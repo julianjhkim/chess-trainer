@@ -1,0 +1,55 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# --- Virtualenvs (we use conda env `chess`, but just in case) ---
+.venv/
+venv/
+env/
+
+# --- Testing / tooling caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+
+# --- Application data (SQLite DB + WAL/SHM sidecars) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/
+
+# --- Node (only if we ever add a build step for frontend vendoring) ---
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
