@@ -38,9 +38,10 @@ htmlcov/
 *.sqlite3
 data/
 
-# --- Node (only if we ever add a build step for frontend vendoring) ---
+# --- Node (dev-only tooling: vendoring chessground + the frontend smoke test) ---
+# package-lock.json IS committed: it records exactly which chessground version
+# produced the vendored bundle in frontend/vendor/.
 node_modules/
-package-lock.json
 npm-debug.log*
 
 # --- macOS ---

@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chess-trainer"
+version = "0.1.0"
+description = "Local web app for daily chess review and opening drills"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "chess",
+    "httpx",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+chess-trainer = "chess_trainer.cli:main"
+
+[tool.setuptools]
+# frontend/ lives outside the package and is located at runtime by paths.py
+packages = [
+    "chess_trainer",
+    "chess_trainer.db",
+    "chess_trainer.engine",
+    "chess_trainer.chesscom",
+    "chess_trainer.pgn",
+    "chess_trainer.review",
+    "chess_trainer.explorer",
+    "chess_trainer.openings",
+    "chess_trainer.srs",
+    "chess_trainer.streak",
+    "chess_trainer.session",
+    "chess_trainer.api",
+    "chess_trainer.api.routers",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::DeprecationWarning:chess_trainer.*"]
