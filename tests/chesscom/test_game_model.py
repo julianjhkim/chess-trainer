@@ -77,7 +77,7 @@ def test_colour_of_finds_black():
 
 
 def test_colour_of_ignores_case_and_whitespace():
-    assert parse_game(payload()).colour_of("  test-player ") == "white"
+    assert parse_game(payload()).colour_of("  TEST-PLAYER ") == "white"
 
 
 def test_colour_of_rejects_a_stranger():

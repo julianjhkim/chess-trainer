@@ -61,7 +61,7 @@ function renderEngineInfo(health) {
   const engine = health.engine ?? {};
   const parts = [`v${health.version}`];
   parts.push(engine.exists ? `Stockfish depth ${engine.depth}` : 'Stockfish NOT FOUND');
-  parts.push(`${health.chesscom_username}@chess.com`);
+  parts.push(health.chesscom_username ? `${health.chesscom_username}@chess.com` : 'chess.com user not set');
   parts.push(health.lichess_token_present ? 'Lichess token set' : 'No Lichess token');
   engineInfo.textContent = parts.join('  ·  ');
   engineInfo.title = `Engine: ${engine.path ?? 'unknown'}\nDatabase: ${health.database}\nStreak timezone: ${health.timezone}`;

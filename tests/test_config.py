@@ -18,7 +18,9 @@ def clean_env(monkeypatch):
 
 def test_defaults_match_the_spec():
     cfg = Config()
-    assert cfg.chesscom_username == "test-player"
+    # No default account: the code is public, and each user names their own.
+    assert cfg.chesscom_username == ""
+    assert not cfg.has_chesscom_username
     assert cfg.engine_depth == 20
     assert cfg.host == "127.0.0.1"
     assert cfg.timezone == "Asia/Seoul"
@@ -81,3 +83,19 @@ def test_bad_integer_is_reported_clearly(monkeypatch, tmp_path):
     monkeypatch.setenv("CHESS_TRAINER_ENGINE_DEPTH", "deep")
     with pytest.raises(ValueError, match="must be an integer"):
         load_config(env_file=tmp_path / "missing.env")
+
+
+def test_the_username_comes_from_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHESS_TRAINER_CHESSCOM_USERNAME", "  someone  ")
+    cfg = load_config(env_file=tmp_path / "missing.env")
+    assert cfg.chesscom_username == "someone"
+    assert cfg.has_chesscom_username
+
+
+def test_no_username_without_the_environment(tmp_path):
+    cfg = load_config(env_file=tmp_path / "missing.env")
+    assert cfg.chesscom_username == ""
+
+
+def test_the_missing_username_message_says_what_to_set():
+    assert "CHESS_TRAINER_CHESSCOM_USERNAME" in config_module.USERNAME_HELP

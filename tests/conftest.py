@@ -117,6 +117,7 @@ def config(db_path: Path) -> Config:
     """Config pointing at a temp database, with the browser disabled."""
     return Config(
         db_path=db_path,
+        chesscom_username="test-player",
         stockfish_path=STOCKFISH_PATH,
         engine_depth=8,
         open_browser=False,

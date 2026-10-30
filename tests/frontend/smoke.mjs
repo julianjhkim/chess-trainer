@@ -223,7 +223,9 @@ check('focus() opens the widget', paste.element.open === true);
 
 // ---- review_view.js: the real review flow ----------------------------
 // A game where White loses immediately, so a low-depth review finds a target.
-const BLUNDER_PGN = '[White "test-player"]\n[Black "rival"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1\n';
+// Named after whoever the live server is configured for, so the pasted game is "mine".
+const me = (await api.getHealth()).chesscom_username || 'test-player';
+const BLUNDER_PGN = `[White "${me}"]\n[Black "rival"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1\n`;
 await api.resetSession();
 await api.startSession(null);
 const pastedGame = (await api.pastePgn(BLUNDER_PGN)).game;

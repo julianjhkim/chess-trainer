@@ -28,8 +28,13 @@ The opening cards need a Lichess token (the explorer returns 401 without one):
 
 ```bash
 cp .env.example .env
-# then edit .env and set LICHESS_TOKEN=lip_...
+# then edit .env and set:
+#   CHESS_TRAINER_CHESSCOM_USERNAME=<your chess.com username>
+#   LICHESS_TOKEN=lip_...
 ```
+
+The chess.com username has no default — without it the app still runs and PGN
+paste still works, but fetching your games says what to set.
 
 Create the token at <https://lichess.org/account/oauth/token/create>. **Leave every
 scope unchecked** — the explorer only needs an authenticated identity, not
@@ -185,7 +190,7 @@ Command line flags override both.
 | Variable | Default | Meaning |
 |---|---|---|
 | `LICHESS_TOKEN` | — | Lichess API token, needed for the opening explorer |
-| `CHESS_TRAINER_CHESSCOM_USERNAME` | `test-player` | whose games to fetch |
+| `CHESS_TRAINER_CHESSCOM_USERNAME` | — | your chess.com username; required for fetching games (no default) |
 | `CHESS_TRAINER_STOCKFISH_PATH` | `/opt/homebrew/bin/stockfish` | engine binary |
 | `CHESS_TRAINER_ENGINE_DEPTH` | `20` | fixed search depth |
 | `CHESS_TRAINER_DB` | `~/.local/share/chess-trainer/chess_trainer.db` | database |

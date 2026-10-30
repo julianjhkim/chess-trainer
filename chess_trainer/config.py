@@ -12,7 +12,12 @@ from chess_trainer import __version__, paths
 
 ENV_PREFIX = "CHESS_TRAINER_"
 
-DEFAULT_USERNAME = "test-player"
+#: Whose games to fetch. Deliberately no default: the code is public and is
+#: meant to be run by anyone, so each user names their own account in `.env`.
+USERNAME_HELP = (
+    "Set your chess.com username: add CHESS_TRAINER_CHESSCOM_USERNAME=<your username> "
+    "to the .env file next to README.md, then restart chess-trainer."
+)
 DEFAULT_STOCKFISH_PATH = "/opt/homebrew/bin/stockfish"
 DEFAULT_DEPTH = 20
 DEFAULT_HOST = "127.0.0.1"
@@ -28,7 +33,8 @@ USER_AGENT = (
 
 @dataclass(frozen=True, slots=True)
 class Config:
-    chesscom_username: str = DEFAULT_USERNAME
+    #: Empty until the user sets it; fetching from chess.com needs it.
+    chesscom_username: str = ""
     stockfish_path: Path = Path(DEFAULT_STOCKFISH_PATH)
     engine_depth: int = DEFAULT_DEPTH
     lichess_token: str | None = None
@@ -42,6 +48,10 @@ class Config:
     def __post_init__(self) -> None:
         if self.db_path is None:
             object.__setattr__(self, "db_path", paths.default_db_path())
+
+    @property
+    def has_chesscom_username(self) -> bool:
+        return bool(self.chesscom_username.strip())
 
     @property
     def base_url(self) -> str:
@@ -86,7 +96,7 @@ def load_config(env_file: Path | None = None) -> Config:
     db_raw = _env("DB")
     token = _env("LICHESS_TOKEN")
     return Config(
-        chesscom_username=_env("CHESSCOM_USERNAME", DEFAULT_USERNAME) or DEFAULT_USERNAME,
+        chesscom_username=(_env("CHESSCOM_USERNAME") or "").strip(),
         stockfish_path=paths.expand(
             _env("STOCKFISH_PATH", DEFAULT_STOCKFISH_PATH) or DEFAULT_STOCKFISH_PATH
         ),

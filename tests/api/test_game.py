@@ -227,3 +227,32 @@ def test_pasting_a_real_chesscom_pgn(client, chesscom_pgn):
     assert game["move_count"] == 22
     assert game["my_colour"] == "white"
     assert game["end_time"] == 1736942614
+
+
+def test_fetching_without_a_username_says_how_to_set_one(config, tmp_path):
+    from dataclasses import replace
+
+    from fastapi.testclient import TestClient
+
+    from chess_trainer.api.app import create_app
+
+    app = create_app(replace(config, chesscom_username=""))
+    with TestClient(app) as bare:
+        response = bare.post("/api/game/fetch-latest")
+        assert response.status_code == 503
+        assert "CHESS_TRAINER_CHESSCOM_USERNAME" in response.json()["detail"]
+        assert bare.get("/api/health").json()["chesscom_username"] == ""
+
+
+def test_pasting_still_works_without_a_username(config):
+    from dataclasses import replace
+
+    from fastapi.testclient import TestClient
+
+    from chess_trainer.api.app import create_app
+
+    app = create_app(replace(config, chesscom_username=""))
+    with TestClient(app) as bare:
+        response = bare.post("/api/game/paste", json={"pgn": PGN})
+        assert response.status_code == 200
+        assert response.json()["game"]["my_colour"] == "white"

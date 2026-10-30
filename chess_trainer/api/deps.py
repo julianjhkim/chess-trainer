@@ -152,6 +152,11 @@ def require_engine(state: State) -> StockfishEngine:
 
 
 def get_chesscom(state: State) -> ChessComClient:
+    """The chess.com client; 503 with instructions when no username is set."""
+    from chess_trainer.config import USERNAME_HELP
+
+    if not state.config.has_chesscom_username:
+        raise HTTPException(status_code=503, detail=USERNAME_HELP)
     return state.chesscom
 
 

@@ -201,6 +201,8 @@ def _colour_from_pgn(parsed: parse.ParsedGame, config: Config) -> str:
     Normally the PGN names me. If it does not -- someone else's game, or a
     study -- default to White rather than refusing, since the drill still works.
     """
+    if not config.has_chesscom_username:
+        return "white"
     try:
         return parsed.colour_of(config.chesscom_username)
     except PlayerNotInGame:

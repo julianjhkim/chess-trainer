@@ -124,7 +124,7 @@ def test_colour_of_finds_each_side():
 
 
 def test_colour_of_ignores_case():
-    assert parse_pgn(SIMPLE).colour_of("test-player") == "white"
+    assert parse_pgn(SIMPLE).colour_of("Test-Player") == "white"
 
 
 def test_colour_of_rejects_a_stranger():
@@ -139,7 +139,7 @@ def test_played_by():
 
 
 def test_end_time_prefers_the_end_headers():
-    # 2025-01-15 12:03:34 UTC
+    # 2026-10-28 12:03:34 UTC
     assert end_time_of(parse_pgn(WITH_CLOCKS)) == 1736942614
 
 

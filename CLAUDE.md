@@ -22,7 +22,11 @@ no Node at runtime. Status: all four steps complete (phases 0–3 done, plus fix
   (or the env's python directly). Never use the system `python3` for the app.
 - **Stockfish**: `/opt/homebrew/bin/stockfish` (the default
   `CHESS_TRAINER_STOCKFISH_PATH`).
-- **chess.com user**: `test-player` (default `CHESS_TRAINER_CHESSCOM_USERNAME`).
+- **chess.com user**: set in `.env` as `CHESS_TRAINER_CHESSCOM_USERNAME`. There
+  is **no default in code** (the repo is public and meant for anyone to run);
+  without it, fetching returns 503 with instructions and pasting assumes White.
+  Tests use the placeholder `test-player` (opponent `test-opponent`). Never write
+  the owner's real username into the repo.
 - **Lichess token**: `LICHESS_TOKEN` in `.env` (gitignored; template in
   `.env.example`). Needed for the opening explorer (401 without it). **Never
   commit, print, log or echo it** — don't `cat .env`.
