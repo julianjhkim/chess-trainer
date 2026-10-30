@@ -136,3 +136,36 @@ def chesscom_payload() -> dict:
     import json
 
     return json.loads((DATA_DIR / "chesscom_game.json").read_text())
+
+
+EXPLORER_DIR = DATA_DIR / "explorer"
+
+
+def _explorer_fixture(name: str) -> dict:
+    import json
+
+    return json.loads((EXPLORER_DIR / name).read_text())
+
+
+@pytest.fixture
+def explorer_root() -> dict:
+    """The real masters response for the start position."""
+    return _explorer_fixture("root.json")
+
+
+@pytest.fixture
+def explorer_e4() -> dict:
+    """The real masters response after 1.e4."""
+    return _explorer_fixture("after_e4.json")
+
+
+@pytest.fixture
+def explorer_deep() -> dict:
+    """A deep Berlin position: 8879 games, most continuations under 5%."""
+    return _explorer_fixture("deep.json")
+
+
+@pytest.fixture
+def explorer_thin() -> dict:
+    """A position with 11 games: engine mode territory."""
+    return _explorer_fixture("thin.json")

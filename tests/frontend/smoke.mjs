@@ -308,5 +308,113 @@ playView.destroy();
 const routerModule = await import(`${REPO}/js/router.js`);
 check('router module exposes createRouter', typeof routerModule.createRouter === 'function');
 
+
+
+// ---- arrows.js --------------------------------------------------------
+const arrows = await import(`${REPO}/js/arrows.js`);
+const given = arrows.givenMove('e2e4');
+check('arrows build a shape from a uci', given.length === 1 && given[0].orig === 'e2' && given[0].dest === 'e4');
+check('the given arrow and the answer arrow differ',
+      arrows.givenMove('e2e4')[0].brush !== arrows.answerMove('e2e4')[0].brush);
+check('a malformed uci yields no shape', arrows.shapes(arrows.move('xx')).length === 0);
+
+// ---- stats_table.js ---------------------------------------------------
+const { renderStatsTable } = await import(`${REPO}/js/stats_table.js`);
+const tableNode = renderStatsTable({
+  total_games: 1000,
+  mode: 'frequency',
+  tie_note: 'two moves are played equally often; Stockfish picked between them.',
+  engine_note: null,
+  rows: [
+    { san: 'c5', uci: 'c7c5', games: 600, share: 60, white: 200, draws: 300, black: 100,
+      white_percent: 33.3, draw_percent: 50, black_percent: 16.7, average_rating: 2401,
+      is_answer: true, is_engine_move: false, is_tied: true },
+    { san: 'e5', uci: 'e7e5', games: 400, share: 40, white: 150, draws: 150, black: 100,
+      white_percent: 37.5, draw_percent: 37.5, black_percent: 25, average_rating: 2410,
+      is_answer: false, is_engine_move: false, is_tied: true },
+  ],
+});
+check('stats table renders a row per move', tableNode.querySelectorAll('tbody tr').length === 2);
+check('stats table highlights the answer', tableNode.querySelectorAll('tr.stats-answer').length === 1);
+check('stats table shows the move, share and games',
+      /c5/.test(tableNode.textContent) && /60\.0%/.test(tableNode.textContent) && /600/.test(tableNode.textContent));
+check('stats table shows the average rating', /2401/.test(tableNode.textContent));
+check('stats table draws a W/D/L bar', tableNode.querySelectorAll('.wdl-bar').length === 2);
+check('stats table badges the answer', tableNode.querySelector('.badge-answer') !== null);
+check('stats table badges a tie', tableNode.querySelector('.badge-tied') !== null);
+check('stats table shows the tie note', /equally often/.test(tableNode.textContent));
+const emptyTable = renderStatsTable({ total_games: 0, mode: null, rows: [] });
+check('an empty stats table says so', /No master moves/.test(emptyTable.textContent));
+
+// ---- cards_view.js: the real drill ------------------------------------
+const { renderCardsView } = await import(`${REPO}/js/cards_view.js`);
+await api.resetSession();
+await api.startSession(null);
+// The step bar would have navigated here; without that the session's current
+// step is still step 1 and "stays current" means nothing.
+await api.jumpToStep('cards');
+
+const cardsHost = document.createElement('main');
+document.body.append(cardsHost);
+const cardsView = renderCardsView(cardsHost, {
+  step: { step: 'cards', position: 4, title: 'Opening cards' },
+  onCompleted: () => {},
+});
+
+// Wait for the VIEW to reach its arrow phase before reading the server's
+// state: the server keeps the last card in memory, so polling the API first
+// can hand back a stale card from an earlier run.
+for (let i = 0; i < 80; i++) {
+  await sleep(250);
+  if (/the arrow shows it/.test(cardsHost.textContent)) break;
+}
+check('cards view reaches the arrow phase', /the arrow shows it/.test(cardsHost.textContent),
+      cardsHost.textContent.slice(0, 100));
+const cardState = await api.cardState();
+check('a card is served', cardState?.card != null, JSON.stringify(cardState?.counts));
+const served = cardState.card;
+check('the card has a given move', !!served.given_move_san, served.given_move_san);
+check('the card names the side to find', ['white', 'black'].includes(served.side_to_move));
+check('the card carries an opening name', !!served.opening_label, served.opening_label);
+check('the card does not leak the answer', !JSON.stringify(served).toLowerCase().includes('answer'));
+
+check('cards view renders a board', realPieces(cardsHost).length > 0, `${realPieces(cardsHost).length} pieces`);
+check('cards view renders an eval bar', cardsHost.querySelector('.evalbar-number') !== null);
+check('cards view shows the queue counts', /Due/.test(cardsHost.textContent) && /New/.test(cardsHost.textContent));
+check('cards view asks for the arrow move',
+      new RegExp(`Play ${served.given_move_san.replace(/[+#]/g, '\\$&')} `).test(cardsHost.textContent),
+      `expected "Play ${served.given_move_san}" in the prompt`);
+check('cards view offers Flip board', [...cardsHost.querySelectorAll('button')].some((b) => b.textContent === 'Flip board'));
+check('the opening name is withheld until the given move is played',
+      !cardsHost.textContent.includes(served.opening_label));
+
+// White stays at the bottom by default, per the spec.
+const cgOrientation = cardsHost.querySelector('.cg-wrap')?.classList.contains('orientation-black');
+check('white is at the bottom by default', cgOrientation !== true);
+
+// Answer through the API the way the board would, then confirm the result panel.
+const wrongReply = served.side_to_move === 'black' ? ['a7', 'a6'] : ['a2', 'a3'];
+const wrongCard = await api.cardAttempt(wrongReply[0], wrongReply[1], null);
+check('a wrong card move is rejected with its own eval',
+      wrongCard.correct === false && !!wrongCard.evaluation.text, wrongCard.evaluation.text);
+check('a wrong card move does not finish the card', wrongCard.finished === false);
+check('a wrong card move reveals no stats', wrongCard.stats == null);
+
+const revealed = await api.showCardAnswer();
+check('show answer reveals the move', !!revealed.answer_san, revealed.answer_san);
+check('show answer grades as a failure', revealed.grade.quality === 1 && revealed.grade.passed === false);
+check('show answer requeues the card', revealed.grade.requeued === true);
+check('show answer returns the stats table', revealed.stats.rows.length > 0, `${revealed.stats.rows.length} rows`);
+check('the stats table marks the answer', revealed.stats.rows.some((r) => r.is_answer));
+check('show answer creates no branches', revealed.branches_created === 0);
+check('the card step is marked and the streak moves',
+      revealed.session != null && revealed.streak?.current >= 1);
+check('the cards step stays current', revealed.session.current === 'cards');
+
+cardsView.destroy();
+
+// ---- router covers all four steps -------------------------------------
+check('router exposes createRouter', typeof routerModule.createRouter === 'function');
+
 console.log(`\n${failures === 0 ? 'ALL FRONTEND CHECKS PASSED' : failures + ' FRONTEND CHECK(S) FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);

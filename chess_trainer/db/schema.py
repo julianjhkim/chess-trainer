@@ -105,7 +105,85 @@ _M002 = Migration(
     """,
 )
 
-MIGRATIONS: tuple[Migration, ...] = (_M001, _M002)
+#: Phase 3: the opening explorer cache, the card tree, and SM-2 scheduling.
+_M003 = Migration(
+    version=3,
+    name="explorer_cache_and_opening_cards",
+    sql="""
+    -- Cached masters-database responses. Keyed by EPD (a FEN without the
+    -- halfmove/fullmove counters) because the explorer is position-based: two
+    -- transposing lines return byte-identical data, and their FENs differ only
+    -- in those counters.
+    CREATE TABLE explorer_cache (
+        epd         TEXT PRIMARY KEY,
+        response    TEXT NOT NULL,      -- the raw JSON, so nothing is lost
+        total_games INTEGER NOT NULL,   -- white+draws+black, for cheap queries
+        fetched_at  TEXT NOT NULL
+    );
+
+    -- One row per position in the lazily grown tree. A position is one card,
+    -- so the key is the EPD: a transposition does not become a second card.
+    CREATE TABLE cards (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        epd            TEXT NOT NULL UNIQUE,
+        fen            TEXT NOT NULL,
+        line_uci       TEXT NOT NULL,     -- space-separated UCI from the start
+        depth          INTEGER NOT NULL,
+        parent_card_id INTEGER REFERENCES cards (id) ON DELETE CASCADE,
+        side_to_move   TEXT NOT NULL CHECK (side_to_move IN ('white', 'black')),
+        given_move_uci TEXT NOT NULL,     -- the move shown as an arrow
+        given_move_san TEXT NOT NULL,
+        -- 'dead_end' marks a position with too few games to be a card; it is
+        -- kept so the "max depth reached" message has its stats.
+        status         TEXT NOT NULL CHECK (status IN ('active', 'dead_end')),
+        mode           TEXT CHECK (mode IN ('frequency', 'engine')),
+        answer_uci     TEXT,
+        answer_san     TEXT,
+        tied_ucis      TEXT,              -- JSON array when a tie was broken
+        opening_eco    TEXT,
+        opening_name   TEXT,
+        position_games INTEGER NOT NULL,
+        queue_seq      INTEGER NOT NULL,  -- insertion order == breadth-first
+        expanded_at    TEXT,              -- when this card's branches were built
+        created_at     TEXT NOT NULL
+    );
+
+    CREATE INDEX cards_queue ON cards (status, depth, queue_seq);
+    CREATE INDEX cards_parent ON cards (parent_card_id);
+
+    -- SM-2 state. A card with no row here has never been answered, i.e. is new.
+    CREATE TABLE card_schedule (
+        card_id          INTEGER PRIMARY KEY REFERENCES cards (id) ON DELETE CASCADE,
+        n                INTEGER NOT NULL DEFAULT 0,   -- consecutive passes
+        ef               REAL NOT NULL DEFAULT 2.5,    -- ease factor, floor 1.3
+        interval_days    INTEGER NOT NULL DEFAULT 0,
+        due_on           TEXT NOT NULL,                -- Asia/Seoul date
+        last_reviewed_on TEXT,
+        reps             INTEGER NOT NULL DEFAULT 0,
+        lapses           INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX card_schedule_due ON card_schedule (due_on);
+
+    -- One row per answer, for a history of the drills.
+    CREATE TABLE card_reviews (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id          INTEGER NOT NULL REFERENCES cards (id) ON DELETE CASCADE,
+        reviewed_at      TEXT NOT NULL,
+        reviewed_on      TEXT NOT NULL,
+        quality          INTEGER NOT NULL,
+        attempts         INTEGER NOT NULL,
+        used_show_answer INTEGER NOT NULL DEFAULT 0,
+        was_new          INTEGER NOT NULL DEFAULT 0,
+        interval_days    INTEGER,
+        ef               REAL
+    );
+
+    CREATE INDEX card_reviews_by_card ON card_reviews (card_id, reviewed_at DESC);
+    """,
+)
+
+MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003)
 
 
 def current_version(conn: sqlite3.Connection) -> int:

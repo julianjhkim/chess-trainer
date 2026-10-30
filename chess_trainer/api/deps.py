@@ -14,11 +14,13 @@ from fastapi import Depends, HTTPException, Request
 
 from chess_trainer.chesscom.client import ChessComClient
 from chess_trainer.config import Config
+from chess_trainer.explorer.lichess_client import LichessExplorerClient
 from chess_trainer.db.connection import TrainerConnection, connect
 from chess_trainer.engine.stockfish import EngineNotAvailable, StockfishEngine
 from chess_trainer.review.review_job import ReviewJob
 from chess_trainer.session.flow import SessionFlow
 from chess_trainer.session.steps import Step
+from chess_trainer.srs.scheduler import CardQueue
 
 T = TypeVar("T")
 
@@ -33,7 +35,15 @@ class AppState:
         self.flow = SessionFlow()
         #: One review per review step, so stepping away and back keeps progress.
         self.reviews: dict[Step, ReviewJob] = {}
+        #: The opening-card queue for this session (requeues, grading state).
+        self.card_queue = CardQueue()
+        #: The card currently on screen, and how it is going.
+        self.current_card_id: int | None = None
+        self.card_attempts: list[str] = []
+        self.card_shown: bool = False
+        self.card_finished: bool = False
         self._chesscom: ChessComClient | None = None
+        self._explorer: LichessExplorerClient | None = None
 
     @property
     def conn(self) -> TrainerConnection:
@@ -51,6 +61,22 @@ class AppState:
 
     #: How long shutdown waits for a review thread to notice it was cancelled.
     JOIN_TIMEOUT_SECONDS = 10.0
+
+    @property
+    def explorer(self) -> LichessExplorerClient:
+        """A lazily created Lichess explorer client, reused across requests."""
+        if self._explorer is None:
+            self._explorer = LichessExplorerClient(
+                self.config.lichess_token, self.config.user_agent
+            )
+        return self._explorer
+
+    def reset_card(self) -> None:
+        """Forget the card on screen (served a new one, or left the step)."""
+        self.current_card_id = None
+        self.card_attempts = []
+        self.card_shown = False
+        self.card_finished = False
 
     def shutdown(self) -> None:
         """Tear down in an order that cannot pull the rug from a worker thread.
@@ -72,6 +98,9 @@ class AppState:
         if self._chesscom is not None:
             self._chesscom.close()
             self._chesscom = None
+        if self._explorer is not None:
+            self._explorer.close()
+            self._explorer = None
 
         if stragglers:
             # Leaking a connection on the way out is far better than crashing:
@@ -126,8 +155,22 @@ def get_chesscom(state: State) -> ChessComClient:
     return state.chesscom
 
 
+def require_explorer(state: State) -> LichessExplorerClient:
+    """The explorer client; 503 with instructions when no token is set."""
+    from chess_trainer.explorer.lichess_client import TOKEN_HELP
+
+    client = state.explorer
+    if not client.has_token:
+        raise HTTPException(
+            status_code=503,
+            detail="The opening cards need a Lichess API token. " + TOKEN_HELP,
+        )
+    return client
+
+
 Conn = Annotated[sqlite3.Connection, Depends(get_conn)]
 ChessCom = Annotated[ChessComClient, Depends(get_chesscom)]
+Explorer = Annotated[LichessExplorerClient, Depends(require_explorer)]
 Cfg = Annotated[Config, Depends(get_config)]
 Flow = Annotated[SessionFlow, Depends(get_flow)]
 Engine = Annotated[StockfishEngine, Depends(require_engine)]

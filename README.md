@@ -7,9 +7,8 @@ Runs entirely on `localhost`. Stockfish does the analysis, the Lichess masters
 database supplies the opening lines, and all frontend libraries are vendored into
 the repo so the app works offline.
 
-**Status: Phase 2 complete** — app skeleton, board, eval bar, start screen, step
-bar, streak, chess.com fetching and full game review (steps 1–3). Opening cards
-(step 4) arrive in Phase 3.
+**Status: complete** — all four steps work: review your last chess.com game, play
+a new one, review that, and drill openings as spaced-repetition cards.
 
 ---
 
@@ -25,7 +24,7 @@ brew install stockfish
 conda run -n chess pip install -e .
 ```
 
-Optional, for the opening cards in Phase 3 — the Lichess explorer requires a token:
+The opening cards need a Lichess token (the explorer returns 401 without one):
 
 ```bash
 cp .env.example .env
@@ -56,7 +55,7 @@ chess-trainer --help
   --no-browser       start the server without opening a browser
 ```
 
-## Trying what Phase 2 built
+## Trying it
 
 Press *Start* with all four boxes ticked and work through it.
 
@@ -79,8 +78,34 @@ paste box appears. Either way, finishing hands straight over to step 3.
 
 **Step 3 — Review that game.** The same drill on the game you just played.
 
-**Step 4 — Opening cards.** Still a Phase 3 scaffold: a free board with a live
-eval bar.
+**Step 4 — Opening cards.** Anki-style drills built from the Lichess masters
+database, grown lazily as you go. The first card is 1.e4; the tree expands only
+when you get a card right.
+
+Each card runs the same way: the earlier moves of the line auto-play, then the
+branch move appears as an **arrow** for you to play — only that move is draggable.
+Playing it reveals the **opening name**, and then you have to find the answer move
+with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
+answer* gives up. Afterwards you get the **stats table**: every master move with
+its share, game count, white/draw/black split and average rating, with the answer
+highlighted.
+
+What counts as the answer depends on how well-travelled the position is:
+
+| Master games | Answer | Branches that become new cards |
+|---|---|---|
+| ≥ 20 | the most played move (a tie is broken by Stockfish, and said so) | every move with ≥ 5% of the games |
+| 5–19 | Stockfish's top move, since frequency can't be trusted | the engine's move only |
+| < 5 | not a card — you get a **"Max depth reached"** message with that line's stats | — |
+
+The start position is the exception: it is not a card, but *all* twenty of White's
+first moves branch from it with no 5% filter, ordered by game count. So 1.a4 and
+1.Nh3 get drilled too, and those thin lines are where you will see "Max depth
+reached" soonest.
+
+New cards arrive breadth-first: every ≥5% reply to 1.e4 before anything at depth
+three. White stays at the bottom whichever side the card asks about, with a *Flip
+board* button.
 
 Other things worth poking at:
 
@@ -99,7 +124,10 @@ Other things worth poking at:
 - **Review history** — every finished review is written to the `game_reviews`
   table: which game, the Seoul date, the ply of your first inaccuracy, your move
   and its classification, the engine's move, both evals, the attempt count and
-  whether you revealed the answer.
+  whether you revealed the answer. Card answers go to `card_reviews` the same way.
+- **Scheduling** — cards use a modified SM-2 (see below). There is no daily limit:
+  due reviews come first, oldest first, then new cards one at a time, until you
+  stop. Getting a card wrong brings it back later in the same session.
 - **Status bar** — bottom left reports what just happened (or what failed); bottom
   right shows the version, engine depth, chess.com username and whether a Lichess
   token is present.
@@ -118,7 +146,7 @@ Command line flags override both.
 | `CHESS_TRAINER_DB` | `~/.local/share/chess-trainer/chess_trainer.db` | database |
 | `CHESS_TRAINER_HOST` | `127.0.0.1` | bind interface |
 | `CHESS_TRAINER_PORT` | `8787` | port |
-| `CHESS_TRAINER_TIMEZONE` | `Asia/Seoul` | streak day boundary |
+| `CHESS_TRAINER_TIMEZONE` | `Asia/Seoul` | streak day boundary and card due dates |
 
 ## Development
 
@@ -176,18 +204,21 @@ chess_trainer/
   pgn/       parse.py, positions.py
   review/    my_moves.py, first_inaccuracy.py, verdict.py, review_session.py,
              review_job.py (background analysis + progress)
-  explorer/  lichess_client.py, cache.py, rate_limit.py, masters.py              [Phase 3]
+  explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
+             explorer_types.py
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,
-             stats_table.py, line.py, card_types.py                              [Phase 3]
-  srs/       sm2.py, grading.py, due.py, scheduler.py                            [Phase 3]
+             stats_table.py, line.py, card_types.py
+  srs/       sm2.py, grading.py, due.py, scheduler.py
   streak/    seoul_day.py, streak.py, tracker.py
   session/   steps.py, flow.py
   api/       app.py, deps.py, schemas.py, routers/<one per feature>
 frontend/
   index.html  css/app.css  vendor/chessground/  js/<one module per concern>
 ```
-Phase 2 adds `review_view.js`, `play_view.js`, `pgn_paste.js` and `animate.js` to
-the frontend, and `games_repo.py` / `game_reviews_repo.py` to the database layer.
+The frontend has one module per concern: `api.js`, `state.js`, `router.js`,
+`board.js`, `evalbar.js`, `stepbar.js`, `streak_view.js`, `start_screen.js`,
+`review_view.js`, `play_view.js`, `cards_view.js`, `stats_table.js`, `arrows.js`,
+`animate.js`, `pgn_paste.js`.
 
 `rules.py` is the single authority on move legality: the browser carries no rules
 engine and asks the server instead, which also means a drill answer can never be
@@ -209,6 +240,45 @@ analysis in a worker thread and reports `assessed / total` progress for the brow
 to poll. The job is cancellable, and `AppState.shutdown` cancels and joins it
 before closing the database — a background thread reading a closed SQLite
 connection is a use-after-free that segfaults the interpreter.
+
+### How the card tree stays cheap
+
+The tree is never prebuilt. Two moments do the work, and only one of them can
+touch the network:
+
+* **Expansion**, when a card is first answered correctly. The card's own cached
+  explorer record already says how often each branch move was played — and the
+  number of games that played a move from a position is exactly the number that
+  reached the position after it. So every child row, *including whether it is a
+  dead end*, is created without a single extra request, and each child's opening
+  name comes from the same record.
+* **Preparation**, the first time a card is served. Only then is the position's own
+  record fetched, because only then is its answer needed.
+
+So a request is spent per card actually drilled, never per card created:
+bootstrapping all twenty first moves costs one request, and expanding 1.e4 into
+four new cards costs none. Everything is cached in SQLite forever, keyed by EPD
+(a FEN without the move counters) — the explorer is position-based, so two
+transposing lines share one cache entry, and a position is only ever one card.
+
+Requests are throttled, and an HTTP 429 waits 60 seconds and retries once.
+
+### The SM-2 variant
+
+Per card: `n` consecutive passes, an ease factor `EF` (2.5 to start, floor 1.3)
+and an interval `I` in days. Grading is automatic — right first time is q=4, right
+after a retry is q=3, revealing the answer is q=1 — so only a reveal actually
+fails a card.
+
+Passing gives `I = 1`, then `6`, then `round(I × EF)`; the ladder runs
+1 → 6 → 15 → 38 → 95 days at the default ease. Failing **halves** the interval
+rather than resetting it (`I = max(1, round(I × 0.5))`), so a lapse on a card you
+have known for months does not throw that history away. The interval is computed
+with the ease the card had *before* the answer, and the ease is updated after.
+
+One consequence worth knowing: a failure also sets `n = 0`, so the next successful
+answer starts the ladder again at one day. The halved interval governs when the
+card comes back, not where it resumes.
 
 ### Why one locked SQLite connection
 
@@ -245,6 +315,10 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/review/attempt` | try a move; returns correctness and an eval |
 | `POST /api/review/show-answer` | reveal the engine's move, ending the review |
 | `POST /api/review/acknowledge` | close a review that had no inaccuracy |
+| `GET /api/cards/state` | the card on screen and the queue behind it |
+| `POST /api/cards/next` | serve the next card (due first, then new) |
+| `POST /api/cards/attempt` | try a move on the current card |
+| `POST /api/cards/show-answer` | reveal the answer, grading it as a failure |
 
 ## Troubleshooting
 
@@ -262,9 +336,18 @@ paste its PGN (Share → PGN) into the box that appears.
 while the first time. Lower it with `chess-trainer --depth 14` if you would rather
 trade some accuracy for speed; results at each depth are cached separately.
 
+**"The opening cards need a Lichess API token"** — the explorer returns 401 for
+every request without one. Create a token (no scopes) at
+<https://lichess.org/account/oauth/token/create> and put it in `.env`.
+
+**"Lichess is rate limiting the opening explorer"** — it already waited 60 seconds
+and retried. Give it a minute; almost everything comes from the local cache, so
+this should be rare.
+
 **Starting over** — delete the database
-(`~/.local/share/chess-trainer/chess_trainer.db`). It holds the streak and the
-analysis cache; schema migrations run automatically on startup.
+(`~/.local/share/chess-trainer/chess_trainer.db`). It holds the streak, the engine
+and explorer caches, the games you have reviewed and the whole card tree with its
+scheduling; schema migrations run automatically on startup.
 
 ## Licence
 

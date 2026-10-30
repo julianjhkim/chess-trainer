@@ -6,7 +6,7 @@
  * every selected step is done, a short summary.
  */
 
-import { renderPlaceholder } from './placeholder_view.js';
+import { renderCardsView } from './cards_view.js';
 import { renderPlayView } from './play_view.js';
 import { renderReviewView } from './review_view.js';
 import { renderStartScreen } from './start_screen.js';
@@ -25,7 +25,10 @@ export function createRouter(container, { onStarted, onCompleted }) {
       return;
     }
 
-    if (session.finished || session.current === null) {
+    // A current step wins over "finished": the opening cards mark themselves
+    // complete on the first answer but keep running, so the summary must not
+    // snatch the view away.
+    if (session.current === null) {
       renderFinished(container, session);
       return;
     }
@@ -37,8 +40,8 @@ export function createRouter(container, { onStarted, onCompleted }) {
   return { render };
 }
 
-/** Pick the view for a step. Opening cards are still a Phase 3 scaffold. */
-function renderStep(container, { session, step, onCompleted }) {
+/** Pick the view for a step. */
+function renderStep(container, { step, onCompleted }) {
   const handleCompleted = (nextSession, options = {}) => {
     if (options.rerender === false) return;
     if (onCompleted) onCompleted(nextSession);
@@ -50,8 +53,10 @@ function renderStep(container, { session, step, onCompleted }) {
       return renderReviewView(container, { step, onCompleted: handleCompleted });
     case 'play':
       return renderPlayView(container, { step, onCompleted });
+    case 'cards':
+      return renderCardsView(container, { step, onCompleted: handleCompleted });
     default:
-      return renderPlaceholder(container, { session, step, onCompleted });
+      throw new Error(`No view for step ${step.step}`);
   }
 }
 

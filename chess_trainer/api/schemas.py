@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from chess_trainer.db.cards_repo import CardRow
 from chess_trainer.db.games_repo import StoredGame
+from chess_trainer.db.schedule_repo import ScheduleRow
 from chess_trainer.engine.eval_format import bar_fraction, format_eval
 from chess_trainer.engine.eval_types import Eval
 from chess_trainer.review.review_job import ReviewJob, ReviewStatus
 from chess_trainer.review.review_session import ReviewTarget
+from chess_trainer.openings import line as line_module
+from chess_trainer.openings.card_types import CardMode
+from chess_trainer.openings.stats_table import StatsTable
 from chess_trainer.review.verdict import ReviewSummary
+from chess_trainer.srs.due import CardSource
+from chess_trainer.srs.scheduler import AnswerOutcome, QueueCounts
 from chess_trainer.session.flow import SessionFlow
 from chess_trainer.session.steps import Step
 from chess_trainer.streak.streak import Streak
@@ -354,5 +361,242 @@ class ShowAnswerResponse(BaseModel):
     fen_after: str
     evaluation: EvalOut
     review: ReviewStateOut
+    session: SessionOut | None = None
+    streak: StreakOut | None = None
+
+
+# -- opening cards -------------------------------------------------------
+class QueueCountsOut(BaseModel):
+    due: int
+    new: int
+    relearning: int
+
+    @classmethod
+    def of(cls, counts: QueueCounts) -> "QueueCountsOut":
+        return cls(due=counts.due, new=counts.new, relearning=counts.relearning)
+
+
+class CardScheduleOut(BaseModel):
+    n: int
+    ef: float
+    interval_days: int
+    due_on: str
+    reps: int
+    lapses: int
+
+    @classmethod
+    def of(cls, schedule: ScheduleRow) -> "CardScheduleOut":
+        return cls(
+            n=schedule.n,
+            ef=round(schedule.ef, 3),
+            interval_days=schedule.interval_days,
+            due_on=schedule.due_on.isoformat(),
+            reps=schedule.reps,
+            lapses=schedule.lapses,
+        )
+
+
+class CardOut(BaseModel):
+    """A card to drill. The answer is deliberately absent."""
+
+    id: int
+    line_uci: str
+    line_label: str
+    depth: int
+    #: Whose move I have to find.
+    side_to_move: str
+    #: Moves auto-played before the given move.
+    replay_ucis: list[str]
+    #: The branch move, shown as an arrow for me to play.
+    given_move_uci: str
+    given_move_san: str
+    #: Position before the given move, i.e. where the arrow is drawn.
+    fen_before_given: str
+    #: Position after the given move: the one whose answer I must find.
+    fen: str
+    #: Revealed once I have played the given move.
+    opening_eco: str | None = None
+    opening_name: str | None = None
+    opening_label: str | None = None
+    mode: str | None = None
+    position_games: int
+    source: CardSource
+    schedule: CardScheduleOut | None = None
+
+    @classmethod
+    def of(
+        cls, card: CardRow, *, source: CardSource, schedule: ScheduleRow | None = None
+    ) -> "CardOut":
+        ucis = card.ucis
+        before = line_module.position_of(ucis[:-1])
+        return cls(
+            id=card.id or 0,
+            line_uci=card.line_uci,
+            line_label=line_module.line_label(ucis),
+            depth=card.depth,
+            side_to_move=card.side_to_move,
+            replay_ucis=list(ucis[:-1]),
+            given_move_uci=card.given_move_uci,
+            given_move_san=card.given_move_san,
+            fen_before_given=before.fen,
+            fen=card.fen,
+            opening_eco=card.opening_eco,
+            opening_name=card.opening_name,
+            opening_label=card.opening_label,
+            mode=card.mode,
+            position_games=card.position_games,
+            source=source,
+            schedule=CardScheduleOut.of(schedule) if schedule else None,
+        )
+
+
+class CardStateOut(BaseModel):
+    """The current card, if any, plus what is waiting behind it."""
+
+    card: CardOut | None = None
+    counts: QueueCountsOut
+    attempts: int = 0
+    used_show_answer: bool = False
+    solved: bool = False
+    finished: bool = False
+    #: Set when the tree has nothing left to serve.
+    exhausted: bool = False
+
+
+class StatsRowOut(BaseModel):
+    san: str
+    uci: str
+    games: int
+    share: float
+    white: int
+    draws: int
+    black: int
+    white_percent: float
+    draw_percent: float
+    black_percent: float
+    average_rating: int | None = None
+    is_answer: bool = False
+    is_engine_move: bool = False
+    is_tied: bool = False
+
+
+class StatsTableOut(BaseModel):
+    rows: list[StatsRowOut]
+    total_games: int
+    mode: str | None = None
+    tie_note: str | None = None
+    engine_note: str | None = None
+
+    @classmethod
+    def of(cls, table: StatsTable) -> "StatsTableOut":
+        return cls(
+            rows=[
+                StatsRowOut(
+                    san=r.san,
+                    uci=r.uci,
+                    games=r.games,
+                    share=round(r.share, 2),
+                    white=r.white,
+                    draws=r.draws,
+                    black=r.black,
+                    white_percent=round(r.white_percent, 1),
+                    draw_percent=round(r.draw_percent, 1),
+                    black_percent=round(r.black_percent, 1),
+                    average_rating=r.average_rating,
+                    is_answer=r.is_answer,
+                    is_engine_move=r.is_engine_move,
+                    is_tied=r.is_tied,
+                )
+                for r in table.rows
+            ],
+            total_games=table.total_games,
+            mode=table.mode.value if table.mode else None,
+            tie_note=table.tie_note,
+            engine_note=table.engine_note,
+        )
+
+
+class DeadEndOut(BaseModel):
+    """A branch that stops because the position has too few master games."""
+
+    line_label: str
+    given_move_san: str
+    games: int
+    white: int = 0
+    draws: int = 0
+    black: int = 0
+    average_rating: int | None = None
+    message: str = "Max depth reached"
+    detail: str | None = None
+
+
+class CardGradeOut(BaseModel):
+    quality: int
+    description: str
+    passed: bool
+    was_new: bool
+    rescheduled: bool
+    requeued: bool
+    interval_days: int | None = None
+    due_on: str | None = None
+    ef: float | None = None
+
+    @classmethod
+    def of(cls, outcome: AnswerOutcome) -> "CardGradeOut":
+        from chess_trainer.srs import grading
+
+        return cls(
+            quality=outcome.quality,
+            description=grading.describe(outcome.quality),
+            passed=outcome.passed,
+            was_new=outcome.was_new,
+            rescheduled=outcome.rescheduled,
+            requeued=outcome.requeued,
+            interval_days=outcome.interval_days,
+            due_on=outcome.due_on.isoformat() if outcome.due_on else None,
+            ef=round(outcome.ef, 3) if outcome.ef is not None else None,
+        )
+
+
+class CardAttemptRequest(BaseModel):
+    from_square: str = Field(alias="from", min_length=2, max_length=2)
+    to_square: str = Field(alias="to", min_length=2, max_length=2)
+    promotion: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class CardAttemptResponse(BaseModel):
+    correct: bool
+    uci: str
+    san: str
+    #: Evaluation after the attempted move, for the eval bar.
+    evaluation: EvalOut
+    fen_after: str
+    attempts: int
+    finished: bool
+    #: Everything below is present only once the card is finished.
+    answer_uci: str | None = None
+    answer_san: str | None = None
+    stats: StatsTableOut | None = None
+    grade: CardGradeOut | None = None
+    dead_ends: list[DeadEndOut] = Field(default_factory=list)
+    branches_created: int = 0
+    counts: QueueCountsOut | None = None
+    session: SessionOut | None = None
+    streak: StreakOut | None = None
+
+
+class ShowCardAnswerResponse(BaseModel):
+    answer_uci: str
+    answer_san: str
+    fen_after: str
+    evaluation: EvalOut
+    attempts: int
+    stats: StatsTableOut
+    grade: CardGradeOut
+    dead_ends: list[DeadEndOut] = Field(default_factory=list)
+    branches_created: int = 0
+    counts: QueueCountsOut
     session: SessionOut | None = None
     streak: StreakOut | None = None

@@ -71,6 +71,16 @@ class SessionFlow:
             self.current = next_after(step, self.enabled)
         return self.current
 
+    def mark_completed(self, step: Step) -> Step | None:
+        """Mark a step done without moving on from it.
+
+        The opening cards have no end: they run until you stop. So the step
+        counts towards the streak as soon as a card is answered, but the
+        session must stay on it rather than jumping to the summary.
+        """
+        self.completed.add(step)
+        return self.current
+
     def uncomplete(self, step: Step) -> None:
         """Forget that a step was completed (used when re-running it)."""
         self.completed.discard(step)

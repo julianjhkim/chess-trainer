@@ -84,3 +84,10 @@ export const reviewShowAnswer = (step) =>
   request('/api/review/show-answer', { method: 'POST', body: { step } });
 export const reviewAcknowledge = (step) =>
   request('/api/review/acknowledge', { method: 'POST', body: { step } });
+
+// -- opening cards --------------------------------------------------------
+export const cardState = () => request('/api/cards/state');
+export const nextCard = () => request('/api/cards/next', { method: 'POST' });
+export const cardAttempt = (from, to, promotion) =>
+  request('/api/cards/attempt', { method: 'POST', body: { from, to, promotion } });
+export const showCardAnswer = () => request('/api/cards/show-answer', { method: 'POST' });

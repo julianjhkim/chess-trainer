@@ -29,6 +29,8 @@ export function createBoard({
   let currentFen = fen;
   let moveHandler = onMove;
   let enabled = interactive;
+  /** Last position state from the server, so a restriction can be undone. */
+  let lastState = null;
 
   const ground = Chessground(element, {
     fen,
@@ -57,6 +59,7 @@ export function createBoard({
 
   /** Push a server-provided position state into chessground. */
   function applyState(state, lastMove = undefined) {
+    lastState = state;
     ground.set({
       fen: state.fen,
       turnColor: state.turn,
@@ -123,6 +126,31 @@ export function createBoard({
     ground.setShapes(shapes ?? []);
   }
 
+  /**
+   * Allow only one move to be played.
+   *
+   * An opening card shows its branch move as an arrow and expects that move to
+   * be played; restricting the legal destinations makes the board say so
+   * rather than letting a wrong drag through to be rejected.
+   */
+  function restrictTo(uci) {
+    const from = uci.slice(0, 2);
+    const to = uci.slice(2, 4);
+    ground.set({
+      movable: {
+        free: false,
+        color: enabled ? ground.state.turnColor : undefined,
+        dests: new Map([[from, [to]]]),
+        showDests: true,
+      },
+    });
+  }
+
+  /** Undo `restrictTo`, restoring every legal move. */
+  function clearRestriction() {
+    if (lastState) applyState(lastState);
+  }
+
   function getFen() {
     return currentFen;
   }
@@ -142,6 +170,8 @@ export function createBoard({
     setInteractive,
     setMoveHandler,
     setShapes,
+    restrictTo,
+    clearRestriction,
     getFen,
     destroy,
     START_FEN,
