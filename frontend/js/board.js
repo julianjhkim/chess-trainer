@@ -11,6 +11,15 @@ import * as api from './api.js';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
+/**
+ * Every live board, newest last.
+ *
+ * `app.js` hands this to `window.chessTrainer` so a board can be inspected
+ * from the console, and the browser tests use it to read chessground's own
+ * state (cached bounds, selection) rather than guessing from the DOM.
+ */
+export const boards = new Set();
+
 /** Convert the API's `dests` object into the Map chessground expects. */
 function toDestsMap(dests) {
   return new Map(Object.entries(dests ?? {}));
@@ -31,6 +40,7 @@ export function createBoard({
   let enabled = interactive;
   /** Last position state from the server, so a restriction can be undone. */
   let lastState = null;
+  let destroyed = false;
 
   const ground = Chessground(element, {
     fen,
@@ -42,6 +52,91 @@ export function createBoard({
     drawable: { enabled: true, visible: true },
     events: { move: handleUserMove },
   });
+
+  // -- geometry ----------------------------------------------------------
+  /*
+   * Chessground measures the board once and caches that rectangle: clicks,
+   * drags and arrows are all resolved against it. It drops the cache on a
+   * window resize, on a scroll, and when the board's own box changes size —
+   * but not when the board merely *moves*, and moving is exactly what happens
+   * here. The views centre the board next to a side panel that grows as
+   * content lands in it (the opening name, the stats table, the attempts
+   * list), which slides the board sideways without changing its size. The
+   * cached rectangle then sits a fraction of a square from the real one and a
+   * click on e2 is read as d2.
+   *
+   * So watch the board and every box it is laid out inside, and redraw
+   * whenever its on-screen rectangle actually moves or resizes. `redrawAll`
+   * is what both re-measures and re-renders the arrows, which are scaled from
+   * the same rectangle — drawn at a stale size they come out as NaN and
+   * vanish.
+   */
+  let lastRect = null;
+  let syncQueued = false;
+  const observed = new Set();
+  // Through `refresh`, not straight to `syncGeometry`: several boxes can
+  // report a new size for one layout change, and that is one re-measure.
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(refresh) : null;
+  if (observer) observer.observe(element);
+
+  /** Watch every ancestor box, since the board moves when one of them grows. */
+  function observeLayout() {
+    if (!observer) return;
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      if (observed.has(node)) continue;
+      observed.add(node);
+      observer.observe(node);
+    }
+  }
+
+  function movedSince(rect) {
+    return (
+      lastRect === null ||
+      Math.abs(lastRect.left - rect.left) > 0.1 ||
+      Math.abs(lastRect.top - rect.top) > 0.1 ||
+      Math.abs(lastRect.width - rect.width) > 0.1 ||
+      Math.abs(lastRect.height - rect.height) > 0.1
+    );
+  }
+
+  /**
+   * Re-measure if the board has moved. Cheap and idempotent: when nothing has
+   * moved it does nothing, which is also what stops a redraw from feeding the
+   * observer that triggered it.
+   */
+  function syncGeometry() {
+    syncQueued = false;
+    if (destroyed) return;
+    observeLayout();
+
+    const rect = element.getBoundingClientRect();
+    // Not laid out yet (the views build a board before inserting it).
+    if (!rect.width || !rect.height) return;
+    if (!movedSince(rect)) return;
+    lastRect = rect;
+
+    // Mid-drag, dropping the cached rectangle is enough and rebuilding the
+    // DOM under the pointer would cancel the drag; the next sync redraws.
+    if (ground.state.draggable.current) {
+      ground.state.dom.bounds.clear();
+      lastRect = null;
+      return;
+    }
+    ground.redrawAll();
+  }
+
+  /**
+   * Ask for a re-measure once the browser has laid out whatever just changed.
+   *
+   * Views call this after changing anything around the board; the observer
+   * would catch it a frame later anyway, but saying so directly keeps the
+   * board correct from the first click after a re-render.
+   */
+  function refresh() {
+    if (destroyed || syncQueued) return;
+    syncQueued = true;
+    requestAnimationFrame(syncGeometry);
+  }
 
   async function handleUserMove(from, to) {
     if (!enabled) return;
@@ -156,12 +251,16 @@ export function createBoard({
   }
 
   function destroy() {
+    destroyed = true;
+    boards.delete(handle);
+    observer?.disconnect();
     ground.destroy();
   }
 
-  return {
+  const handle = {
     element,
     ground,
+    refresh,
     setFen,
     pushMove,
     setOrientation,
@@ -176,6 +275,9 @@ export function createBoard({
     destroy,
     START_FEN,
   };
+
+  boards.add(handle);
+  return handle;
 }
 
 export { START_FEN };

@@ -169,6 +169,25 @@ chess-trainer --no-browser --port 8791 &     # in another shell
 npm run smoke
 ```
 
+A DOM shim has no layout, though: every rectangle in jsdom is zero, so it cannot
+see a board whose geometry has gone wrong. The click-mapping test therefore drives
+the real app in Chromium and clicks square centres with the mouse, asserting that
+the square chessground picks is the square clicked — at each point where the layout
+around the board changes. It needs no server, engine, database or network: a stub
+serves the real frontend with canned API payloads.
+
+```bash
+npm install && npx playwright install chromium
+npm run clicks
+```
+
+Regenerate the stub's legal-move data from the real rules module after changing the
+lines it plays:
+
+```bash
+python3 tests/frontend/fixtures/generate.py
+```
+
 ### Vendored frontend libraries
 
 The app loads no CDN at runtime. [chessground](https://github.com/lichess-org/chessground)
@@ -179,7 +198,7 @@ after changing the pinned version in `package.json`:
 npm install && npm run vendor
 ```
 
-Node is only needed for that and for the smoke test — never to run the app.
+Node is only needed for that and for the frontend tests — never to run the app.
 `node_modules/` is gitignored.
 
 chessground is GPL-3.0-or-later, which is why this project is GPL-3.0-or-later too

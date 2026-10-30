@@ -62,9 +62,9 @@ export function renderReviewView(container, { step, onCompleted }) {
   container.append(layout);
 
   // -- side panel cards --------------------------------------------------
-  const gameCard = card('Game');
-  const promptCard = card(step.title);
-  const attemptsCard = card('Attempts');
+  const gameCard = card('Game', panelChanged);
+  const promptCard = card(step.title, panelChanged);
+  const attemptsCard = card('Attempts', panelChanged);
   side.append(gameCard.root, promptCard.root, attemptsCard.root);
   attemptsCard.root.hidden = true;
 
@@ -333,6 +333,7 @@ export function renderReviewView(container, { step, onCompleted }) {
   function renderAttempts() {
     if (!attemptLog.length) {
       attemptsCard.root.hidden = true;
+      panelChanged();
       return;
     }
     attemptsCard.root.hidden = false;
@@ -422,10 +423,21 @@ export function renderReviewView(container, { step, onCompleted }) {
   }
 
   // -- helpers -----------------------------------------------------------
+  /**
+   * The side panel just changed size — the game card, the attempts list and
+   * the summary all arrive while the board is up, and the centred layout
+   * slides the board sideways when they do. Chessground caches the board's
+   * rectangle, so it has to be told, or later clicks read the wrong square.
+   */
+  function panelChanged() {
+    board?.refresh();
+  }
+
   function ensureBoard({ orientation = 'white' } = {}) {
     if (board === null) {
       board = createBoard({ orientation, interactive: false });
       boardAndBar.replaceChildren(board.element, evalBar.element);
+      board.refresh();
     } else {
       board.setOrientation(orientation);
     }
@@ -496,7 +508,7 @@ export function renderReviewView(container, { step, onCompleted }) {
 }
 
 // -- small DOM helpers ----------------------------------------------------
-function card(title) {
+function card(title, onChange) {
   const root = document.createElement('div');
   root.className = 'card';
   const heading = document.createElement('h3');
@@ -507,6 +519,7 @@ function card(title) {
     root,
     setBody(node) {
       body.replaceChildren(node);
+      if (onChange) onChange();
     },
   };
 }

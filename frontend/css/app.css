@@ -38,6 +38,11 @@
 
 * { box-sizing: border-box; }
 
+/* Keep the scrollbar's gutter whether or not a scrollbar is showing: without
+   it, a view that grows past the window narrows the page and slides the
+   centred board sideways. */
+html { scrollbar-gutter: stable; }
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -146,7 +151,13 @@ button.primary {
 button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 .button-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-/* ---------- board + eval bar ---------- */
+/* ---------- board + eval bar ----------
+   The board must not move once it is on screen: chessground caches the board's
+   rectangle and resolves every click against it. So the side panel is a fixed
+   width rather than a content-sized one — otherwise an opening name or a stats
+   table landing in it would widen the row and slide the centred board
+   sideways. `board.js` watches for the shifts this cannot prevent (fonts,
+   window resizes, the row wrapping). */
 .board-layout {
   display: flex;
   gap: 16px;
@@ -205,7 +216,14 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 }
 .evalbar-number.pending { color: var(--muted); }
 
-.side-panel { min-width: 260px; max-width: 340px; display: flex; flex-direction: column; gap: 14px; }
+.side-panel {
+  flex: none;
+  width: 320px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -307,7 +325,7 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 .card a:hover { text-decoration: underline; }
 
 /* ---------- opening cards ---------- */
-.side-panel-wide { max-width: 420px; }
+.side-panel-wide { width: 420px; }
 
 .card-line { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; flex-wrap: wrap; }
 .tag {

@@ -4,6 +4,7 @@
  */
 
 import * as api from './api.js';
+import { boards } from './board.js';
 import { createRouter } from './router.js';
 import { get, set, setStatus, subscribe } from './state.js';
 import { createStepBar } from './stepbar.js';
@@ -69,4 +70,4 @@ function renderEngineInfo(health) {
 boot();
 
 // Exposed for debugging from the browser console.
-window.chessTrainer = { api, state: get };
+window.chessTrainer = { api, state: get, boards };

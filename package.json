@@ -2,14 +2,16 @@
   "name": "chess-trainer-devtools",
   "private": true,
   "type": "module",
-  "description": "Dev-only tooling: vendors chessground into frontend/vendor and smoke-tests the frontend in a DOM. The app itself needs no Node at runtime.",
+  "description": "Dev-only tooling: vendors chessground into frontend/vendor, smoke-tests the frontend in a DOM and checks board click mapping in a real browser. The app itself needs no Node at runtime.",
   "scripts": {
     "vendor": "node scripts/vendor_chessground.mjs",
-    "smoke": "node tests/frontend/smoke.mjs"
+    "smoke": "node tests/frontend/smoke.mjs",
+    "clicks": "node tests/frontend/click_map.mjs"
   },
   "devDependencies": {
     "chessground": "9.2.1",
     "esbuild": "^0.25.0",
-    "jsdom": "^30.0.0"
+    "jsdom": "^30.0.0",
+    "playwright": "^1.64.1"
   }
 }

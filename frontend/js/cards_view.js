@@ -57,9 +57,9 @@ export function renderCardsView(container, { step, onCompleted }) {
   const side = document.createElement('div');
   side.className = 'side-panel side-panel-wide';
 
-  const queueCard = card_('Queue');
-  const promptCard = card_(step.title);
-  const resultCard = card_('Result');
+  const queueCard = card_('Queue', panelChanged);
+  const promptCard = card_(step.title, panelChanged);
+  const resultCard = card_('Result', panelChanged);
   resultCard.root.hidden = true;
   side.append(queueCard.root, promptCard.root, resultCard.root);
 
@@ -393,11 +393,22 @@ export function renderCardsView(container, { step, onCompleted }) {
   }
 
   // -- helpers -----------------------------------------------------------
+  /**
+   * The side panel just changed size: the opening name, the stats table and
+   * the grade all land in it mid-card, and the centred layout slides the board
+   * sideways when they do. Chessground caches the board's rectangle, so it has
+   * to be told, or every later click reads a square too far to the left.
+   */
+  function panelChanged() {
+    board?.refresh();
+  }
+
   function ensureBoard() {
     if (board === null) {
       // White at the bottom by default, whichever side the card asks about.
       board = createBoard({ orientation: 'white', interactive: false });
       boardAndBar.replaceChildren(board.element, evalBar.element);
+      board.refresh();
     }
     return board;
   }
@@ -422,7 +433,7 @@ export function renderCardsView(container, { step, onCompleted }) {
 }
 
 // -- small DOM helpers ----------------------------------------------------
-function card_(title) {
+function card_(title, onChange) {
   const root = document.createElement('div');
   root.className = 'card';
   const heading = document.createElement('h3');
@@ -433,6 +444,7 @@ function card_(title) {
     root,
     setBody(node) {
       body.replaceChildren(node);
+      if (onChange) onChange();
     },
   };
 }
