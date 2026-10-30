@@ -96,7 +96,10 @@ export function renderReviewView(container, { step, onCompleted }) {
   const whyCard = card('Why', panelChanged);
   const movesCard = card('Moves', panelChanged);
   const attemptsCard = card('Attempts', panelChanged);
-  side.append(gameCard.root, promptCard.root, whyCard.root, movesCard.root, attemptsCard.root);
+  side.append(gameCard.root, promptCard.root, movesCard.root);
+  // Under the buttons, beside the moves they are about: the attempts while
+  // solving, and once it is over the "why" above them.
+  boardColumn.append(whyCard.root, attemptsCard.root);
   whyCard.root.hidden = true;
   movesCard.root.hidden = true;
   attemptsCard.root.hidden = true;

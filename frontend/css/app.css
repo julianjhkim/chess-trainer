@@ -166,6 +166,10 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); }
   justify-content: center;
 }
 .board-column { display: flex; flex-direction: column; gap: 12px; }
+/* Cards under the board take the board's width and wrap inside it: `width: 0`
+   keeps their text out of the column's own sizing, so a long note never
+   widens the column (which would slide the board sideways). */
+.board-column > .card { width: 0; min-width: 100%; }
 .board-and-bar { display: flex; gap: 12px; align-items: stretch; }
 
 .cg-wrap {
