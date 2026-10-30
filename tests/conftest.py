@@ -45,6 +45,10 @@ class FakeEngine:
     """An :class:`Analyser` that returns canned results and counts calls.
 
     Scores default to a mild White edge; per-FEN overrides can be supplied.
+
+    The default best move is the position's first legal move, not a fixed
+    string: a hardcoded ``e2e4`` is illegal nearly everywhere and would turn a
+    wrong assertion into a confusing ``IllegalMove`` from deep in the code.
     """
 
     def __init__(
@@ -52,7 +56,7 @@ class FakeEngine:
         results: dict[str, Eval] | None = None,
         best_moves: dict[str, str] | None = None,
         default: Eval | None = None,
-        default_best: str = "e2e4",
+        default_best: str | None = None,
     ) -> None:
         self.results = results or {}
         self.best_moves = best_moves or {}
@@ -60,11 +64,21 @@ class FakeEngine:
         self.default_best = default_best
         self.calls: list[tuple[str, int, tuple[str, ...] | None]] = []
 
+    def _fallback_best(self, fen: str) -> str | None:
+        if self.default_best is not None:
+            return self.default_best
+        import chess
+
+        board = chess.Board(fen)
+        for move in board.legal_moves:
+            return move.uci()
+        return None
+
     def analyse(
         self, fen: str, depth: int, *, root_moves: list[str] | None = None
     ) -> EngineAnalysis:
         self.calls.append((fen, depth, tuple(root_moves) if root_moves else None))
-        best = self.best_moves.get(fen, self.default_best)
+        best = self.best_moves.get(fen) or self._fallback_best(fen)
         if root_moves:
             best = root_moves[0] if best not in root_moves else best
         return EngineAnalysis(
@@ -105,3 +119,20 @@ def config(db_path: Path) -> Config:
         open_browser=False,
         port=0,
     )
+
+
+DATA_DIR = Path(__file__).parent / "data"
+
+
+@pytest.fixture
+def chesscom_pgn() -> str:
+    """A real chess.com PGN, committed so tests never need the network."""
+    return (DATA_DIR / "chesscom_game.pgn").read_text()
+
+
+@pytest.fixture
+def chesscom_payload() -> dict:
+    """The matching raw archive entry for that game."""
+    import json
+
+    return json.loads((DATA_DIR / "chesscom_game.json").read_text())

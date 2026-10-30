@@ -9,8 +9,17 @@ from tests.conftest import FakeEngine
 FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
-def test_best_move_returns_the_engine_choice(conn, fake_engine):
-    assert best_move.best_move(conn, fake_engine, FEN, 20) == "e2e4"
+def test_best_move_returns_the_engine_choice(conn):
+    engine = FakeEngine(best_moves={FEN: "e2e4"})
+    assert best_move.best_move(conn, engine, FEN, 20) == "e2e4"
+
+
+def test_best_move_defaults_to_a_legal_move(conn, fake_engine):
+    """The fake stands in for a real engine, so its answer must be playable."""
+    import chess
+
+    chosen = best_move.best_move(conn, fake_engine, FEN, 20)
+    assert chess.Move.from_uci(chosen) in chess.Board(FEN).legal_moves
 
 
 def test_best_move_is_cached(conn, fake_engine):
@@ -19,9 +28,10 @@ def test_best_move_is_cached(conn, fake_engine):
     assert fake_engine.call_count == 1
 
 
-def test_is_best_move_compares_uci(conn, fake_engine):
-    assert best_move.is_best_move(conn, fake_engine, FEN, 20, "e2e4")
-    assert not best_move.is_best_move(conn, fake_engine, FEN, 20, "d2d4")
+def test_is_best_move_compares_uci(conn):
+    engine = FakeEngine(best_moves={FEN: "e2e4"})
+    assert best_move.is_best_move(conn, engine, FEN, 20, "e2e4")
+    assert not best_move.is_best_move(conn, engine, FEN, 20, "d2d4")
 
 
 def test_best_among_single_candidate_skips_the_engine(conn, fake_engine):

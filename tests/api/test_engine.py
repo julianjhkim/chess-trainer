@@ -5,7 +5,8 @@ from chess_trainer.engine.eval_types import Eval
 START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
-def test_eval_returns_a_formatted_evaluation(client):
+def test_eval_returns_a_formatted_evaluation(client, fake_engine_for_api):
+    fake_engine_for_api.best_moves[START] = "e2e4"
     payload = client.post("/api/engine/eval", json={"fen": START}).json()
     assert payload["evaluation"]["text"] == "+0.20"
     assert 0 < payload["evaluation"]["fraction"] < 1

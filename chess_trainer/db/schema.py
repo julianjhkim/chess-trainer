@@ -54,7 +54,58 @@ _M001 = Migration(
     """,
 )
 
-MIGRATIONS: tuple[Migration, ...] = (_M001,)
+#: Phase 2: fetched games and a light history of the reviews done on them.
+_M002 = Migration(
+    version=2,
+    name="games_and_game_reviews",
+    sql="""
+    -- Games fetched from chess.com, or pasted as PGN.
+    CREATE TABLE games (
+        id              TEXT PRIMARY KEY,   -- chess.com uuid, or a digest for pasted PGN
+        url             TEXT,
+        pgn             TEXT NOT NULL,
+        my_color        TEXT NOT NULL CHECK (my_color IN ('white', 'black')),
+        white_username  TEXT,
+        black_username  TEXT,
+        white_result    TEXT,
+        black_result    TEXT,
+        time_class      TEXT,
+        rules           TEXT,
+        end_time        INTEGER,            -- unix seconds; NULL if the PGN had no date
+        source          TEXT NOT NULL CHECK (source IN ('chesscom', 'paste')),
+        fetched_at      TEXT NOT NULL
+    );
+
+    CREATE INDEX games_by_recency ON games (end_time DESC, fetched_at DESC);
+
+    -- One row per completed review, for a light history.
+    CREATE TABLE game_reviews (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id              TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        reviewed_at          TEXT NOT NULL,   -- UTC timestamp
+        reviewed_on          TEXT NOT NULL,   -- Asia/Seoul calendar date
+        depth                INTEGER NOT NULL,
+        -- All of the following are NULL when the game held no inaccuracy.
+        first_inaccuracy_ply INTEGER,
+        my_move_uci          TEXT,
+        my_move_san          TEXT,
+        classification       TEXT,
+        best_move_uci        TEXT,
+        best_move_san        TEXT,
+        eval_before_cp       INTEGER,
+        eval_before_mate     INTEGER,
+        eval_after_cp        INTEGER,
+        eval_after_mate      INTEGER,
+        win_percent_drop     REAL,
+        attempts             INTEGER NOT NULL DEFAULT 0,
+        used_show_answer     INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX game_reviews_by_game ON game_reviews (game_id, reviewed_at DESC);
+    """,
+)
+
+MIGRATIONS: tuple[Migration, ...] = (_M001, _M002)
 
 
 def current_version(conn: sqlite3.Connection) -> int:

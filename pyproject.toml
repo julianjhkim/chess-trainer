@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "Local web app for daily chess review and opening drills"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 dependencies = [
     "fastapi",
     "uvicorn[standard]",

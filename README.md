@@ -7,9 +7,9 @@ Runs entirely on `localhost`. Stockfish does the analysis, the Lichess masters
 database supplies the opening lines, and all frontend libraries are vendored into
 the repo so the app works offline.
 
-**Status: Phase 1 complete** — app skeleton, board, eval bar, start screen, step
-bar and streak. The four step views are scaffolds for now; game review arrives in
-Phase 2 and opening cards in Phase 3.
+**Status: Phase 2 complete** — app skeleton, board, eval bar, start screen, step
+bar, streak, chess.com fetching and full game review (steps 1–3). Opening cards
+(step 4) arrive in Phase 3.
 
 ---
 
@@ -56,26 +56,53 @@ chess-trainer --help
   --no-browser       start the server without opening a browser
 ```
 
-## Trying what Phase 1 built
+## Trying what Phase 2 built
 
-1. **Start screen** — four checkboxes, all checked. Untick some and press *Start*;
-   only the ticked steps are selected, and *Start* greys out if you untick them all.
-2. **Step bar** — all four steps are always shown at the top. Click any of them to
-   jump forward or back, at any time. A step you left unticked is shown dimmed, and
-   clicking it selects it on the way in.
-3. **Board** — each step currently shows a playable board. Drag a piece: legality
-   comes from the server (python-chess), so illegal moves snap back. *Flip board*
-   and *Reset position* are below it.
-4. **Eval bar** — left of the board, always visible, with the number from White's
-   perspective (`+0.45`, `−1.20`, `M3`). It updates after every move. The first
-   analysis of a position takes about a second at depth 20; the same position again
-   is instant, because results are cached in SQLite.
-5. **Streak** — press *Mark this step complete*. The top right shows current and
-   longest streak; the day boundary is midnight in Asia/Seoul. Completing a second
-   step on the same day does not double-count it.
-6. **Status bar** — bottom left reports what just happened (or what failed); bottom
-   right shows the version, engine depth, chess.com username and whether a Lichess
-   token is present.
+Press *Start* with all four boxes ticked and work through it.
+
+**Step 1 — Review last game.** Your most recent chess.com game is fetched and your
+moves are analysed at depth 20, stopping at the first inaccuracy. A progress bar
+counts the moves; a long game can take a minute or two the first time, and is
+instant afterwards because results are cached. Then the game auto-replays to the
+position just before your first slip and you play the move yourself. Only
+Stockfish's top choice is accepted; wrong tries are unlimited and each one updates
+the eval bar so you can see what it would have cost. *Show answer* gives up. When
+you find it, the review ends with a summary: the move you played and its
+classification, the engine's move, the evals either side and the win% you dropped.
+If the game had no inaccuracy, it says so.
+
+**Step 2 — Play a game.** *Open chess.com* opens a tab; play your game and come
+back. *I'm done — fetch my game* watches the chess.com archive for about two
+minutes for a game newer than the one you had before (the archive lags a minute or
+so behind a finished game), counting down as it goes. If nothing turns up, a PGN
+paste box appears. Either way, finishing hands straight over to step 3.
+
+**Step 3 — Review that game.** The same drill on the game you just played.
+
+**Step 4 — Opening cards.** Still a Phase 3 scaffold: a free board with a live
+eval bar.
+
+Other things worth poking at:
+
+- **Step bar** — all four steps always visible; click any one to jump forward or
+  back at any time, mid-review included. A step you left unticked is dimmed, and
+  clicking it selects it on the way in.
+- **Board orientation** — a review orients the board to the colour you played.
+  *Flip board* turns it round.
+- **Eval bar** — always visible, always from White's perspective
+  (`+0.45`, `−1.20`, `M3`).
+- **PGN paste** — available in both review steps at any point, for when chess.com
+  is unreachable or the game has not appeared in the archive yet.
+- **Streak** — top right, current and longest. Finishing a review counts the day;
+  the boundary is midnight in Asia/Seoul, and a second step the same day does not
+  double-count.
+- **Review history** — every finished review is written to the `game_reviews`
+  table: which game, the Seoul date, the ply of your first inaccuracy, your move
+  and its classification, the engine's move, both evals, the attempt count and
+  whether you revealed the answer.
+- **Status bar** — bottom left reports what just happened (or what failed); bottom
+  right shows the version, engine depth, chess.com username and whether a Lichess
+  token is present.
 
 ## Configuration
 
@@ -127,8 +154,8 @@ npm install && npm run vendor
 Node is only needed for that and for the smoke test — never to run the app.
 `node_modules/` is gitignored.
 
-> chessground is **GPL-3.0-or-later**, and it is vendored into this public repo.
-> Bear that in mind if you ever want to license this project differently.
+chessground is GPL-3.0-or-later, which is why this project is GPL-3.0-or-later too
+(see [Licence](#licence)).
 
 ## Architecture
 
@@ -144,9 +171,11 @@ chess_trainer/
   db/        connection.py, schema.py (migrations), one repository per table
   engine/    stockfish.py (process), analysis.py (cached), eval_format.py,
              winpct.py, classify.py, best_move.py, eval_types.py
-  chesscom/  client.py, archives.py, latest_game.py, polling.py, game_model.py   [Phase 2]
-  pgn/       parse.py, positions.py                                              [Phase 2]
-  review/    first_inaccuracy.py, review_session.py, my_moves.py, verdict.py     [Phase 2]
+  chesscom/  client.py (HTTP), archives.py, latest_game.py, polling.py,
+             game_model.py
+  pgn/       parse.py, positions.py
+  review/    my_moves.py, first_inaccuracy.py, verdict.py, review_session.py,
+             review_job.py (background analysis + progress)
   explorer/  lichess_client.py, cache.py, rate_limit.py, masters.py              [Phase 3]
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,
              stats_table.py, line.py, card_types.py                              [Phase 3]
@@ -157,10 +186,29 @@ chess_trainer/
 frontend/
   index.html  css/app.css  vendor/chessground/  js/<one module per concern>
 ```
+Phase 2 adds `review_view.js`, `play_view.js`, `pgn_paste.js` and `animate.js` to
+the frontend, and `games_repo.py` / `game_reviews_repo.py` to the database layer.
 
 `rules.py` is the single authority on move legality: the browser carries no rules
 engine and asks the server instead, which also means a drill answer can never be
 judged client-side.
+
+### Review analysis runs in the background
+
+Classifying a move needs the evaluation before it *and* after it, and the "after"
+position is not reusable as the next move's "before" (you moved, then your
+opponent did). So Stockfish ends up scoring roughly every ply. Two things keep
+that bearable: only *your* moves are classified and given a best-move answer, and
+the walk **stops at your first inaccuracy** — a slip on move 8 costs a handful of
+searches rather than one per ply of the whole game. Everything is cached by
+`(fen, depth)`, so re-reviewing is instant.
+
+Even so, a game where the first slip is the last move played can take a minute at
+depth 20. That would look like a hung page, so `review/review_job.py` runs the
+analysis in a worker thread and reports `assessed / total` progress for the browser
+to poll. The job is cancellable, and `AppState.shutdown` cancels and joins it
+before closing the database — a background thread reading a closed SQLite
+connection is a use-after-free that segfaults the interpreter.
 
 ### Why one locked SQLite connection
 
@@ -187,6 +235,16 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/board/state` | legal destinations and status for a FEN |
 | `POST /api/board/move` | apply a move, get SAN and the new position |
 | `POST /api/engine/eval` | evaluate a position, read through the cache |
+| `GET /api/game/latest` | the most recent stored game (no network) |
+| `POST /api/game/fetch-latest` | fetch my newest chess.com game and store it |
+| `POST /api/game/baseline` | record the newest game *before* I play one |
+| `POST /api/game/poll-new` | one ~12s window watching for a newer game |
+| `POST /api/game/paste` | store a game from pasted PGN |
+| `POST /api/review/start` | begin a review; analyses in the background |
+| `GET /api/review/{step}` | review progress and state (polled while analysing) |
+| `POST /api/review/attempt` | try a move; returns correctness and an eval |
+| `POST /api/review/show-answer` | reveal the engine's move, ending the review |
+| `POST /api/review/acknowledge` | close a review that had no inaccuracy |
 
 ## Troubleshooting
 
@@ -196,6 +254,22 @@ The app still starts; only evaluation is unavailable.
 
 **Port already in use** — `chess-trainer --port 8800`.
 
+**"No new game appeared in two minutes"** — the chess.com archive sometimes lags
+further behind. Press the fetch button again, or open the game on chess.com and
+paste its PGN (Share → PGN) into the box that appears.
+
+**The review is analysing for a long time** — a long game at depth 20 takes a
+while the first time. Lower it with `chess-trainer --depth 14` if you would rather
+trade some accuracy for speed; results at each depth are cached separately.
+
 **Starting over** — delete the database
 (`~/.local/share/chess-trainer/chess_trainer.db`). It holds the streak and the
 analysis cache; schema migrations run automatically on startup.
+
+## Licence
+
+GPL-3.0-or-later — see [LICENSE](LICENSE).
+
+The vendored copy of [chessground](https://github.com/lichess-org/chessground) in
+`frontend/vendor/chessground/` is GPL-3.0-or-later (Lichess), which is what sets
+this project's licence; its own licence text is kept alongside it.

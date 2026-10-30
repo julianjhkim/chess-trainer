@@ -235,3 +235,73 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 }
 .status.error { color: var(--bad); }
 .status.busy { color: var(--warn); }
+
+/* ---------- progress bars (review analysis, game polling) ---------- */
+.progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width .3s ease;
+}
+.poll-progress { margin-top: 16px; }
+
+/* ---------- PGN paste ---------- */
+.pgn-paste {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+}
+.pgn-paste > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+}
+.pgn-paste > summary:hover { color: var(--text); }
+.pgn-paste[open] > summary { margin-bottom: 8px; color: var(--text); }
+.pgn-paste textarea {
+  width: 100%;
+  font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+.pgn-paste textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.paste-error { color: var(--bad); font-size: 13px; }
+
+/* ---------- attempt list ---------- */
+.attempt-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+.attempt-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+.attempt-wrong { color: var(--bad); }
+.attempt-correct { color: var(--good); font-weight: 600; }
+.attempt-eval { color: var(--muted); font-variant-numeric: tabular-nums; }
+.attempt-correct .attempt-eval { color: inherit; }
+
+/* ---------- links in cards ---------- */
+.card a { color: var(--accent); text-decoration: none; }
+.card a:hover { text-decoration: underline; }

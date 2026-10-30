@@ -1,10 +1,9 @@
 /**
- * Temporary Phase 1 scaffold.
+ * Scaffold for a step whose real view does not exist yet.
  *
- * Each step gets a playable board with a live eval bar, so the board, the
- * engine round-trip, the step bar and the streak can all be exercised before
- * the real step views exist. Phase 2 replaces this for the review and play
- * steps, Phase 3 for the opening cards; this module goes away with them.
+ * Only the opening-cards step still uses this: it gets a playable board with a
+ * live eval bar so the board and engine round-trip stay exercised. Phase 3
+ * replaces it, and this module goes away with it.
  */
 
 import * as api from './api.js';
@@ -118,10 +117,7 @@ export function renderPlaceholder(container, { session, step, onCompleted }) {
 }
 
 const PLACEHOLDER_NOTES = {
-  review_last_game: 'Phase 2 will replay your last chess.com game up to your first inaccuracy and ask you to find the better move. For now this is a free board so the board, eval bar and engine can be checked.',
-  play: 'Phase 2 will add the "Open chess.com" and "I\'m done — fetch my game" buttons here.',
-  review_new_game: 'Phase 2 will review the game you just played, the same way as step 1.',
-  cards: 'Phase 3 will add the opening card drills from the Lichess masters database.',
+  cards: 'Phase 3 will add the opening card drills from the Lichess masters database. For now this is a free board, so the board, eval bar and engine stay exercised.',
 };
 
 function button(text, handler, className = '') {

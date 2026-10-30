@@ -7,6 +7,8 @@
  */
 
 import { renderPlaceholder } from './placeholder_view.js';
+import { renderPlayView } from './play_view.js';
+import { renderReviewView } from './review_view.js';
 import { renderStartScreen } from './start_screen.js';
 
 export function createRouter(container, { onStarted, onCompleted }) {
@@ -29,10 +31,28 @@ export function createRouter(container, { onStarted, onCompleted }) {
     }
 
     const step = session.steps.find((s) => s.step === session.current);
-    active = renderPlaceholder(container, { session, step, onCompleted });
+    active = renderStep(container, { session, step, onStarted, onCompleted });
   }
 
   return { render };
+}
+
+/** Pick the view for a step. Opening cards are still a Phase 3 scaffold. */
+function renderStep(container, { session, step, onCompleted }) {
+  const handleCompleted = (nextSession, options = {}) => {
+    if (options.rerender === false) return;
+    if (onCompleted) onCompleted(nextSession);
+  };
+
+  switch (step.step) {
+    case 'review_last_game':
+    case 'review_new_game':
+      return renderReviewView(container, { step, onCompleted: handleCompleted });
+    case 'play':
+      return renderPlayView(container, { step, onCompleted });
+    default:
+      return renderPlaceholder(container, { session, step, onCompleted });
+  }
 }
 
 function renderFinished(container, session) {

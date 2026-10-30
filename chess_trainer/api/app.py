@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from chess_trainer import __version__, paths
 from chess_trainer.api.deps import AppState
-from chess_trainer.api.routers import board, engine, health, session, streak
+from chess_trainer.api.routers import board, engine, game, health, review, session, streak
 from chess_trainer.config import Config, load_config
 from chess_trainer.db import schema
 
@@ -21,6 +21,8 @@ ROUTERS = (
     streak.router,
     engine.router,
     board.router,
+    game.router,
+    review.router,
 )
 
 

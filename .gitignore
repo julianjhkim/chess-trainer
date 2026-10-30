@@ -36,7 +36,9 @@ htmlcov/
 *.db-shm
 *.sqlite
 *.sqlite3
-data/
+# Anchored to the repo root: a bare `data/` would also swallow tests/data/,
+# which holds committed PGN fixtures the suite needs.
+/data/
 
 # --- Node (dev-only tooling: vendoring chessground + the frontend smoke test) ---
 # package-lock.json IS committed: it records exactly which chessground version

@@ -56,3 +56,31 @@ export const playMove = (fen, from, to, promotion) =>
 // -- engine ---------------------------------------------------------------
 export const evaluate = (fen, depth) =>
   request('/api/engine/eval', { method: 'POST', body: { fen, depth: depth ?? null } });
+
+// -- games ----------------------------------------------------------------
+export const latestGame = () => request('/api/game/latest');
+export const fetchLatestGame = () => request('/api/game/fetch-latest', { method: 'POST' });
+export const setGameBaseline = () => request('/api/game/baseline', { method: 'POST' });
+export const pollForNewGame = (budgetSeconds) =>
+  request('/api/game/poll-new', {
+    method: 'POST',
+    body: { budget_seconds: budgetSeconds ?? null },
+  });
+export const pastePgn = (pgn) => request('/api/game/paste', { method: 'POST', body: { pgn } });
+
+// -- review ---------------------------------------------------------------
+export const startReview = (step, { gameId = null, restart = false } = {}) =>
+  request('/api/review/start', {
+    method: 'POST',
+    body: { step, game_id: gameId, restart },
+  });
+export const reviewState = (step) => request(`/api/review/${step}`);
+export const reviewAttempt = (step, from, to, promotion) =>
+  request('/api/review/attempt', {
+    method: 'POST',
+    body: { step, from, to, promotion },
+  });
+export const reviewShowAnswer = (step) =>
+  request('/api/review/show-answer', { method: 'POST', body: { step } });
+export const reviewAcknowledge = (step) =>
+  request('/api/review/acknowledge', { method: 'POST', body: { step } });
