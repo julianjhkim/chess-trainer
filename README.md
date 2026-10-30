@@ -81,7 +81,13 @@ it, ← from there shows the position with the engine's move (green) and yours (
 and → goes on to the move you actually played and the rest of the game. Your slip
 is marked red in the list.
 
-A **Why** card then reads back the engine's reasoning — not in prose, since there
+Under the board, a **Review at Lichess** card links to the game on the Lichess
+analysis board, opened at the position before your slip and from your side, for
+trying moves of your own — something this app deliberately leaves to Lichess. The
+link only carries the moves (no names), in the URL itself; nothing is sent to
+Lichess unless you click it. A clean game gets the link too, from the first move.
+
+Below it, a **Why** card reads back the engine's reasoning — not in prose, since there
 is no understanding behind it, but as its own lines with the facts that can be
 read straight off them:
 
@@ -229,7 +235,7 @@ npm run cards
 
 And a third, over stepping through a reviewed game with the arrow keys — before
 and after the slip is solved — the Hint circle, the Why card, and the game card's
-single chess.com link:
+single chess.com link, and the Lichess link:
 
 ```bash
 npm run review
@@ -277,7 +283,8 @@ chess_trainer/
   pgn/       parse.py, positions.py
   review/    my_moves.py, first_inaccuracy.py, verdict.py, review_session.py,
              review_job.py (background analysis + progress), browse.py,
-             hint.py, explain.py (the "why", read off the engine's lines)
+             hint.py, explain.py (the "why", read off the engine's lines),
+             lichess_link.py
   explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
              explorer_types.py
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,
@@ -396,7 +403,7 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/game/poll-new` | one ~12s window watching for a newer game |
 | `POST /api/game/paste` | store a game from pasted PGN |
 | `POST /api/review/start` | begin a review; analyses in the background |
-| `GET /api/review/{step}` | review progress and state (polled while analysing), including the browsable `moves` |
+| `GET /api/review/{step}` | review progress and state (polled while analysing), including the browsable `moves` and, once finished, `lichess_url` |
 | `POST /api/review/attempt` | try a move; returns correctness and an eval |
 | `POST /api/review/hint` | the square and piece the answer moves from (not its destination) |
 | `POST /api/review/show-answer` | reveal the engine's move, ending the review |

@@ -56,7 +56,7 @@ Frontend (Node is dev-only; `npm install` and `npx playwright install chromium` 
 npm run smoke    # jsdom run of the real ES modules — needs a live server on :8791 (see above)
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
-npm run review   # Chromium: review move browsing, Hint circle, Why card, single chess.com link
+npm run review   # Chromium: review move browsing, Hint, Why, Lichess link, single chess.com link
 ```
 `clicks` and `cards` use `tests/frontend/stub_server.mjs` (real frontend, canned
 payloads) — no server, engine, DB or network. After changing the lines the stub
@@ -102,6 +102,16 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   move shows it as a nav "aside". The analysis cache stores the PV (`pv`
   column); `analysis.analyse(..., need_line=True)` re-searches entries cached
   without one.
+- **Review at Lichess** (`review/lichess_link.py`, `ReviewStateOut.lichess_url`):
+  set only once the review is finished (clean games too). URL form
+  `https://lichess.org/analysis/pgn/<movetext>?color=<my colour>#<target ply>`
+  (verified against lichess.org); movetext is percent-escaped except dots (SAN
+  has `#`, `+`, `=`), moves only — no player names. Non-standard start FEN →
+  `/analysis/<fen with _ for spaces>`. A plain link; the app never calls Lichess
+  for this. Trying your own moves is left to Lichess on purpose — don't build a
+  free-play board in the app.
+- Board-column layout under the review board: buttons → Review at Lichess →
+  Why → Attempts. Side panel: Game → prompt → Moves.
 - **Move browsing** (`review/browse.py`, `frontend/js/move_nav.js`, `move_list.js`):
   ← / → step, Home/↑ and End/↓ jump, the move list is clickable. While the drill
   is open the server sends only the moves *before* the slip (never my move or

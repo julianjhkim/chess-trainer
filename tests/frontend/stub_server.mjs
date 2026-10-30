@@ -318,6 +318,9 @@ function browseReviewState(extra = {}) {
     solved: reviewFinished,
     finished: reviewFinished,
     summary: reviewFinished ? { ...BROWSE_SUMMARY, used_hint: reviewHinted } : null,
+    lichess_url: reviewFinished
+      ? 'https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3%20Nc6%203.Bb5?color=white#2'
+      : null,
     moves: analysing
       ? []
       : reviewFinished

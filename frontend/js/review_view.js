@@ -93,13 +93,15 @@ export function renderReviewView(container, { step, onCompleted }) {
   // -- side panel cards --------------------------------------------------
   const gameCard = card('Game', panelChanged);
   const promptCard = card(step.title, panelChanged);
+  const lichessCard = card('Review at Lichess', panelChanged);
   const whyCard = card('Why', panelChanged);
   const movesCard = card('Moves', panelChanged);
   const attemptsCard = card('Attempts', panelChanged);
   side.append(gameCard.root, promptCard.root, movesCard.root);
   // Under the buttons, beside the moves they are about: the attempts while
   // solving, and once it is over the "why" above them.
-  boardColumn.append(whyCard.root, attemptsCard.root);
+  boardColumn.append(lichessCard.root, whyCard.root, attemptsCard.root);
+  lichessCard.root.hidden = true;
   whyCard.root.hidden = true;
   movesCard.root.hidden = true;
   attemptsCard.root.hidden = true;
@@ -283,6 +285,7 @@ export function renderReviewView(container, { step, onCompleted }) {
     promptCard.setBody(body);
     ensureBoardAtStart();
     showNav(review.moves ?? [], { index: 0 });
+    renderLichessLink();
   }
 
   async function renderTarget() {
@@ -536,6 +539,7 @@ export function renderReviewView(container, { step, onCompleted }) {
       lastMove: answer,
       shapes: [arrow(answer, 'green')].filter(Boolean),
     });
+    renderLichessLink();
     void loadExplanation(target);
   }
 
@@ -567,6 +571,35 @@ export function renderReviewView(container, { step, onCompleted }) {
   function hideWhy() {
     explainToken += 1;
     whyCard.root.hidden = true;
+    lichessCard.root.hidden = true;
+  }
+
+  /**
+   * Trying moves of your own is Lichess's job, not this app's: once the review
+   * is over, link to the game on its analysis board, opened where it went
+   * wrong. The URL only carries the moves, and nothing is sent until clicked.
+   */
+  function renderLichessLink() {
+    const url = review?.lichess_url;
+    lichessCard.root.hidden = !url;
+    if (!url) return;
+    const body = document.createElement('div');
+    body.append(
+      paragraph(
+        review.target
+          ? 'Open this game on the Lichess analysis board, at the position where it went wrong, and try the moves yourself.'
+          : 'Open this game on the Lichess analysis board and try the moves yourself.',
+        'choice-note',
+      ),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.className = 'lichess-link';
+    link.textContent = 'Review at Lichess ↗';
+    body.append(link);
+    lichessCard.setBody(body);
   }
 
   // -- move navigation ---------------------------------------------------

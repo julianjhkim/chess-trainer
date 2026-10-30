@@ -141,6 +141,33 @@ def test_moves_are_mine_by_colour_when_i_played_black(client):
     assert [m["is_mine"] for m in payload["moves"]] == [False, True] * 3
 
 
+# -- the Lichess link ------------------------------------------------------
+def test_no_lichess_link_while_still_solving(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    assert start_review(client)["lichess_url"] is None
+
+
+def test_a_finished_review_links_to_lichess_at_the_slip(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    payload = client.post("/api/review/show-answer", json={"step": STEP}).json()
+    url = payload["review"]["lichess_url"]
+    assert url.startswith("https://lichess.org/analysis/pgn/1.e4")
+    assert url.endswith("?color=white#2")
+
+
+def test_the_lichess_link_carries_no_player_names(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    url = client.post("/api/review/show-answer", json={"step": STEP}).json()["review"]["lichess_url"]
+    assert "test-player" not in url and "rival" not in url
+
+
+def test_a_clean_game_links_to_lichess_from_the_start(client):
+    url = start_review(client, pgn=BLACK_PGN)["lichess_url"]
+    assert url.endswith("?color=black#0")
+
+
 # -- hints ---------------------------------------------------------------
 def test_a_hint_names_the_piece_but_not_its_destination(client, fake_engine_for_api):
     make_blunder(fake_engine_for_api, 2, "d2d4")

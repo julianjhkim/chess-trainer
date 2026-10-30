@@ -124,6 +124,7 @@ async function testWhileDrilling(page, base) {
     return board && board.ground.state.movable.color !== undefined;
   });
 
+  check('no Lichess link while still solving', !(await page.isVisible('.lichess-link')));
   let state = await snapshot(page);
   check('the game card has exactly one chess.com link after several polls', state.links === 1, `${state.links} links`);
   check('the list holds only the moves before the slip', JSON.stringify(state.moves) === '["e4","e5"]', JSON.stringify(state.moves));
@@ -228,6 +229,17 @@ async function testAfterSolving(page) {
   await page.click('.nav-row button[aria-label^="Next"]');
   await waitForFen(page, FENS[1], 'the ▶ button');
   check('the ▶ button steps too', (await snapshot(page)).fen === FENS[1]);
+
+  // -- Lichess
+  const href = await page.getAttribute('.lichess-link', 'href');
+  check('a finished review links to the Lichess analysis board', href?.startsWith('https://lichess.org/analysis/pgn/'), href);
+  check('the link opens in a new tab', (await page.getAttribute('.lichess-link', 'target')) === '_blank');
+  check('the Lichess card sits above Why, under the buttons', await page.evaluate(() => {
+    const column = document.querySelector('.board-column');
+    const cards = [...column.querySelectorAll(':scope > .card')].filter((c) => !c.hidden);
+    const titles = cards.map((c) => c.querySelector('h3').textContent);
+    return titles.join('|') === 'Review at Lichess|Why|Attempts';
+  }));
 
   // -- why
   await waitForText(page, 'You played: 2.Nf3');

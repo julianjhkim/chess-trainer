@@ -15,6 +15,7 @@ from chess_trainer.review import my_moves
 from chess_trainer.review.browse import browsable_moves
 from chess_trainer.review.explain import ExplainedLine, Explanation
 from chess_trainer.review.hint import hint_for
+from chess_trainer.review.lichess_link import analysis_url
 from chess_trainer.review.review_job import ReviewJob, ReviewStatus
 from chess_trainer.review.review_session import ReviewTarget
 from chess_trainer.openings import card_builder, line as line_module
@@ -324,6 +325,9 @@ class ReviewStateOut(BaseModel):
     #: while the drill is open, the whole game once the review is over. Empty
     #: while analysing.
     moves: list[ReviewMoveOut] = Field(default_factory=list)
+    #: Once the review is over: the game on Lichess's analysis board, opened
+    #: at the position before my first inaccuracy, to try moves there.
+    lichess_url: str | None = None
 
     @classmethod
     def of(cls, step: Step, job: ReviewJob) -> "ReviewStateOut":
@@ -358,14 +362,22 @@ class ReviewStateOut(BaseModel):
             state.summary = ReviewSummaryOut.of(session.summary())
             if target is not None:
                 state.target = _target_out(target, orientation)
+        positions = positions_module.from_parsed(job.parsed)
         state.moves = [
             ReviewMoveOut.of(position, job.my_colour)
             for position in browsable_moves(
-                positions_module.from_parsed(job.parsed),
+                positions,
                 target_ply=target.ply if target is not None else None,
                 finished=session.finished,
             )
         ]
+        if session.finished:
+            state.lichess_url = analysis_url(
+                positions,
+                start_fen=job.parsed.start_fen,
+                ply=target.ply if target is not None else 0,
+                my_colour=job.my_colour,
+            )
         return state
 
 

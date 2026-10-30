@@ -354,6 +354,7 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 
 /* Review: hint and the "why" card. */
 .hint-line { color: var(--warn); font-weight: 600; }
+.lichess-link { font-weight: 600; }
 .explanation { display: grid; gap: 12px; }
 .explain-heading { margin: 0 0 4px; font-weight: 600; }
 .explain-best .explain-heading { color: var(--good); }
