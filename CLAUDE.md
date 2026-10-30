@@ -56,6 +56,7 @@ Frontend (Node is dev-only; `npm install` and `npx playwright install chromium` 
 npm run smoke    # jsdom run of the real ES modules — needs a live server on :8791 (see above)
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
+npm run review   # Chromium: arrow-key move browsing in a review + single chess.com link
 ```
 `clicks` and `cards` use `tests/frontend/stub_server.mjs` (real frontend, canned
 payloads) — no server, engine, DB or network. After changing the lines the stub
@@ -86,6 +87,14 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   move at the analysis depth (default 20) is accepted** — strict string match,
   judged server-side (`review/verdict.py`). Unlimited retries, eval bar updates
   on each; "Show answer" gives up. No inaccuracy → say so.
+- **Move browsing** (`review/browse.py`, `frontend/js/move_nav.js`, `move_list.js`):
+  ← / → step, Home/↑ and End/↓ jump, the move list is clickable. While the drill
+  is open the server sends only the moves *before* the slip (never my move or
+  anything after it) and the board accepts a move only at the live position.
+  Once finished (solved, revealed, or no inaccuracy) the whole game is sent; the
+  engine's answer is an "aside" between the position before the slip and the
+  move I played (← from it: green best + red mine arrows; →: my actual move).
+  Keys typed in text fields (PGN box) are ignored.
 - Analysis runs in a background job with progress polling; cached by `(fen, depth)`.
   `AppState.shutdown` must cancel/join the job before closing the DB.
 
@@ -156,3 +165,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   change around the board. A freshly built board is detached, so it needs a
   refresh once inserted. jsdom can't catch this — use `npm run clicks`.
 - Don't let the background review thread outlive the DB connection (segfault).
+- Review state is re-rendered on every 700 ms progress poll: anything a render
+  adds must go inside the card body that `setBody` replaces, never appended to
+  the card root (that once stacked up "Open on chess.com" links).
+- The browser tests' stub (`tests/frontend/stub_server.mjs`) only knows positions
+  in `fixtures/board.json`; add new lines to `fixtures/generate.py` and rerun it.

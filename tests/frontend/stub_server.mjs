@@ -11,7 +11,9 @@
  * `POST /__scenario {"step": "cards", "engineAgrees": false}` chooses which
  * step the session says is current -- i.e. which view the page renders on the
  * next load -- and what the card says about Stockfish agreeing with the
- * masters.
+ * masters. Adding `"review": "browse"` swaps the one-position review for a real
+ * five-move game whose first slip is White's third ply, which is also slow to
+ * analyse: the first few polls report progress before the target arrives.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -150,6 +152,73 @@ const REVIEW_TARGET = {
   orientation: 'white',
 };
 
+/**
+ * The review game for the `browse` scenario: 1.e4 e5 2.Nf3 Nc6 3.Bb5, where
+ * 2.Nf3 is the slip and 2.Bc4 the engine's answer.
+ */
+const BROWSE_LINE = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5'];
+const BROWSE_TARGET_PLY = 2;
+const BROWSE_ANSWER = 'f1c4';
+/** Polls answered with "still analysing" before the browse review is ready. */
+const BROWSE_ANALYSING_POLLS = 3;
+
+/** The review's move list for `line`, shaped like `ReviewMoveOut`. */
+function movesOf(line, myColour = 'white') {
+  let fen = START_FEN;
+  return line.map((uci, ply) => {
+    const move = fixture.moves[`${fen}|${uci}`];
+    if (!move) throw new Error(`no fixture move for ${uci} at ply ${ply}`);
+    const moverIsWhite = ply % 2 === 0;
+    const moveNumber = Math.floor(ply / 2) + 1;
+    const entry = {
+      ply,
+      move_number: moveNumber,
+      label: `${moveNumber}${moverIsWhite ? '.' : '...'}${move.san}`,
+      san: move.san,
+      uci,
+      fen_before: fen,
+      fen_after: move.fen,
+      mover_is_white: moverIsWhite,
+      is_mine: moverIsWhite === (myColour === 'white'),
+    };
+    fen = move.fen;
+    return entry;
+  });
+}
+
+const BROWSE_MOVES = movesOf(BROWSE_LINE);
+
+const BROWSE_TARGET = {
+  ply: BROWSE_TARGET_PLY,
+  move_number: 2,
+  move_label: '2.Nf3',
+  fen_before: BROWSE_MOVES[BROWSE_TARGET_PLY].fen_before,
+  replay_ucis: BROWSE_LINE.slice(0, BROWSE_TARGET_PLY),
+  mover_is_white: true,
+  orientation: 'white',
+};
+
+const BROWSE_SUMMARY = {
+  found_an_inaccuracy: true,
+  move_label: '2.Nf3',
+  my_move_san: 'Nf3',
+  my_move_uci: 'g1f3',
+  classification: 'inaccuracy',
+  best_move_san: 'Bc4',
+  best_move_uci: BROWSE_ANSWER,
+  eval_before: EVALUATION,
+  eval_after: { cp: -20, mate: null, text: '−0.20', fraction: 0.47 },
+  win_percent_drop: 11.2,
+  attempts: 1,
+  used_show_answer: false,
+  solved_first_try: true,
+};
+
+/** Which review the stub serves: null for the one-position one, or 'browse'. */
+let reviewScenario = null;
+let reviewPolls = 0;
+let reviewFinished = false;
+
 /** Which step the session reports as current; set through `/__scenario`. */
 let currentStep = 'cards';
 /** What the served card says about Stockfish agreeing with the masters. */
@@ -176,6 +245,7 @@ function session(step) {
 const STREAK = { current: 4, longest: 9, active_today: true, total_days: 21 };
 
 function reviewState(extra = {}) {
+  if (reviewScenario === 'browse') return browseReviewState(extra);
   return {
     step: currentStep,
     status: 'ready',
@@ -193,6 +263,34 @@ function reviewState(extra = {}) {
     solved: false,
     finished: false,
     summary: null,
+    ...extra,
+  };
+}
+
+function browseReviewState(extra = {}) {
+  const analysing = reviewPolls < BROWSE_ANALYSING_POLLS;
+  return {
+    step: currentStep,
+    status: analysing ? 'analysing' : 'ready',
+    game: { ...GAME, move_count: BROWSE_LINE.length },
+    orientation: 'white',
+    depth: 20,
+    assessed: analysing ? reviewPolls : 2,
+    total_moves: 3,
+    progress: analysing ? reviewPolls / 3 : 1,
+    error: null,
+    target: analysing ? null : BROWSE_TARGET,
+    no_inaccuracy: false,
+    attempts: reviewAttempts,
+    used_show_answer: false,
+    solved: reviewFinished,
+    finished: reviewFinished,
+    summary: reviewFinished ? BROWSE_SUMMARY : null,
+    moves: analysing
+      ? []
+      : reviewFinished
+        ? BROWSE_MOVES
+        : BROWSE_MOVES.slice(0, BROWSE_TARGET_PLY),
     ...extra,
   };
 }
@@ -273,13 +371,22 @@ const routes = {
   // -- game review ------------------------------------------------------
   'POST /api/review/start': () => {
     reviewAttempts = 0;
+    reviewPolls = 0;
+    reviewFinished = false;
     return reviewState();
   },
-  'GET /api/review/review_last_game': () => reviewState(),
-  'GET /api/review/review_new_game': () => reviewState(),
+  'GET /api/review/review_last_game': () => {
+    reviewPolls += 1;
+    return reviewState();
+  },
+  'GET /api/review/review_new_game': () => {
+    reviewPolls += 1;
+    return reviewState();
+  },
   'POST /api/review/attempt': (body) => {
     reviewAttempts += 1;
     const uci = `${body.from}${body.to}${body.promotion ?? ''}`;
+    if (reviewScenario === 'browse') return browseAttempt(body, uci);
     const move = boardMove({ ...body, fen: START_FEN });
     return {
       correct: false,
@@ -298,10 +405,30 @@ const routes = {
   'POST /__scenario': (body) => {
     currentStep = body.step;
     engineAgrees = body.engineAgrees ?? null;
+    reviewScenario = body.review ?? null;
     reviewAttempts = 0;
-    return { step: currentStep, engineAgrees };
+    reviewPolls = 0;
+    reviewFinished = false;
+    return { step: currentStep, engineAgrees, review: reviewScenario };
   },
 };
+
+function browseAttempt(body, uci) {
+  const move = boardMove({ ...body, fen: BROWSE_TARGET.fen_before });
+  const correct = uci === BROWSE_ANSWER;
+  if (correct) reviewFinished = true;
+  return {
+    correct,
+    uci,
+    san: move?.san ?? uci,
+    evaluation: EVALUATION,
+    fen_after: move?.fen ?? BROWSE_TARGET.fen_before,
+    attempts: reviewAttempts,
+    review: reviewState(),
+    session: correct ? session(currentStep) : null,
+    streak: correct ? STREAK : null,
+  };
+}
 
 async function serveStatic(pathname, response) {
   const relative = pathname === '/' ? 'index.html' : normalize(pathname).replace(/^\/+/, '');

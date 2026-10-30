@@ -321,6 +321,33 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 .attempt-correct .attempt-eval { color: inherit; }
 
 /* ---------- links in cards ---------- */
+/* Review: the game score, stepped through with the arrow keys. */
+.nav-row { justify-content: center; }
+.nav-row button { min-width: 44px; padding-left: 0; padding-right: 0; }
+.move-list {
+  position: relative;          /* move offsets are measured from the list */
+  max-height: 220px;
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+.move-row { display: grid; grid-template-columns: 34px 1fr 1fr; align-items: center; }
+.move-number { color: var(--muted); font-size: 13px; }
+.move-list .move {
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+}
+.move-list .move-mine { font-weight: 600; }
+.move-list .move-placeholder { color: var(--muted); cursor: default; }
+.move-list .move-inaccuracy { color: var(--bad); }
+.move-list .move-current { background: var(--accent-dim); }
+.move-list .move:hover:not(.move-placeholder):not(.move-current) { background: var(--panel-2); }
+
 .card a { color: var(--accent); text-decoration: none; }
 .card a:hover { text-decoration: underline; }
 

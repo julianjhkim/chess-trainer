@@ -70,6 +70,15 @@ you find it, the review ends with a summary: the move you played and its
 classification, the engine's move, the evals either side and the win% you dropped.
 If the game had no inaccuracy, it says so.
 
+Once the board is up, **← / →** step through the game, **Home / End** (or ↑ / ↓)
+jump to either end, and the move list beside the board is clickable. While you
+are solving, that covers only the moves that led to the position — the board takes
+a move only back at the live position, which End returns you to. Once the review
+is over the whole game opens up to the last move: the engine's answer sits beside
+it, ← from there shows the position with the engine's move (green) and yours (red),
+and → goes on to the move you actually played and the rest of the game. Your slip
+is marked red in the list.
+
 **Step 2 — Play a game.** *Open chess.com* opens a tab; play your game and come
 back. *I'm done — fetch my game* watches the chess.com archive for about two
 minutes for a game newer than the one you had before (the archive lags a minute or
@@ -201,6 +210,13 @@ question screen and what its stats table marks afterwards:
 npm run cards
 ```
 
+And a third, over stepping through a reviewed game with the arrow keys — before
+and after the slip is solved — and the game card's single chess.com link:
+
+```bash
+npm run review
+```
+
 Regenerate the stub's legal-move data from the real rules module after changing the
 lines it plays:
 
@@ -242,7 +258,7 @@ chess_trainer/
              game_model.py
   pgn/       parse.py, positions.py
   review/    my_moves.py, first_inaccuracy.py, verdict.py, review_session.py,
-             review_job.py (background analysis + progress)
+             review_job.py (background analysis + progress), browse.py
   explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
              explorer_types.py
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,
@@ -256,8 +272,8 @@ frontend/
 ```
 The frontend has one module per concern: `api.js`, `state.js`, `router.js`,
 `board.js`, `evalbar.js`, `stepbar.js`, `streak_view.js`, `start_screen.js`,
-`review_view.js`, `play_view.js`, `cards_view.js`, `stats_table.js`, `arrows.js`,
-`animate.js`, `pgn_paste.js`.
+`review_view.js`, `move_nav.js`, `move_list.js`, `play_view.js`, `cards_view.js`,
+`stats_table.js`, `arrows.js`, `animate.js`, `pgn_paste.js`.
 
 `rules.py` is the single authority on move legality: the browser carries no rules
 engine and asks the server instead, which also means a drill answer can never be
@@ -358,7 +374,7 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/game/poll-new` | one ~12s window watching for a newer game |
 | `POST /api/game/paste` | store a game from pasted PGN |
 | `POST /api/review/start` | begin a review; analyses in the background |
-| `GET /api/review/{step}` | review progress and state (polled while analysing) |
+| `GET /api/review/{step}` | review progress and state (polled while analysing), including the browsable `moves` |
 | `POST /api/review/attempt` | try a move; returns correctness and an eval |
 | `POST /api/review/show-answer` | reveal the engine's move, ending the review |
 | `POST /api/review/acknowledge` | close a review that had no inaccuracy |

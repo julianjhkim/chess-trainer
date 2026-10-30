@@ -10,17 +10,27 @@
  *
  * The board is oriented to the colour I played. The eval bar refreshes after
  * every attempt, including wrong ones, so each try's cost is visible.
+ *
+ * Once the board is up, ← / → step through the game (Home / End jump). While
+ * the drill is open that covers the moves leading to the position, and the
+ * board only takes a move back at the live position; once the review is over
+ * it covers the whole game, with the engine's answer sitting beside the move I
+ * actually played.
  */
 
 import * as api from './api.js';
 import { createPause, createReplay, replayDelayFor } from './animate.js';
 import { createBoard } from './board.js';
 import { createEvalBar } from './evalbar.js';
+import { createMoveList } from './move_list.js';
+import { bindArrowKeys, createMoveNav } from './move_nav.js';
 import { createPgnPaste } from './pgn_paste.js';
 import { get, set, setStatus, withStatus } from './state.js';
 
 const POLL_INTERVAL_MS = 700;
 const WRONG_MOVE_LINGER_MS = 1100;
+/** Holding an arrow key down steps quickly; only evaluate where it stops. */
+const EVAL_DEBOUNCE_MS = 180;
 
 const CLASSIFICATION_LABEL = {
   inaccuracy: 'an inaccuracy',
@@ -38,6 +48,12 @@ export function renderReviewView(container, { step, onCompleted }) {
   let board = null;
   let review = null;
   const attemptLog = [];
+  /** Whether the arrow keys may move the board (not mid-replay or mid-attempt). */
+  let navReady = false;
+  let latestView = null;
+  let drawing = Promise.resolve();
+  let evalTimer = null;
+  let evalToken = 0;
 
   // -- layout ------------------------------------------------------------
   const layout = document.createElement('div');
@@ -53,7 +69,11 @@ export function renderReviewView(container, { step, onCompleted }) {
   const controls = document.createElement('div');
   controls.className = 'button-row';
 
-  boardColumn.append(boardAndBar, controls);
+  const navRow = document.createElement('div');
+  navRow.className = 'button-row nav-row';
+  navRow.hidden = true;
+
+  boardColumn.append(boardAndBar, navRow, controls);
 
   const side = document.createElement('div');
   side.className = 'side-panel';
@@ -64,9 +84,27 @@ export function renderReviewView(container, { step, onCompleted }) {
   // -- side panel cards --------------------------------------------------
   const gameCard = card('Game', panelChanged);
   const promptCard = card(step.title, panelChanged);
+  const movesCard = card('Moves', panelChanged);
   const attemptsCard = card('Attempts', panelChanged);
-  side.append(gameCard.root, promptCard.root, attemptsCard.root);
+  side.append(gameCard.root, promptCard.root, movesCard.root, attemptsCard.root);
+  movesCard.root.hidden = true;
   attemptsCard.root.hidden = true;
+
+  // -- move navigation ---------------------------------------------------
+  const nav = createMoveNav({ onChange: onNavChange });
+  const moveList = createMoveList({
+    onSelect: (index) => {
+      if (navReady) nav.go(index);
+    },
+  });
+  movesCard.setBody(moveList.element);
+  navRow.append(
+    navButton('⏮', 'Start (Home)', () => nav.first()),
+    navButton('◀', 'Previous move (←)', () => nav.back()),
+    navButton('▶', 'Next move (→)', () => nav.forward()),
+    navButton('⏭', 'End (End)', () => nav.last()),
+  );
+  const unbindKeys = bindArrowKeys(nav, { enabled: () => navReady && !destroyed });
 
   // -- boot --------------------------------------------------------------
   start();
@@ -130,6 +168,7 @@ export function renderReviewView(container, { step, onCompleted }) {
       return;
     }
     if (review.status === 'analysing') {
+      hideNav();
       renderAnalysing();
       schedulePoll();
       return;
@@ -158,8 +197,12 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (game.my_result) addRow(list, 'Result', game.my_result.replace(/_/g, ' '));
     if (game.move_count) addRow(list, 'Moves', String(game.move_count));
     if (game.time_class) addRow(list, 'Type', game.time_class);
-    gameCard.setBody(list);
 
+    // The link goes inside the body, which `setBody` replaces: this runs on
+    // every progress poll, and anything appended to the card itself would
+    // pile up one more link per poll.
+    const body = document.createElement('div');
+    body.append(list);
     if (game.url) {
       const link = document.createElement('a');
       link.href = game.url;
@@ -167,8 +210,9 @@ export function renderReviewView(container, { step, onCompleted }) {
       link.rel = 'noreferrer noopener';
       link.textContent = 'Open on chess.com ↗';
       link.className = 'choice-note';
-      gameCard.root.append(link);
+      body.append(link);
     }
+    gameCard.setBody(body);
   }
 
   function renderAnalysing() {
@@ -216,9 +260,14 @@ export function renderReviewView(container, { step, onCompleted }) {
         applyCompletion(result);
       }, 'primary'),
     );
-    body.append(row, pgnPasteWidget({ summary: 'Review a different game (paste PGN)' }).element);
+    body.append(
+      row,
+      paragraph('← → step through the game; Home and End jump to either end.', 'choice-note'),
+      pgnPasteWidget({ summary: 'Review a different game (paste PGN)' }).element,
+    );
     promptCard.setBody(body);
     ensureBoardAtStart();
+    showNav(review.moves ?? [], { index: 0 });
   }
 
   async function renderTarget() {
@@ -233,6 +282,10 @@ export function renderReviewView(container, { step, onCompleted }) {
         'Find the move the engine wants — only its top choice counts. Unlimited retries.',
         'choice-note',
       ),
+      paragraph(
+        '← → step through the moves that led here; End comes back to the position.',
+        'choice-note',
+      ),
       // The paste fallback stays available mid-review, so a different game can
       // always be loaded without finishing this one first.
       pgnPasteWidget({ summary: 'Review a different game (paste PGN)' }).element,
@@ -244,6 +297,7 @@ export function renderReviewView(container, { step, onCompleted }) {
   }
 
   async function replayToTarget(target) {
+    navReady = false;
     const orientation = review.orientation;
     const fresh = ensureBoard({ orientation });
     await fresh.setFen(fresh.START_FEN);
@@ -260,6 +314,7 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (destroyed || !completed) return;
 
     await refreshEval(target.fen_before);
+    showNav(review.moves ?? [], { index: target.replay_ucis.length });
     fresh.setInteractive(true);
     fresh.setMoveHandler(handleAttempt);
     setStatus('Your move.');
@@ -282,6 +337,7 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (!target || destroyed) return;
 
     board.setInteractive(false);
+    navReady = false;
     let response;
     try {
       response = await api.reviewAttempt(
@@ -294,6 +350,7 @@ export function renderReviewView(container, { step, onCompleted }) {
       setStatus(error.message, 'error');
       await board.setFen(target.fen_before);
       board.setInteractive(true);
+      navReady = true;
       return;
     }
 
@@ -315,12 +372,14 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (destroyed || !kept) return;
     await board.setFen(target.fen_before);
     board.setInteractive(true);
+    navReady = true;
   }
 
   async function showAnswer() {
     const target = review?.target;
     if (!target) return;
     board?.setInteractive(false);
+    navReady = false;
     const response = await withStatus('Revealing…', () => api.reviewShowAnswer(step.step));
     review = response.review;
     await board.setFen(target.fen_before);
@@ -406,14 +465,103 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (summary.used_show_answer) addRow(list, 'Answer', 'revealed');
     body.append(list);
     body.append(paragraph('Review complete — this step is done.', 'choice-note'));
+    body.append(
+      paragraph(
+        '← → step through the whole game. The engine\'s move sits between the position and the move you played.',
+        'choice-note',
+      ),
+    );
     body.append(pgnPasteWidget({ summary: 'Review another game (paste PGN)' }).element);
     promptCard.setBody(body);
 
-    if (highlight && board) {
-      board.setShapes([
-        { orig: highlight.slice(0, 2), dest: highlight.slice(2, 4), brush: 'green' },
-      ]);
+    if (!board || !target) return;
+    const answer = highlight ?? summary.best_move_uci;
+    showNav(review.moves ?? [], { index: target.ply, marked: target.ply });
+    // The board is on the answer position right now (just solved, revealed or
+    // rebuilt), so that is what the aside shows.
+    nav.showAside({ after: target.ply, fen: board.getFen(), lastMove: answer });
+  }
+
+  // -- move navigation ---------------------------------------------------
+  /** Load the browsable moves and put the cursor on position `index`. */
+  function showNav(moves, { index, marked = null }) {
+    nav.setMoves(moves, { index });
+    moveList.setMoves(moves, { marked });
+    moveList.setCurrent(index);
+    latestView = nav.view();
+    movesCard.root.hidden = false;
+    navRow.hidden = false;
+    navReady = true;
+    panelChanged();
+  }
+
+  function hideNav() {
+    navReady = false;
+    movesCard.root.hidden = true;
+    navRow.hidden = true;
+    panelChanged();
+  }
+
+  /**
+   * Draw where the cursor now is. Draws are chained, because each one waits on
+   * the server for the position's legal moves, and a held arrow key would
+   * otherwise let an older position land after a newer one; any view the
+   * cursor has already left is skipped.
+   */
+  function onNavChange(view) {
+    latestView = view;
+    moveList.setCurrent(view.aside ? 0 : view.index);
+    drawing = drawing
+      .then(() => (view === latestView ? drawView(view) : null))
+      .catch((error) => setStatus(error.message, 'error'));
+  }
+
+  async function drawView(view) {
+    if (!board || destroyed) return;
+    const target = review?.target;
+    const fen = view.fen ?? target?.fen_before ?? board.START_FEN;
+    const drilling = Boolean(target) && !review.finished;
+    // Only the live position takes a move: anywhere else the drill is paused.
+    const live = drilling && !view.aside && view.index === nav.length;
+
+    board.setInteractive(false);
+    await board.setFen(fen, { lastMove: squares(view.lastMove) });
+    if (view !== latestView || destroyed) return;
+
+    board.setShapes(shapesFor(view));
+    if (live) {
+      board.setInteractive(true);
+      board.setMoveHandler(handleAttempt);
+      setStatus('Your move.');
+    } else if (drilling) {
+      setStatus('Browsing the game — press End to come back to the position.');
     }
+    scheduleEval(fen);
+  }
+
+  /**
+   * Arrows for a finished review: the engine's move on the aside, and at the
+   * position where I went wrong both its move (green) and mine (red).
+   */
+  function shapesFor(view) {
+    const target = review?.target;
+    const summary = review?.summary;
+    if (!review?.finished || !target || !summary) return [];
+    const best = arrow(summary.best_move_uci, 'green');
+    if (view.aside) return [best].filter(Boolean);
+    if (view.index !== target.ply) return [];
+    const mine = summary.my_move_uci !== summary.best_move_uci
+      ? arrow(summary.my_move_uci, 'red')
+      : null;
+    return [best, mine].filter(Boolean);
+  }
+
+  function scheduleEval(fen) {
+    if (evalTimer !== null) clearTimeout(evalTimer);
+    evalTimer = setTimeout(() => {
+      evalTimer = null;
+      void refreshEval(fen);
+    }, EVAL_DEBOUNCE_MS);
   }
 
   function applyCompletion(response) {
@@ -451,12 +599,15 @@ export function renderReviewView(container, { step, onCompleted }) {
   }
 
   async function refreshEval(fen) {
+    // A later position may be asked for before this one comes back (stepping
+    // through the game); only the most recent answer may reach the bar.
+    const token = ++evalToken;
     evalBar.pending();
     try {
       const response = await api.evaluate(fen);
-      if (!destroyed) evalBar.update(response.evaluation);
+      if (!destroyed && token === evalToken) evalBar.update(response.evaluation);
     } catch {
-      evalBar.clear();
+      if (token === evalToken) evalBar.clear();
     }
   }
 
@@ -471,6 +622,7 @@ export function renderReviewView(container, { step, onCompleted }) {
         });
         attemptLog.length = 0;
         renderAttempts();
+        hideNav();
         onReviewState();
       },
     });
@@ -500,6 +652,8 @@ export function renderReviewView(container, { step, onCompleted }) {
     destroy() {
       destroyed = true;
       stopPolling();
+      unbindKeys();
+      if (evalTimer !== null) clearTimeout(evalTimer);
       replay?.cancel();
       pause?.cancel();
       board?.destroy();
@@ -522,6 +676,24 @@ function card(title, onChange) {
       if (onChange) onChange();
     },
   };
+}
+
+function squares(uci) {
+  return uci ? [uci.slice(0, 2), uci.slice(2, 4)] : undefined;
+}
+
+function arrow(uci, brush) {
+  return uci ? { orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush } : null;
+}
+
+function navButton(text, title, handler) {
+  const element = button(text, handler);
+  element.title = title;
+  element.setAttribute('aria-label', title);
+  // Clicking must not leave focus on the button, or Space/Enter would repeat
+  // the step instead of meaning whatever they mean on the page.
+  element.addEventListener('mousedown', (event) => event.preventDefault());
+  return element;
 }
 
 function paragraph(text, className) {

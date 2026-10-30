@@ -9,6 +9,10 @@ from chess_trainer.db.games_repo import StoredGame
 from chess_trainer.db.schedule_repo import ScheduleRow
 from chess_trainer.engine.eval_format import bar_fraction, format_eval
 from chess_trainer.engine.eval_types import Eval
+from chess_trainer.pgn import positions as positions_module
+from chess_trainer.pgn.positions import PositionMove
+from chess_trainer.review import my_moves
+from chess_trainer.review.browse import browsable_moves
 from chess_trainer.review.review_job import ReviewJob, ReviewStatus
 from chess_trainer.review.review_session import ReviewTarget
 from chess_trainer.openings import card_builder, line as line_module
@@ -212,6 +216,34 @@ class ReviewTargetOut(BaseModel):
     orientation: str
 
 
+class ReviewMoveOut(BaseModel):
+    """One move of the game, for stepping through it with the arrow keys."""
+
+    ply: int
+    move_number: int
+    label: str
+    san: str
+    uci: str
+    fen_before: str
+    fen_after: str
+    mover_is_white: bool
+    is_mine: bool
+
+    @classmethod
+    def of(cls, position: PositionMove, my_colour: str) -> "ReviewMoveOut":
+        return cls(
+            ply=position.ply,
+            move_number=position.move_number,
+            label=position.move_label,
+            san=position.san,
+            uci=position.uci,
+            fen_before=position.fen_before,
+            fen_after=position.fen_after,
+            mover_is_white=position.mover_is_white,
+            is_mine=my_moves.is_mine(position, my_colour),
+        )
+
+
 class ReviewSummaryOut(BaseModel):
     found_an_inaccuracy: bool
     move_label: str | None = None
@@ -267,6 +299,10 @@ class ReviewStateOut(BaseModel):
     solved: bool = False
     finished: bool = False
     summary: ReviewSummaryOut | None = None
+    #: The moves that can be stepped through: those before my first inaccuracy
+    #: while the drill is open, the whole game once the review is over. Empty
+    #: while analysing.
+    moves: list[ReviewMoveOut] = Field(default_factory=list)
 
     @classmethod
     def of(cls, step: Step, job: ReviewJob) -> "ReviewStateOut":
@@ -298,6 +334,14 @@ class ReviewStateOut(BaseModel):
             state.summary = ReviewSummaryOut.of(session.summary())
             if target is not None:
                 state.target = _target_out(target, orientation)
+        state.moves = [
+            ReviewMoveOut.of(position, job.my_colour)
+            for position in browsable_moves(
+                positions_module.from_parsed(job.parsed),
+                target_ply=target.ply if target is not None else None,
+                finished=session.finished,
+            )
+        ]
         return state
 
 

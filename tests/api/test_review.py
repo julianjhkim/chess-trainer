@@ -90,6 +90,57 @@ def test_the_target_does_not_leak_the_answer(client, fake_engine_for_api):
     assert payload["summary"] is None
 
 
+# -- browsing the game's moves -------------------------------------------
+def test_an_open_drill_lists_only_the_moves_before_the_target(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    payload = start_review(client)
+    assert [m["uci"] for m in payload["moves"]] == ["e2e4", "e7e5"]
+
+
+def test_the_move_list_does_not_leak_the_answer_or_my_move(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    blob = str(start_review(client)["moves"])
+    assert "d2d4" not in blob
+    assert "g1f3" not in blob
+
+
+def test_listed_moves_carry_what_the_board_needs(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    first, second = start_review(client)["moves"]
+    assert first["san"] == "e4"
+    assert first["label"] == "1.e4"
+    assert first["fen_after"] == second["fen_before"]
+    assert first["is_mine"] is True
+    assert second["is_mine"] is False
+
+
+def test_solving_opens_the_whole_game(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    payload = client.post(
+        "/api/review/attempt", json={"step": STEP, "from": "d2", "to": "d4"}
+    ).json()
+    assert len(payload["review"]["moves"]) == 6
+    assert client.get(f"/api/review/{STEP}").json()["moves"][2]["san"] == "Nf3"
+
+
+def test_revealing_opens_the_whole_game(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    payload = client.post("/api/review/show-answer", json={"step": STEP}).json()
+    assert len(payload["review"]["moves"]) == 6
+
+
+def test_a_clean_game_lists_every_move(client):
+    payload = start_review(client)
+    assert len(payload["moves"]) == 6
+
+
+def test_moves_are_mine_by_colour_when_i_played_black(client):
+    payload = start_review(client, pgn=BLACK_PGN)
+    assert [m["is_mine"] for m in payload["moves"]] == [False, True] * 3
+
+
 def test_the_board_is_oriented_to_my_colour(client, fake_engine_for_api):
     make_blunder(fake_engine_for_api, 2, "d2d4")
     assert start_review(client)["orientation"] == "white"
