@@ -87,8 +87,21 @@ branch move appears as an **arrow** for you to play — only that move is dragga
 Playing it reveals the **opening name**, and then you have to find the answer move
 with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
 answer* gives up. Afterwards you get the **stats table**: every master move with
-its share, game count, white/draw/black split and average rating, with the answer
-highlighted.
+its share, game count, white/draw/black split and average rating, with the answer,
+the most played move and Stockfish's own choice all marked.
+
+On a frequency card the question also says whether the most played move is the
+one Stockfish would play:
+
+> Heads-up: the most played move is NOT the engine's best move — find the most
+> played one.
+
+It is a bare yes or no — naming either move would give the answer away — and it
+is resolved before the card is shown, so the card never pauses to search. The
+point is that the drill asks for *the move the masters played*, which is not
+always the best move on the board; being told which kind of card this is stops
+the disagreement feeling like a trick. Engine-mode cards say nothing, since
+their answer is the engine's move to begin with.
 
 What counts as the answer depends on how well-travelled the position is:
 
@@ -179,6 +192,13 @@ serves the real frontend with canned API payloads.
 ```bash
 npm install && npx playwright install chromium
 npm run clicks
+```
+
+The same stub drives a second browser test, over what a card actually says on its
+question screen and what its stats table marks afterwards:
+
+```bash
+npm run cards
 ```
 
 Regenerate the stub's legal-move data from the real rules module after changing the

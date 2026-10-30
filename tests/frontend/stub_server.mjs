@@ -8,8 +8,10 @@
  * schemas, with the legal-move data generated from the real rules module
  * (`fixtures/generate.py`).
  *
- * `POST /__scenario {"step": "cards"}` chooses which step the session says is
- * current, i.e. which view the page renders on the next load.
+ * `POST /__scenario {"step": "cards", "engineAgrees": false}` chooses which
+ * step the session says is current -- i.e. which view the page renders on the
+ * next load -- and what the card says about Stockfish agreeing with the
+ * masters.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -69,6 +71,7 @@ const CARD = {
   position_games: 1234567,
   source: 'new',
   schedule: null,
+  engine_agrees: null,
 };
 
 const CARD_ANSWER_UCI = 'e7e5';
@@ -79,17 +82,19 @@ const STATS = {
   tie_note: null,
   engine_note: null,
   rows: [
-    row('e5', 'e7e5', 480000, 38.9, true),
-    row('c5', 'c7c5', 400000, 32.4, false),
-    row('e6', 'e7e6', 180000, 14.6, false),
-    row('c6', 'c7c6', 90000, 7.3, false),
-    row('d5', 'd7d5', 40000, 3.2, false),
-    row('Nf6', 'g8f6', 30000, 2.4, false),
-    row('d6', 'd7d6', 14567, 1.2, false),
+    row('e5', 'e7e5', 480000, 38.9, { answer: true, mostPlayed: true }),
+    // Stockfish prefers a move the masters played less often: the case the
+    // question warns about, and the reason both marks exist.
+    row('c5', 'c7c5', 400000, 32.4, { engine: true }),
+    row('e6', 'e7e6', 180000, 14.6),
+    row('c6', 'c7c6', 90000, 7.3),
+    row('d5', 'd7d5', 40000, 3.2),
+    row('Nf6', 'g8f6', 30000, 2.4),
+    row('d6', 'd7d6', 14567, 1.2),
   ],
 };
 
-function row(san, uci, games, share, isAnswer) {
+function row(san, uci, games, share, marks = {}) {
   return {
     san,
     uci,
@@ -102,8 +107,9 @@ function row(san, uci, games, share, isAnswer) {
     draw_percent: 38,
     black_percent: 26,
     average_rating: 2412,
-    is_answer: isAnswer,
-    is_engine_move: false,
+    is_answer: marks.answer === true,
+    is_engine_move: marks.engine === true,
+    is_most_played: marks.mostPlayed === true,
     is_tied: false,
   };
 }
@@ -146,6 +152,8 @@ const REVIEW_TARGET = {
 
 /** Which step the session reports as current; set through `/__scenario`. */
 let currentStep = 'cards';
+/** What the served card says about Stockfish agreeing with the masters. */
+let engineAgrees = null;
 /** Attempts made in the stubbed review, so the attempts card can grow. */
 let reviewAttempts = 0;
 
@@ -222,7 +230,7 @@ const routes = {
 
   // -- opening cards ----------------------------------------------------
   'POST /api/cards/next': () => ({
-    card: CARD,
+    card: { ...CARD, engine_agrees: engineAgrees },
     counts: { due: 3, new: 7, relearning: 1 },
     attempts: 0,
     used_show_answer: false,
@@ -231,7 +239,7 @@ const routes = {
     exhausted: false,
   }),
   'GET /api/cards/state': () => ({
-    card: CARD,
+    card: { ...CARD, engine_agrees: engineAgrees },
     counts: { due: 3, new: 7, relearning: 1 },
   }),
   'POST /api/cards/attempt': (body) => {
@@ -289,8 +297,9 @@ const routes = {
   // -- test control -----------------------------------------------------
   'POST /__scenario': (body) => {
     currentStep = body.step;
+    engineAgrees = body.engineAgrees ?? null;
     reviewAttempts = 0;
-    return { step: currentStep };
+    return { step: currentStep, engineAgrees };
   },
 };
 

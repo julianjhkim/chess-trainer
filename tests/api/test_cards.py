@@ -31,6 +31,18 @@ def start_cards(client):
     return client.post("/api/cards/next").json()
 
 
+def fen_after(ucis: list[str]) -> str:
+    """The position a line reaches, as the engine fake is keyed by FEN."""
+    from chess_trainer.openings import line as line_module
+
+    return line_module.position_of(ucis).fen
+
+
+def engine_plays(fake_engine, ucis: list[str], uci: str) -> None:
+    """Make the fake engine's top move in a position be ``uci``."""
+    fake_engine.best_moves[fen_after(ucis)] = uci
+
+
 # -- serving -------------------------------------------------------------
 def test_the_first_card_bootstraps_the_tree(client):
     payload = start_cards(client)
@@ -221,17 +233,134 @@ def test_the_stats_table_has_the_spec_columns(client):
     assert row["average_rating"] == 2401
 
 
-def test_frequency_mode_marks_no_engine_move(client):
+def test_a_frequency_table_still_has_no_engine_note(client):
+    """Marking the engine's move is not the same as being answered by it."""
     start_cards(client)
     table = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()["stats"]
-    assert not any(r["is_engine_move"] for r in table["rows"])
     assert table["engine_note"] is None
+
+
+def test_the_stats_table_marks_both_moves_when_they_differ(
+    client, fake_engine_for_api
+):
+    engine_plays(fake_engine_for_api, ["e2e4"], "e7e5")
+    start_cards(client)
+    table = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()["stats"]
+    assert [r["san"] for r in table["rows"] if r["is_most_played"]] == ["c5"]
+    assert [r["san"] for r in table["rows"] if r["is_engine_move"]] == ["e5"]
+    assert [r["san"] for r in table["rows"] if r["is_answer"]] == ["c5"]
+
+
+def test_one_row_carries_both_marks_when_they_agree(client, fake_engine_for_api):
+    engine_plays(fake_engine_for_api, ["e2e4"], "c7c5")
+    start_cards(client)
+    table = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()["stats"]
+    row = table["rows"][0]
+    assert row["san"] == "c5"
+    assert row["is_answer"] and row["is_engine_move"] and row["is_most_played"]
+
+
+def test_the_revealed_table_marks_them_too(client, fake_engine_for_api):
+    engine_plays(fake_engine_for_api, ["e2e4"], "e7e5")
+    start_cards(client)
+    table = client.post("/api/cards/show-answer").json()["stats"]
+    assert [r["san"] for r in table["rows"] if r["is_engine_move"]] == ["e5"]
+    assert [r["san"] for r in table["rows"] if r["is_most_played"]] == ["c5"]
 
 
 def test_the_stats_table_also_appears_when_revealed(client):
     start_cards(client)
     payload = client.post("/api/cards/show-answer").json()
     assert payload["stats"]["total_games"] == 1309466
+
+
+# -- does the engine agree with the masters? -----------------------------
+def test_the_card_says_when_the_engine_agrees(client, fake_engine_for_api):
+    engine_plays(fake_engine_for_api, ["e2e4"], "c7c5")
+    card = start_cards(client)["card"]
+    assert card["engine_agrees"] is True
+
+
+def test_the_card_says_when_the_engine_disagrees(client, fake_engine_for_api):
+    engine_plays(fake_engine_for_api, ["e2e4"], "e7e5")
+    card = start_cards(client)["card"]
+    assert card["engine_agrees"] is False
+
+
+def test_the_agreement_does_not_name_either_move(client, fake_engine_for_api):
+    """A bare yes/no: naming the engine's move would give the answer away."""
+    import json
+
+    engine_plays(fake_engine_for_api, ["e2e4"], "e7e5")
+    card = start_cards(client)["card"]
+    assert card["engine_agrees"] is False
+    assert "e7e5" not in json.dumps(card)
+    assert "c7c5" not in json.dumps(card)
+
+
+def test_an_engine_mode_card_reports_no_agreement(client, fake_engine_for_api):
+    """Answered by the engine already, so there is nothing to compare."""
+    deep = [
+        "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "g8f6",
+        "e1g1", "f6e4", "d2d4", "e4d6", "b5c6", "d7c6",
+        "d4e5", "d6f5",
+    ]
+    thin = [*deep, "h2h3"]
+    engine_plays(fake_engine_for_api, thin, "d8d1")
+    card = _serve_card_for_line(client, thin)
+    assert card["mode"] == "engine"
+    assert card["engine_agrees"] is None
+
+
+def test_the_card_state_reports_the_agreement_too(client, fake_engine_for_api):
+    engine_plays(fake_engine_for_api, ["e2e4"], "e7e5")
+    start_cards(client)
+    assert client.get("/api/cards/state").json()["card"]["engine_agrees"] is False
+
+
+def test_the_engine_is_searched_once_per_position(client, fake_engine_for_api):
+    """Serving a card again reads the cached search rather than repeating it."""
+    engine_plays(fake_engine_for_api, ["e2e4"], "e7e5")
+    start_cards(client)
+    searches = [c for c in fake_engine_for_api.calls if c[0] == fen_after(["e2e4"])]
+    assert len(searches) == 1
+
+    client.get("/api/cards/state")
+    repeated = [c for c in fake_engine_for_api.calls if c[0] == fen_after(["e2e4"])]
+    assert len(repeated) == 1
+
+
+def _serve_card_for_line(client, ucis: list[str]):
+    """Serve a card for ``ucis``, as the only one in the tree.
+
+    The queue runs breadth-first, so a deep position would never come up on
+    its own; the bootstrapped cards are cleared out of its way.
+    """
+    from chess_trainer.db import cards_repo
+    from chess_trainer.db.connection import transaction
+    from chess_trainer.openings import line as line_module
+
+    start_cards(client)
+    conn = client.app.state.ctx.conn
+    position = line_module.position_of(ucis)
+    with transaction(conn):
+        conn.execute("DELETE FROM cards")
+    cards_repo.insert(
+        conn,
+        cards_repo.CardRow(
+            epd=position.epd,
+            fen=position.fen,
+            line_uci=position.line_uci,
+            depth=position.depth,
+            side_to_move=position.side_to_move,
+            given_move_uci=ucis[-1],
+            given_move_san="h3",
+            status=cards_repo.STATUS_ACTIVE,
+            position_games=11,
+            queue_seq=1,
+        ),
+    )
+    return client.post("/api/cards/next").json()["card"]
 
 
 # -- the tree grows ------------------------------------------------------

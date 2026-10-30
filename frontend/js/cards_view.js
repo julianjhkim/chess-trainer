@@ -23,6 +23,12 @@ import { renderStatsTable } from './stats_table.js';
 
 const WRONG_MOVE_LINGER_MS = 1000;
 
+// Said on the question screen, before the answer is known: whether the move
+// the masters played most is the one Stockfish would play.
+const ENGINE_AGREES = "The most played move is also the engine's best move.";
+const ENGINE_DISAGREES =
+  "Heads-up: the most played move is NOT the engine's best move — find the most played one.";
+
 const SOURCE_LABEL = {
   new: 'New card',
   due: 'Review',
@@ -276,6 +282,17 @@ export function renderCardsView(container, { step, onCompleted }) {
             'choice-note',
           ),
         );
+        // Whether Stockfish would play the same move, decided before the card
+        // was shown. Which move either one is stays unsaid: that is the
+        // question. `null` means there is nothing to say, not "no".
+        if (card.engine_agrees !== null && card.engine_agrees !== undefined) {
+          body.append(
+            paragraph(
+              card.engine_agrees ? ENGINE_AGREES : ENGINE_DISAGREES,
+              card.engine_agrees ? 'engine-agrees' : 'engine-disagrees',
+            ),
+          );
+        }
       }
     }
 

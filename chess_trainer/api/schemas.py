@@ -11,7 +11,7 @@ from chess_trainer.engine.eval_format import bar_fraction, format_eval
 from chess_trainer.engine.eval_types import Eval
 from chess_trainer.review.review_job import ReviewJob, ReviewStatus
 from chess_trainer.review.review_session import ReviewTarget
-from chess_trainer.openings import line as line_module
+from chess_trainer.openings import card_builder, line as line_module
 from chess_trainer.openings.card_types import CardMode
 from chess_trainer.openings.stats_table import StatsTable
 from chess_trainer.review.verdict import ReviewSummary
@@ -420,12 +420,22 @@ class CardOut(BaseModel):
     opening_label: str | None = None
     mode: str | None = None
     position_games: int
+    #: Whether the most played move is also Stockfish's top move at the
+    #: configured depth. Only frequency cards have anything to compare, so
+    #: ``None`` means "nothing to say" -- never "no". Deliberately a bare
+    #: yes/no: naming either move would give the answer away.
+    engine_agrees: bool | None = None
     source: CardSource
     schedule: CardScheduleOut | None = None
 
     @classmethod
     def of(
-        cls, card: CardRow, *, source: CardSource, schedule: ScheduleRow | None = None
+        cls,
+        card: CardRow,
+        *,
+        source: CardSource,
+        schedule: ScheduleRow | None = None,
+        engine_best_uci: str | None = None,
     ) -> "CardOut":
         ucis = card.ucis
         before = line_module.position_of(ucis[:-1])
@@ -445,6 +455,7 @@ class CardOut(BaseModel):
             opening_label=card.opening_label,
             mode=card.mode,
             position_games=card.position_games,
+            engine_agrees=card_builder.engine_agrees(card, engine_best_uci),
             source=source,
             schedule=CardScheduleOut.of(schedule) if schedule else None,
         )
@@ -477,6 +488,7 @@ class StatsRowOut(BaseModel):
     average_rating: int | None = None
     is_answer: bool = False
     is_engine_move: bool = False
+    is_most_played: bool = False
     is_tied: bool = False
 
 
@@ -505,6 +517,7 @@ class StatsTableOut(BaseModel):
                     average_rating=r.average_rating,
                     is_answer=r.is_answer,
                     is_engine_move=r.is_engine_move,
+                    is_most_played=r.is_most_played,
                     is_tied=r.is_tied,
                 )
                 for r in table.rows

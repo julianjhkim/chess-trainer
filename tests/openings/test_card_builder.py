@@ -139,11 +139,113 @@ def test_preparing_twice_resolves_once(conn, explorer, fake_engine):
     assert second.card.answer_uci == first.card.answer_uci
 
 
-def test_a_frequency_answer_needs_no_engine(conn, explorer, fake_engine):
+def test_a_frequency_answer_is_decided_without_the_engine(conn, explorer, fake_engine):
+    """The engine does not choose the answer -- frequency does.
+
+    It is still consulted once, to find its own top move for the card's
+    "is the most played move also the engine's?" line, and the answer is the
+    most played move whatever it says.
+    """
     card_builder.ensure_bootstrapped(conn, explorer)
     card = cards_repo.next_new_card(conn)
-    card_builder.prepare_card(conn, explorer, fake_engine, card, engine_depth=10)
+    position = line_module.position_of(["e2e4"])
+    engine = FakeEngine(best_moves={position.fen: "e7e5"})
+    prepared = card_builder.prepare_card(
+        conn, explorer, engine, card, engine_depth=10
+    )
+    assert prepared.card.answer_uci == "c7c5"  # the most played, not the engine's
+    assert engine.call_count == 1
+
+
+def test_preparing_resolves_the_engines_own_move(conn, explorer):
+    card_builder.ensure_bootstrapped(conn, explorer)
+    card = cards_repo.next_new_card(conn)
+    position = line_module.position_of(["e2e4"])
+    engine = FakeEngine(best_moves={position.fen: "e7e5"})
+    prepared = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
+    assert prepared.engine_best_uci == "e7e5"
+
+
+def test_re_serving_a_card_reads_the_engine_from_the_cache(conn, explorer):
+    """A card seen before still reports the engine's move, without searching."""
+    card_builder.ensure_bootstrapped(conn, explorer)
+    card = cards_repo.next_new_card(conn)
+    position = line_module.position_of(["e2e4"])
+    engine = FakeEngine(best_moves={position.fen: "e7e5"})
+    first = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
+    calls = engine.call_count
+
+    again = card_builder.prepare_card(
+        conn, explorer, engine, first.card, engine_depth=10
+    )
+    assert again.engine_best_uci == "e7e5"
+    assert engine.call_count == calls
+
+
+def test_a_dead_end_is_never_searched(conn, explorer, fake_engine):
+    thin_line = [*DEEP, "h2h3"]
+    position = line_module.position_of(thin_line)
+    card = cards_repo.insert(
+        conn,
+        cards_repo.CardRow(
+            epd=position.epd, fen=position.fen, line_uci=position.line_uci,
+            depth=position.depth, side_to_move=position.side_to_move,
+            given_move_uci="h2h3", given_move_san="h3",
+            status=cards_repo.STATUS_DEAD_END, position_games=11, queue_seq=1,
+        ),
+    )
+    prepared = card_builder.prepare_card(
+        conn, explorer, fake_engine, card, engine_depth=10
+    )
+    assert prepared.engine_best_uci is None
     assert fake_engine.call_count == 0
+
+
+# -- does the engine agree with the masters? -----------------------------
+def test_engine_agrees_when_the_most_played_move_is_its_own(conn, explorer):
+    card_builder.ensure_bootstrapped(conn, explorer)
+    card = cards_repo.next_new_card(conn)
+    position = line_module.position_of(["e2e4"])
+    engine = FakeEngine(best_moves={position.fen: "c7c5"})
+    prepared = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
+    assert card_builder.engine_agrees(prepared.card, prepared.engine_best_uci) is True
+
+
+def test_engine_disagrees_when_it_prefers_another_move(conn, explorer):
+    card_builder.ensure_bootstrapped(conn, explorer)
+    card = cards_repo.next_new_card(conn)
+    position = line_module.position_of(["e2e4"])
+    engine = FakeEngine(best_moves={position.fen: "e7e5"})
+    prepared = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
+    assert card_builder.engine_agrees(prepared.card, prepared.engine_best_uci) is False
+
+
+def test_an_engine_mode_card_has_no_agreement_to_report(conn, explorer):
+    """Its answer *is* the engine's move, so there is nothing to compare."""
+    thin_line = [*DEEP, "h2h3"]
+    position = line_module.position_of(thin_line)
+    engine = FakeEngine(best_moves={position.fen: "d8d1"})
+    card = cards_repo.insert(
+        conn,
+        cards_repo.CardRow(
+            epd=position.epd, fen=position.fen, line_uci=position.line_uci,
+            depth=position.depth, side_to_move=position.side_to_move,
+            given_move_uci="h2h3", given_move_san="h3", status="active",
+            position_games=11, queue_seq=1,
+        ),
+    )
+    prepared = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
+    assert prepared.card.mode == CardMode.ENGINE.value
+    assert card_builder.engine_agrees(prepared.card, prepared.engine_best_uci) is None
+
+
+def test_no_agreement_without_an_engine_result(conn, explorer, fake_engine):
+    card_builder.ensure_bootstrapped(conn, explorer)
+    card = cards_repo.next_new_card(conn)
+    prepared = card_builder.prepare_card(
+        conn, explorer, fake_engine, card, engine_depth=10
+    )
+    assert card_builder.engine_agrees(prepared.card, None) is None
 
 
 def test_preparing_records_the_opening_of_the_position(conn, explorer, fake_engine):
@@ -353,6 +455,7 @@ def test_an_engine_mode_card_is_answered_by_the_engine(conn, explorer):
     prepared = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
     assert prepared.card.mode == CardMode.ENGINE.value
     assert prepared.card.answer_uci == "d8d1"
+    # The answer and the engine's own move are the same search, cached.
     assert engine.call_count == 1
 
 
@@ -404,7 +507,8 @@ def test_a_tie_is_broken_by_the_engine_and_recorded(conn):
     prepared = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
     assert prepared.card.answer_uci == "e7e5"
     assert set(prepared.card.tied_ucis) == {"c7c5", "e7e5"}
-    assert engine.call_count == 1
+    # One search among the tied moves, one for the engine's own top move.
+    assert engine.call_count == 2
 
 
 # -- transpositions ------------------------------------------------------

@@ -48,6 +48,8 @@ class PreparedCard:
     stats: PositionStats
     #: True when this call had to resolve the answer (first time served).
     resolved_now: bool = False
+    #: Stockfish's top move here, resolved before the card is shown.
+    engine_best_uci: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,11 +130,23 @@ def prepare_card(
 
     A card whose own record turns out to be too thin becomes a dead end, which
     can happen when the parent's game count and the position's own disagree.
+
+    Stockfish's own top move is resolved here too, so the question can say
+    whether the most played move is also the engine's without pausing the card
+    to find out. It costs nothing after the first time: the result is cached by
+    position and depth.
     """
     stats = stats_for_card(conn, source, card)
 
     if not cards_repo.needs_answer(card):
-        return PreparedCard(card=card, stats=stats, resolved_now=False)
+        return PreparedCard(
+            card=card,
+            stats=stats,
+            resolved_now=False,
+            engine_best_uci=engine_best_move(
+                conn, engine, card, engine_depth=engine_depth
+            ),
+        )
 
     plan = tree_rules.plan_position(stats)
 
@@ -157,7 +171,48 @@ def prepare_card(
         opening_eco=opening.eco if opening else None,
         opening_name=opening.name if opening else None,
     )
-    return PreparedCard(card=updated, stats=stats, resolved_now=True)
+    return PreparedCard(
+        card=updated,
+        stats=stats,
+        resolved_now=True,
+        engine_best_uci=engine_best_move(
+            conn, engine, updated, engine_depth=engine_depth
+        ),
+    )
+
+
+def engine_best_move(
+    conn: sqlite3.Connection,
+    engine: Analyser,
+    card: CardRow,
+    *,
+    engine_depth: int,
+) -> str | None:
+    """Stockfish's top move in a card's position, through the analysis cache.
+
+    ``None`` for a dead end, which is never asked and so never searched.
+    """
+    if card.status != STATUS_ACTIVE:
+        return None
+    return best_move_module.best_move(conn, engine, card.fen, engine_depth)
+
+
+def engine_agrees(card: CardRow, engine_best_uci: str | None) -> bool | None:
+    """Whether a card's answer is also Stockfish's top move.
+
+    Only frequency-mode cards have anything to compare: there the answer is the
+    move the masters played most, which the engine may well disagree with, and
+    saying so turns the card into a fair question rather than a trap. An
+    engine-mode card is answered *by* the engine, so the question never arises.
+
+    ``None`` means there is nothing to say. The caller must not turn it into a
+    "no": it is also what an unanswered card and a missing engine result give.
+    """
+    if card.mode != CardMode.FREQUENCY.value:
+        return None
+    if card.answer_uci is None or engine_best_uci is None:
+        return None
+    return engine_best_uci == card.answer_uci
 
 
 def _resolve_answer(

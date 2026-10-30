@@ -6,7 +6,8 @@
   "scripts": {
     "vendor": "node scripts/vendor_chessground.mjs",
     "smoke": "node tests/frontend/smoke.mjs",
-    "clicks": "node tests/frontend/click_map.mjs"
+    "clicks": "node tests/frontend/click_map.mjs",
+    "cards": "node tests/frontend/cards_prompt.mjs"
   },
   "devDependencies": {
     "chessground": "9.2.1",

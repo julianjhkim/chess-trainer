@@ -2,8 +2,9 @@
 
 One row per candidate move: the move, its share of the position's games, the
 game count, the white/draw/black split and the average rating. The answer is
-flagged, the engine's move is flagged when the card is in engine mode, and a
-tie broken by the engine is noted.
+flagged, so is the most played move and Stockfish's own choice -- the question
+only says *whether* those two agree, so the table is where you find out which
+move each one was. A tie broken by the engine is noted.
 
 Pure: built from a :class:`PositionStats` plus what the card decided.
 """
@@ -28,8 +29,10 @@ class StatsRow:
     average_rating: int | None
     #: The accepted answer for this card.
     is_answer: bool = False
-    #: Marked when the card is in engine mode, per the spec.
+    #: Stockfish's top move at the configured depth.
     is_engine_move: bool = False
+    #: The move the masters played most often (every one of them, on a tie).
+    is_most_played: bool = False
     #: One of several moves played equally often, resolved by the engine.
     is_tied: bool = False
 
@@ -68,10 +71,21 @@ def build(
     mode: CardMode | None,
     tied_ucis: tuple[str, ...] | list[str] = (),
     engine_move_uci: str | None = None,
+    engine_move_san: str | None = None,
 ) -> StatsTable:
-    """Build the table for a position."""
+    """Build the table for a position.
+
+    ``engine_move_uci`` is Stockfish's top move, whatever the mode: on a
+    frequency card the question has already said whether it matched the most
+    played move, and this is where that claim can be checked.
+    """
     total = stats.total_games
     tied = set(tied_ucis)
+    # An engine-mode card is answered by the engine, so its answer is the
+    # engine's move even when the caller did not say so separately.
+    engine_uci = engine_move_uci or (answer_uci if mode is CardMode.ENGINE else None)
+    ordered = stats.by_games()
+    most_played = ordered[0].games if ordered else 0
     rows = [
         StatsRow(
             san=move.san,
@@ -83,32 +97,37 @@ def build(
             black=move.black,
             average_rating=move.average_rating,
             is_answer=move.uci == answer_uci,
-            is_engine_move=(
-                mode is CardMode.ENGINE and move.uci == (engine_move_uci or answer_uci)
-            ),
+            is_engine_move=move.uci == engine_uci,
+            is_most_played=move.games == most_played and move.games > 0,
             is_tied=move.uci in tied,
         )
-        for move in stats.by_games()
+        for move in ordered
     ]
 
-    # An engine-mode answer need not appear in the database at all.
-    if (
-        mode is CardMode.ENGINE
-        and answer_uci is not None
-        and not any(row.uci == answer_uci for row in rows)
-    ):
+    # An engine-mode answer need not appear in the database at all, and nor need
+    # Stockfish's choice on a frequency card. Both are named to the player, so
+    # both get a row rather than being left nowhere to be found.
+    extra: list[tuple[str, str | None]] = []
+    if mode is CardMode.ENGINE and answer_uci is not None:
+        extra.append((answer_uci, None))
+    if engine_uci is not None and engine_uci != answer_uci:
+        extra.append((engine_uci, engine_move_san))
+
+    for uci, san in extra:
+        if any(row.uci == uci for row in rows):
+            continue
         rows.append(
             StatsRow(
-                san=answer_uci,
-                uci=answer_uci,
+                san=san or uci,
+                uci=uci,
                 games=0,
                 share=0.0,
                 white=0,
                 draws=0,
                 black=0,
                 average_rating=None,
-                is_answer=True,
-                is_engine_move=True,
+                is_answer=uci == answer_uci,
+                is_engine_move=uci == engine_uci,
             )
         )
 

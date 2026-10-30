@@ -3,8 +3,9 @@
  *
  * One row per master move: the move, its share, the game count, the
  * white/draw/black split and the average rating. The accepted answer is
- * highlighted, the engine's move is marked when the card was decided by the
- * engine, and a tie the engine broke is noted beneath.
+ * highlighted, the engine's own move is marked, and a tie the engine broke is
+ * noted beneath. The question says only *whether* the most played move was
+ * the engine's; this is where you see which move each one was.
  */
 
 const MAX_ROWS = 12;
@@ -79,6 +80,11 @@ function bodyRow(row) {
   move.className = 'mono stats-move';
   move.textContent = row.san;
   if (row.is_answer) move.append(badge('answer', 'badge-answer'));
+  // On a frequency card the answer *is* the most played move, so saying both
+  // would be noise; the badge is for the cards where they come apart.
+  if (row.is_most_played && !row.is_answer) {
+    move.append(badge('most played', 'badge-played'));
+  }
   if (row.is_engine_move) move.append(badge('engine', 'badge-engine'));
   if (row.is_tied) move.append(badge('tied', 'badge-tied'));
 

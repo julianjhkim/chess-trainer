@@ -47,6 +47,18 @@ def _counts(state: State, conn: sqlite3.Connection, config: Config) -> QueueCoun
     return QueueCountsOut.of(state.card_queue.counts(conn, _today(config)))
 
 
+def _cached_engine_move(
+    conn: sqlite3.Connection, card: CardRow, config: Config
+) -> str | None:
+    """Stockfish's move here, if it is already cached.
+
+    This endpoint only reports what is on screen, so it reads the cache and
+    never starts a search; the card was served with the search already done.
+    """
+    cached = analysis.cached_only(conn, card.fen, config.engine_depth)
+    return cached.best_move if cached else None
+
+
 def _current_card(state: State, conn: sqlite3.Connection) -> CardRow:
     if state.current_card_id is None:
         raise HTTPException(
@@ -76,6 +88,7 @@ def get_state(state: State, conn: Conn, config: Cfg) -> CardStateOut:
             card,
             source=CardSource.DUE,
             schedule=schedule_repo.get(conn, card.id or 0),
+            engine_best_uci=_cached_engine_move(conn, card, config),
         ),
         counts=counts,
         attempts=len(state.card_attempts),
@@ -131,7 +144,12 @@ async def next_card(
     state.card_queue.mark_served()
 
     return CardStateOut(
-        card=CardOut.of(card, source=item.source, schedule=item.schedule),
+        card=CardOut.of(
+            card,
+            source=item.source,
+            schedule=item.schedule,
+            engine_best_uci=prepared.engine_best_uci,
+        ),
         counts=_counts(state, conn, config),
     )
 
@@ -258,19 +276,27 @@ async def _finish_card(
                 conn, explorer, engine, card, engine_depth=config.engine_depth
             )
         stats = card_builder.stats_for_card(conn, explorer, card)
-        return outcome, expansion, stats
+        engine_move = card_builder.engine_best_move(
+            conn, engine, card, engine_depth=config.engine_depth
+        )
+        return outcome, expansion, stats, engine_move
 
     try:
-        outcome, expansion, stats = await state.in_thread(run)
+        outcome, expansion, stats, engine_move = await state.in_thread(run)
     except ExplorerError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    # The question told the player whether the most played move was also the
+    # engine's; the table marks both, so that can be checked against the moves.
     table = stats_table.build(
         stats,
         answer_uci=card.answer_uci,
         mode=CardMode(card.mode) if card.mode else None,
         tied_ucis=card.tied_ucis,
-        engine_move_uci=card.answer_uci if card.mode == CardMode.ENGINE.value else None,
+        engine_move_uci=engine_move,
+        engine_move_san=(
+            line_module.san_of(card.fen, engine_move) if engine_move else None
+        ),
     )
 
     response.answer_uci = card.answer_uci

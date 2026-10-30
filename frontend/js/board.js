@@ -74,9 +74,11 @@ export function createBoard({
   let lastRect = null;
   let syncQueued = false;
   const observed = new Set();
-  // Through `refresh`, not straight to `syncGeometry`: several boxes can
-  // report a new size for one layout change, and that is one re-measure.
-  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(refresh) : null;
+  // Deferred, not straight to `syncGeometry`: several boxes can report a new
+  // size for one layout change, and that is one re-measure. Measuring inside
+  // the observer's own callback would also risk a resize loop.
+  const observer =
+    typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleSync) : null;
   if (observer) observer.observe(element);
 
   /** Watch every ancestor box, since the board moves when one of them grows. */
@@ -126,13 +128,22 @@ export function createBoard({
   }
 
   /**
-   * Ask for a re-measure once the browser has laid out whatever just changed.
+   * Re-measure now, because the caller has just changed something around the
+   * board.
    *
-   * Views call this after changing anything around the board; the observer
-   * would catch it a frame later anyway, but saying so directly keeps the
-   * board correct from the first click after a re-render.
+   * Deliberately synchronous. A board is built detached and measures nothing,
+   * so until the first re-measure every click falls outside the board and is
+   * dropped; waiting a frame for that would leave the board live but deaf for
+   * as long as it takes to paint. The forced layout costs a view re-render,
+   * and after the first one it is a no-op: nothing moved, nothing to redraw.
    */
   function refresh() {
+    if (destroyed) return;
+    syncGeometry();
+  }
+
+  /** Re-measure on the next frame, coalescing a burst of observer events. */
+  function scheduleSync() {
     if (destroyed || syncQueued) return;
     syncQueued = true;
     requestAnimationFrame(syncGeometry);

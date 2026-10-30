@@ -328,10 +328,10 @@ const tableNode = renderStatsTable({
   rows: [
     { san: 'c5', uci: 'c7c5', games: 600, share: 60, white: 200, draws: 300, black: 100,
       white_percent: 33.3, draw_percent: 50, black_percent: 16.7, average_rating: 2401,
-      is_answer: true, is_engine_move: false, is_tied: true },
+      is_answer: true, is_engine_move: false, is_most_played: true, is_tied: true },
     { san: 'e5', uci: 'e7e5', games: 400, share: 40, white: 150, draws: 150, black: 100,
       white_percent: 37.5, draw_percent: 37.5, black_percent: 25, average_rating: 2410,
-      is_answer: false, is_engine_move: false, is_tied: true },
+      is_answer: false, is_engine_move: true, is_most_played: false, is_tied: true },
   ],
 });
 check('stats table renders a row per move', tableNode.querySelectorAll('tbody tr').length === 2);
@@ -342,6 +342,31 @@ check('stats table shows the average rating', /2401/.test(tableNode.textContent)
 check('stats table draws a W/D/L bar', tableNode.querySelectorAll('.wdl-bar').length === 2);
 check('stats table badges the answer', tableNode.querySelector('.badge-answer') !== null);
 check('stats table badges a tie', tableNode.querySelector('.badge-tied') !== null);
+check("stats table badges the engine's move on a frequency card",
+      tableNode.querySelector('.badge-engine') !== null);
+check('the most played move is not badged when it is the answer',
+      tableNode.querySelector('.badge-played') === null);
+
+// Engine mode: the answer is the engine's move, so the most played move is a
+// different row and has to say so.
+const engineModeTable = renderStatsTable({
+  total_games: 11,
+  mode: 'engine',
+  tie_note: null,
+  engine_note: 'Only 11 master games here, so Stockfish decides rather than frequency.',
+  rows: [
+    { san: 'a6', uci: 'a7a6', games: 7, share: 63.6, white: 3, draws: 2, black: 2,
+      white_percent: 43, draw_percent: 29, black_percent: 28, average_rating: 2380,
+      is_answer: false, is_engine_move: false, is_most_played: true, is_tied: false },
+    { san: 'Nf6', uci: 'g8f6', games: 4, share: 36.4, white: 1, draws: 2, black: 1,
+      white_percent: 25, draw_percent: 50, black_percent: 25, average_rating: 2390,
+      is_answer: true, is_engine_move: true, is_most_played: false, is_tied: false },
+  ],
+});
+check('stats table badges the most played move when it is not the answer',
+      engineModeTable.querySelector('.badge-played') !== null);
+check('the most played badge sits on the most played row',
+      engineModeTable.querySelectorAll('tbody tr')[0].textContent.includes('most played'));
 check('stats table shows the tie note', /equally often/.test(tableNode.textContent));
 const emptyTable = renderStatsTable({ total_games: 0, mode: null, rows: [] });
 check('an empty stats table says so', /No master moves/.test(emptyTable.textContent));
@@ -377,6 +402,13 @@ check('the card has a given move', !!served.given_move_san, served.given_move_sa
 check('the card names the side to find', ['white', 'black'].includes(served.side_to_move));
 check('the card carries an opening name', !!served.opening_label, served.opening_label);
 check('the card does not leak the answer', !JSON.stringify(served).toLowerCase().includes('answer'));
+// Resolved by a real Stockfish search before the card was shown.
+check('a frequency card says whether the engine agrees',
+      served.mode !== 'frequency' || typeof served.engine_agrees === 'boolean',
+      `${served.mode}: ${served.engine_agrees}`);
+check('an engine-mode card has no agreement to report',
+      served.mode !== 'engine' || served.engine_agrees === null,
+      `${served.mode}: ${served.engine_agrees}`);
 
 check('cards view renders a board', realPieces(cardsHost).length > 0, `${realPieces(cardsHost).length} pieces`);
 check('cards view renders an eval bar', cardsHost.querySelector('.evalbar-number') !== null);
@@ -406,6 +438,8 @@ check('show answer grades as a failure', revealed.grade.quality === 1 && reveale
 check('show answer requeues the card', revealed.grade.requeued === true);
 check('show answer returns the stats table', revealed.stats.rows.length > 0, `${revealed.stats.rows.length} rows`);
 check('the stats table marks the answer', revealed.stats.rows.some((r) => r.is_answer));
+check('the stats table marks the most played move', revealed.stats.rows.some((r) => r.is_most_played));
+check("the stats table marks Stockfish's move", revealed.stats.rows.some((r) => r.is_engine_move));
 check('show answer creates no branches', revealed.branches_created === 0);
 check('the card step is marked and the streak moves',
       revealed.session != null && revealed.streak?.current >= 1);

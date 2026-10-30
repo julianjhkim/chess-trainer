@@ -94,11 +94,92 @@ def test_the_engine_move_is_marked_in_engine_mode():
     assert [r.san for r in table.rows if r.is_engine_move] == ["b"]
 
 
-def test_nothing_is_marked_as_the_engine_move_in_frequency_mode():
+def test_nothing_is_marked_as_the_engine_move_without_one():
     table = stats_table.build(
         stats([("a", 10, 0, 0)]), answer_uci="a", mode=CardMode.FREQUENCY
     )
     assert not any(r.is_engine_move for r in table.rows)
+
+
+# -- the engine's move on a frequency card -------------------------------
+def test_the_engine_move_is_marked_in_frequency_mode_too():
+    """The card said whether the engine agreed; the table says with what."""
+    table = stats_table.build(
+        stats([("a", 10, 0, 0), ("b", 5, 0, 0)]),
+        answer_uci="a",
+        mode=CardMode.FREQUENCY,
+        engine_move_uci="b",
+    )
+    assert [r.san for r in table.rows if r.is_engine_move] == ["b"]
+    assert [r.san for r in table.rows if r.is_answer] == ["a"]
+
+
+def test_one_row_carries_both_marks_when_they_agree():
+    table = stats_table.build(
+        stats([("a", 10, 0, 0), ("b", 5, 0, 0)]),
+        answer_uci="a",
+        mode=CardMode.FREQUENCY,
+        engine_move_uci="a",
+    )
+    row = table.rows[0]
+    assert row.is_answer and row.is_engine_move and row.is_most_played
+
+
+def test_an_engine_move_no_master_played_still_gets_a_row():
+    table = stats_table.build(
+        stats([("a", 10, 0, 0)]),
+        answer_uci="a",
+        mode=CardMode.FREQUENCY,
+        engine_move_uci="h2h4",
+        engine_move_san="h4",
+    )
+    added = [r for r in table.rows if r.uci == "h2h4"]
+    assert added and added[0].san == "h4"
+    assert added[0].is_engine_move and not added[0].is_answer
+    assert added[0].games == 0
+
+
+# -- the most played move ------------------------------------------------
+def test_the_most_played_move_is_marked():
+    table = stats_table.build(
+        stats([("a", 1, 0, 0), ("b", 10, 0, 0)]),
+        answer_uci="b",
+        mode=CardMode.FREQUENCY,
+    )
+    assert [r.san for r in table.rows if r.is_most_played] == ["b"]
+
+
+def test_every_move_tied_for_most_played_is_marked():
+    table = stats_table.build(
+        stats([("a", 10, 0, 0), ("b", 10, 0, 0), ("c", 1, 0, 0)]),
+        answer_uci="a",
+        mode=CardMode.FREQUENCY,
+        tied_ucis=("a", "b"),
+    )
+    assert {r.san for r in table.rows if r.is_most_played} == {"a", "b"}
+
+
+def test_the_most_played_move_is_marked_in_engine_mode_too():
+    """Here it is not the answer, which is exactly why it needs saying."""
+    table = stats_table.build(
+        stats([("a", 7, 0, 0), ("b", 3, 0, 0)]),
+        answer_uci="b",
+        mode=CardMode.ENGINE,
+        engine_move_uci="b",
+    )
+    most = [r for r in table.rows if r.is_most_played]
+    assert [r.san for r in most] == ["a"]
+    assert not most[0].is_answer
+
+
+def test_a_move_no_master_played_is_never_the_most_played():
+    table = stats_table.build(
+        stats([("a", 7, 0, 0)]),
+        answer_uci="h2h4",
+        mode=CardMode.ENGINE,
+        engine_move_uci="h2h4",
+    )
+    assert [r.san for r in table.rows if r.is_most_played] == ["a"]
 
 
 def test_an_engine_move_absent_from_the_database_gets_a_row():
