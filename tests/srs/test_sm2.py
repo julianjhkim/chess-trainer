@@ -120,9 +120,10 @@ def test_a_failure_halves_rather_than_resetting():
     assert result.previous_interval_days == 38
 
 
-def test_a_failure_resets_the_pass_count():
+def test_a_failure_leaves_the_ladder_position_alone():
+    """n survives a lapse, which is what makes halving the interval mean something."""
     result = sm2.review(SchedulingState(n=4, ef=2.5, interval_days=38), 1, today=TODAY)
-    assert result.state.n == 0
+    assert result.state.n == 4
 
 
 def test_a_failure_never_goes_below_one_day():
@@ -144,12 +145,61 @@ def test_a_long_interval_is_halved_not_destroyed():
     assert result.interval_days == 182
 
 
-def test_recovering_after_a_failure_restarts_the_ladder():
-    """n was reset, so the next pass is a one-day interval again."""
+def test_recovering_after_a_failure_continues_from_the_halved_interval():
+    """The next pass grows from the halved interval, not from one day."""
     failed = sm2.review(SchedulingState(n=4, ef=2.5, interval_days=38), 1, today=TODAY)
+    assert failed.interval_days == 19
+
+    recovered = sm2.review(failed.state, 4, today=TODAY)
+    # 19 * 1.96 (the ease after the lapse), not back to 1.
+    assert recovered.interval_days == 37
+    assert recovered.state.n == 5
+
+
+def test_a_lapse_costs_one_step_not_the_whole_history():
+    """A long-known card recovers near where it was, not at the beginning."""
+    state = SchedulingState(n=9, ef=2.5, interval_days=365)
+    failed = sm2.review(state, 1, today=TODAY)
+    recovered = sm2.review(failed.state, 4, today=TODAY)
+    assert failed.interval_days == 182
+    assert recovered.interval_days == 357  # round(182 * 1.96)
+    assert recovered.interval_days > 100
+
+
+def test_a_card_that_never_passed_stays_at_one_day():
+    """The n == 0 exception, which the pass rule already gives us."""
+    failed = sm2.review(sm2.new_state(), 1, today=TODAY)
+    assert failed.state.n == 0
+    assert failed.interval_days == 1
+
     recovered = sm2.review(failed.state, 4, today=TODAY)
     assert recovered.interval_days == 1
     assert recovered.state.n == 1
+
+
+def test_repeated_lapses_keep_halving_without_restarting():
+    # round(12.5) is 12, not 13: Python rounds halves to even.
+    state = SchedulingState(n=5, ef=2.5, interval_days=100)
+    for expected in (50, 25, 12, 6, 3):
+        result = sm2.review(state, 1, today=TODAY)
+        assert result.interval_days == expected
+        assert result.state.n == 5
+        state = result.state
+
+
+def test_halving_bottoms_out_at_one_day():
+    state = SchedulingState(n=5, ef=2.5, interval_days=2)
+    for _ in range(4):
+        state = sm2.review(state, 1, today=TODAY).state
+        assert state.interval_days >= 1
+    assert state.interval_days == 1
+
+
+def test_n_counts_passes_rather_than_consecutive_passes():
+    state = sm2.new_state()
+    for quality in (4, 4, 1, 4):
+        state = sm2.review(state, quality, today=TODAY).state
+    assert state.n == 3  # three passes; the lapse did not reset it
 
 
 # -- validation ----------------------------------------------------------

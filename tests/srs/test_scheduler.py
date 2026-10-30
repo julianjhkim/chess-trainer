@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
+
 from chess_trainer.db import cards_repo, review_log_repo, schedule_repo
 from chess_trainer.srs.due import CardSource
 from chess_trainer.srs.scheduler import CardQueue
@@ -326,3 +328,61 @@ def test_an_answered_card_is_no_longer_new(conn):
     assert queue.counts(conn, TODAY).new == 1
     pass_card(queue, conn, card)
     assert queue.counts(conn, TODAY).new == 0
+
+
+# -- lapses keep the ladder position (persisted path) --------------------
+def test_a_lapse_does_not_restart_the_ladder_across_sessions(conn):
+    """The rule end to end: fail a mature card, then pass it tomorrow."""
+    card = make_card(conn, 1)
+    schedule_repo.upsert(
+        conn,
+        schedule_repo.ScheduleRow(
+            card_id=card.id, n=4, ef=2.5, interval_days=38, due_on=TODAY, reps=4
+        ),
+    )
+
+    # Today: the answer is revealed, so the card lapses.
+    lapse = fail_card(CardQueue(), conn, cards_repo.get(conn, card.id))
+    assert lapse.interval_days == 19  # halved, not reset
+    after_lapse = schedule_repo.get(conn, card.id)
+    assert after_lapse.n == 4  # the ladder position survived
+    assert after_lapse.ef == pytest.approx(1.96)
+
+    # A later session: it is answered correctly and grows from the halved value.
+    tomorrow = TODAY + timedelta(days=1)
+    recovery = CardQueue().record_answer(
+        conn, cards_repo.get(conn, card.id), attempts=1,
+        used_show_answer=False, today=tomorrow,
+    )
+    assert recovery.interval_days == 37  # round(19 * 1.96), not 1
+    assert schedule_repo.get(conn, card.id).n == 5
+
+
+def test_a_never_passed_card_stays_at_one_day_after_a_lapse(conn):
+    card = make_card(conn, 1)
+    queue = CardQueue()
+    lapse = fail_card(queue, conn, card)
+    assert lapse.interval_days == 1
+    assert schedule_repo.get(conn, card.id).n == 0
+
+    tomorrow = TODAY + timedelta(days=1)
+    recovery = CardQueue().record_answer(
+        conn, cards_repo.get(conn, card.id), attempts=1,
+        used_show_answer=False, today=tomorrow,
+    )
+    assert recovery.interval_days == 1
+    assert schedule_repo.get(conn, card.id).n == 1
+
+
+def test_lapses_are_still_counted_even_though_n_survives(conn):
+    card = make_card(conn, 1)
+    schedule_repo.upsert(
+        conn,
+        schedule_repo.ScheduleRow(
+            card_id=card.id, n=3, ef=2.5, interval_days=15, due_on=TODAY
+        ),
+    )
+    fail_card(CardQueue(), conn, cards_repo.get(conn, card.id))
+    stored = schedule_repo.get(conn, card.id)
+    assert stored.lapses == 1
+    assert stored.n == 3

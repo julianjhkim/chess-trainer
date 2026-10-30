@@ -2,6 +2,10 @@
 
 A card with no row here has never been answered, which is what makes it "new".
 Due dates are Asia/Seoul calendar dates, matching the streak's day boundary.
+
+``n`` is the card's position on the interval ladder and is *not* reset by a
+lapse (see :mod:`chess_trainer.srs.sm2`); ``lapses`` counts the failures
+separately.
 """
 
 from __future__ import annotations

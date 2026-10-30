@@ -265,20 +265,28 @@ Requests are throttled, and an HTTP 429 waits 60 seconds and retries once.
 
 ### The SM-2 variant
 
-Per card: `n` consecutive passes, an ease factor `EF` (2.5 to start, floor 1.3)
-and an interval `I` in days. Grading is automatic — right first time is q=4, right
-after a retry is q=3, revealing the answer is q=1 — so only a reveal actually
-fails a card.
+Per card: `n`, its position on the interval ladder, an ease factor `EF` (2.5 to
+start, floor 1.3) and an interval `I` in days. Grading is automatic — right first
+time is q=4, right after a retry is q=3, revealing the answer is q=1 — so only a
+reveal actually fails a card.
 
-Passing gives `I = 1`, then `6`, then `round(I × EF)`; the ladder runs
-1 → 6 → 15 → 38 → 95 days at the default ease. Failing **halves** the interval
-rather than resetting it (`I = max(1, round(I × 0.5))`), so a lapse on a card you
-have known for months does not throw that history away. The interval is computed
-with the ease the card had *before* the answer, and the ease is updated after.
+Passing gives `I = 1`, then `6`, then `round(I × EF)`, and `n += 1`; the ladder
+runs 1 → 6 → 15 → 38 → 95 days at the default ease. The interval is computed with
+the ease the card had *before* the answer, and the ease is updated afterwards.
 
-One consequence worth knowing: a failure also sets `n = 0`, so the next successful
-answer starts the ladder again at one day. The halved interval governs when the
-card comes back, not where it resumes.
+Failing departs from textbook SM-2 twice over. The interval is **halved** rather
+than dropped to a day (`I = max(1, round(I × 0.5))`), **and `n` is left alone** —
+the ladder is never restarted. Keeping `n` is what makes the halving mean
+something: the next successful answer continues from the halved interval, so a
+lapse costs one step rather than the card's whole history.
+
+```
+n=4, I=38d  ──fail──▶  I=19d (n still 4)  ──pass──▶  I=37d   (19 × 1.96)
+```
+
+A card that has never passed (`n = 0`) stays at one day either way, which falls
+out of the `n = 0` pass rule rather than needing a special case. So `n` counts
+completed passes rather than consecutive ones, and `lapses` is tracked separately.
 
 ### Why one locked SQLite connection
 

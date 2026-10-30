@@ -1,7 +1,7 @@
 """The modified SM-2 scheduler.
 
-Per card: ``n`` consecutive passes, an ease factor ``ef`` and an interval ``I``
-in days.
+Per card: ``n``, the card's position on the interval ladder, an ease factor
+``ef`` and an interval ``I`` in days.
 
 Pass (``q >= 3``)::
 
@@ -10,12 +10,21 @@ Pass (``q >= 3``)::
     else        I = round(I * ef)
     n += 1
 
-Fail (``q < 3``) departs from textbook SM-2, which drops straight back to one
-day. Here the interval is halved instead, so a lapse on a card you have known
-for months does not throw away all of that history::
+Fail (``q < 3``) departs from textbook SM-2 twice over. Textbook SM-2 drops the
+interval back to one day and resets the ladder; here the interval is only
+halved, **and ``n`` is left alone**::
 
     I = max(1, round(I * 0.5))
-    n = 0
+    n unchanged
+
+Keeping ``n`` is what makes the halving meaningful: the next successful answer
+continues from the halved interval (``I * ef``) rather than starting again at a
+day, so a lapse on a card known for months costs one step rather than all of its
+history. A card that had never passed (``n == 0``) still sits at one day, since
+the pass rule for ``n == 0`` gives ``I = 1`` -- which falls out of the same
+rules rather than needing a special case.
+
+So ``n`` counts completed passes rather than *consecutive* ones.
 
 The ease factor moves the usual way, with a floor of 1.3::
 
@@ -53,7 +62,11 @@ MIN_INTERVAL = 1
 
 @dataclass(frozen=True, slots=True)
 class SchedulingState:
-    """A card's scheduling state."""
+    """A card's scheduling state.
+
+    ``n`` is the ladder position: 0 before the first pass, then one per pass. It
+    survives a lapse, so the ladder is never restarted.
+    """
 
     n: int = 0
     ef: float = INITIAL_EF
@@ -105,7 +118,9 @@ def review(state: SchedulingState, quality: int, *, today: date) -> SchedulingRe
     passed = quality >= PASS_QUALITY
     interval = next_interval(state, quality)
     updated = SchedulingState(
-        n=state.n + 1 if passed else 0,
+        # A lapse leaves n alone, so the next pass grows from the halved
+        # interval instead of restarting the ladder at one day.
+        n=state.n + 1 if passed else state.n,
         ef=next_ef(state.ef, quality),
         interval_days=interval,
     )

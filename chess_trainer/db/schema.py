@@ -154,7 +154,7 @@ _M003 = Migration(
     -- SM-2 state. A card with no row here has never been answered, i.e. is new.
     CREATE TABLE card_schedule (
         card_id          INTEGER PRIMARY KEY REFERENCES cards (id) ON DELETE CASCADE,
-        n                INTEGER NOT NULL DEFAULT 0,   -- consecutive passes
+        n                INTEGER NOT NULL DEFAULT 0,   -- ladder position; survives a lapse
         ef               REAL NOT NULL DEFAULT 2.5,    -- ease factor, floor 1.3
         interval_days    INTEGER NOT NULL DEFAULT 0,
         due_on           TEXT NOT NULL,                -- Asia/Seoul date
