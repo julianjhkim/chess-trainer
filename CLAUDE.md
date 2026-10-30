@@ -177,6 +177,13 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - **Commit and push after each change** (to `main` unless told otherwise).
   Commit style: a plain-English subject describing the user-visible effect,
   then a prose body explaining why.
+- **The GitHub repo is public.** Keep personal information out of everything
+  committed — files, test fixtures, commit messages and metadata: no tokens or
+  `.env`, emails, real names, local absolute paths (`/Users/...`), or real game
+  data beyond what the user has approved (a real game also exposes the
+  opponent). Prefer synthetic fixtures. Scan each diff for personal strings
+  before committing, and ask when in doubt. Never rewrite published history
+  (force-push) without explicit approval.
 - License **GPL-3.0-or-later** (forced by vendored chessground). Keep it on new files/metadata.
 - Update README.md as well when behaviour changes.
 
