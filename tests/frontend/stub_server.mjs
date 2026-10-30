@@ -218,6 +218,36 @@ const BROWSE_SUMMARY = {
 let reviewScenario = null;
 let reviewPolls = 0;
 let reviewFinished = false;
+let reviewHinted = false;
+
+const BROWSE_HINT = { square: 'f1', piece: 'bishop', text: 'Move your bishop on f1.' };
+
+/** The "why" for the browse game, shaped like `ExplanationResponse`. */
+function browseExplanation() {
+  const answer = fixture.moves[`${BROWSE_TARGET.fen_before}|${BROWSE_ANSWER}`];
+  const [nf3, nc6] = BROWSE_MOVES.slice(2, 4);
+  const lineMove = (m) => ({
+    uci: m.uci,
+    san: m.san,
+    label: m.label,
+    fen_after: m.fen_after,
+    mover_is_white: m.mover_is_white,
+  });
+  return {
+    best: {
+      moves: [
+        { uci: BROWSE_ANSWER, san: answer.san, label: `2.${answer.san}`, fen_after: answer.fen, mover_is_white: true },
+      ],
+      evaluation: EVALUATION,
+      notes: ['After it the engine rates the position +0.31.'],
+    },
+    mine: {
+      moves: [lineMove(nf3), lineMove(nc6)],
+      evaluation: BROWSE_SUMMARY.eval_after,
+      notes: ['The engine answers 2...Nc6.', 'It costs 11.2% of your winning chances (+0.31 → −0.20).'],
+    },
+  };
+}
 
 /** Which step the session reports as current; set through `/__scenario`. */
 let currentStep = 'cards';
@@ -283,9 +313,11 @@ function browseReviewState(extra = {}) {
     no_inaccuracy: false,
     attempts: reviewAttempts,
     used_show_answer: false,
+    used_hint: reviewHinted,
+    hint: reviewHinted ? BROWSE_HINT : null,
     solved: reviewFinished,
     finished: reviewFinished,
-    summary: reviewFinished ? BROWSE_SUMMARY : null,
+    summary: reviewFinished ? { ...BROWSE_SUMMARY, used_hint: reviewHinted } : null,
     moves: analysing
       ? []
       : reviewFinished
@@ -373,8 +405,15 @@ const routes = {
     reviewAttempts = 0;
     reviewPolls = 0;
     reviewFinished = false;
+    reviewHinted = false;
     return reviewState();
   },
+  'POST /api/review/hint': () => {
+    reviewHinted = true;
+    return { hint: BROWSE_HINT, review: reviewState() };
+  },
+  'POST /api/review/explain': () =>
+    reviewFinished ? browseExplanation() : { error: 'Solve the position or show the answer first.' },
   'GET /api/review/review_last_game': () => {
     reviewPolls += 1;
     return reviewState();
@@ -409,6 +448,7 @@ const routes = {
     reviewAttempts = 0;
     reviewPolls = 0;
     reviewFinished = false;
+    reviewHinted = false;
     return { step: currentStep, engineAgrees, review: reviewScenario };
   },
 };

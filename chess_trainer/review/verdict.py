@@ -36,6 +36,7 @@ class ReviewSummary:
     attempts: int
     used_show_answer: bool
     found_an_inaccuracy: bool
+    used_hint: bool = False
 
     @property
     def solved_first_try(self) -> bool:

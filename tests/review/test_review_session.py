@@ -355,3 +355,45 @@ def test_the_real_game_is_reviewable_with_canned_evals(conn, chesscom_pgn):
     assert plan.target.ply == 6
     assert plan.target.move_number == 4
     assert len(plan.target.replay_ucis) == 6
+
+
+# -- hints ---------------------------------------------------------------
+def test_a_hint_gives_the_square_the_answer_moves_from(conn):
+    session = session_with_target(conn)
+    assert session.hint() == "d2"
+    assert session.used_hint
+
+
+def test_a_hint_does_not_finish_or_count_as_an_attempt(conn):
+    session = session_with_target(conn)
+    session.hint()
+    assert not session.finished
+    assert session.attempt_count == 0
+
+
+def test_no_hint_once_the_review_is_over(conn):
+    session = session_with_target(conn)
+    session.attempt("d2d4")
+    with pytest.raises(ValueError):
+        session.hint()
+
+
+def test_no_hint_without_a_target(conn, fake_engine):
+    plan = build_review(conn, fake_engine, parsed(), game_id="g", my_colour="white", depth=10)
+    with pytest.raises(ValueError):
+        ReviewSession(plan).hint()
+
+
+def test_the_summary_and_history_note_a_hint(conn):
+    session = session_with_target(conn)
+    session.hint()
+    session.attempt("d2d4")
+    assert session.summary().used_hint
+    assert session.to_history(date(2026, 10, 30)).used_hint
+
+
+def test_without_a_hint_nothing_is_noted(conn):
+    session = session_with_target(conn)
+    session.attempt("d2d4")
+    assert not session.summary().used_hint
+    assert not session.to_history(date(2026, 10, 30)).used_hint

@@ -141,6 +141,86 @@ def test_moves_are_mine_by_colour_when_i_played_black(client):
     assert [m["is_mine"] for m in payload["moves"]] == [False, True] * 3
 
 
+# -- hints ---------------------------------------------------------------
+def test_a_hint_names_the_piece_but_not_its_destination(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    payload = client.post("/api/review/hint", json={"step": STEP}).json()
+    assert payload["hint"] == {"square": "d2", "piece": "pawn", "text": "Move your pawn on d2."}
+    assert "d4" not in str(payload)
+    assert payload["review"]["used_hint"] is True
+    assert payload["review"]["finished"] is False
+
+
+def test_the_hint_is_part_of_the_review_state(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    assert client.get(f"/api/review/{STEP}").json()["hint"] is None
+    client.post("/api/review/hint", json={"step": STEP})
+    assert client.get(f"/api/review/{STEP}").json()["hint"]["square"] == "d2"
+
+
+def test_a_hint_is_recorded_in_the_summary_and_history(client, fake_engine_for_api):
+    from chess_trainer.db import game_reviews_repo
+
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    client.post("/api/review/hint", json={"step": STEP})
+    payload = client.post(
+        "/api/review/attempt", json={"step": STEP, "from": "d2", "to": "d4"}
+    ).json()
+    assert payload["review"]["summary"]["used_hint"] is True
+
+    from chess_trainer.db.connection import connect
+
+    conn = connect(client.app.state.ctx.config.db_path)
+    assert game_reviews_repo.recent(conn)[0].used_hint is True
+    conn.close()
+
+
+def test_no_hint_after_the_review_is_over(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    client.post("/api/review/show-answer", json={"step": STEP})
+    assert client.post("/api/review/hint", json={"step": STEP}).status_code == 409
+
+
+def test_no_hint_on_a_clean_game(client):
+    start_review(client)
+    assert client.post("/api/review/hint", json={"step": STEP}).status_code == 409
+
+
+# -- explanations --------------------------------------------------------
+def test_no_explanation_while_still_solving(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    start_review(client)
+    assert client.post("/api/review/explain", json={"step": STEP}).status_code == 409
+
+
+def test_no_explanation_for_a_clean_game(client):
+    start_review(client)
+    assert client.post("/api/review/explain", json={"step": STEP}).status_code == 409
+
+
+def test_the_explanation_shows_both_lines(client, fake_engine_for_api):
+    from chess_trainer import rules
+
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    target = positions()[2]
+    after_best = rules.apply_move(target.fen_before, "d2d4").fen_after
+    fake_engine_for_api.pvs[after_best] = ("e5d4", "f1c4")
+    fake_engine_for_api.pvs[target.fen_after] = ("b8c6",)
+    start_review(client)
+    client.post("/api/review/show-answer", json={"step": STEP})
+
+    payload = client.post("/api/review/explain", json={"step": STEP}).json()
+    assert [m["label"] for m in payload["best"]["moves"]] == ["2.d4", "2...exd4", "3.Bc4"]
+    assert [m["label"] for m in payload["mine"]["moves"]] == ["2.Nf3", "2...Nc6"]
+    assert payload["mine"]["evaluation"]["cp"] == -900
+    assert "Over this line you lose a pawn." in payload["best"]["notes"]
+    assert payload["best"]["moves"][0]["fen_after"] == after_best
+
+
 def test_the_board_is_oriented_to_my_colour(client, fake_engine_for_api):
     make_blunder(fake_engine_for_api, 2, "d2d4")
     assert start_review(client)["orientation"] == "white"

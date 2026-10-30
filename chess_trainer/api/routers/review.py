@@ -13,6 +13,9 @@ from chess_trainer.api.schemas import (
     AttemptRequest,
     AttemptResponse,
     EvalOut,
+    ExplanationResponse,
+    HintOut,
+    HintResponse,
     ReviewStateOut,
     SessionOut,
     ShowAnswerRequest,
@@ -25,7 +28,7 @@ from chess_trainer.db import game_reviews_repo, games_repo
 from chess_trainer.engine import analysis
 from chess_trainer.pgn import parse
 from chess_trainer.pgn.parse import PgnParseError
-from chess_trainer.review import review_job
+from chess_trainer.review import explain as explain_module, review_job
 from chess_trainer.review.review_job import ReviewJob
 from chess_trainer.session.steps import Step
 from chess_trainer.streak import seoul_day, tracker
@@ -178,6 +181,84 @@ async def attempt(
     if correct:
         _finish(state, conn, config, step, job, response)
     return response
+
+
+@router.post("/hint", response_model=HintResponse)
+def hint(payload: ShowAnswerRequest, state: State) -> HintResponse:
+    """Say which piece the answer moves -- its square, not where it goes.
+
+    Only while the position is still being solved; the review history notes
+    that a hint was taken.
+    """
+    step = _require_review_step(payload.step)
+    job = _require_ready(_require_job(state, step), step)
+    session = job.session
+    assert session is not None
+    target = session.target
+    if target is None:
+        raise HTTPException(
+            status_code=409, detail="This game had no inaccuracy to solve."
+        )
+    if session.finished:
+        raise HTTPException(status_code=409, detail="This review is already finished.")
+
+    square = session.hint()
+    return HintResponse(
+        hint=HintOut.of(target.fen_before, square),
+        review=ReviewStateOut.of(step, job),
+    )
+
+
+@router.post("/explain", response_model=ExplanationResponse)
+async def explain(
+    payload: ShowAnswerRequest,
+    state: State,
+    conn: Conn,
+    engine: Engine,
+    config: Cfg,
+) -> ExplanationResponse:
+    """Why the engine's move is the answer: its line, and the line after mine.
+
+    Only once the review is over, since it names the answer. Reads the engine's
+    lines through the cache; a position cached before lines were kept is
+    searched once more.
+    """
+    step = _require_review_step(payload.step)
+    job = _require_ready(_require_job(state, step), step)
+    session = job.session
+    assert session is not None
+    target = session.target
+    if target is None:
+        raise HTTPException(
+            status_code=409, detail="This game had no inaccuracy to explain."
+        )
+    if not session.finished:
+        raise HTTPException(
+            status_code=409, detail="Solve the position or show the answer first."
+        )
+
+    after_best = rules.apply_move(target.fen_before, target.best_move_uci).fen_after
+    after_mine = rules.apply_move(target.fen_before, target.my_move_uci).fen_after
+
+    def run():
+        best = analysis.analyse(conn, engine, after_best, config.engine_depth, need_line=True)
+        mine = analysis.analyse(conn, engine, after_mine, config.engine_depth, need_line=True)
+        return best, mine
+
+    best, mine = await state.in_thread(run)
+    return ExplanationResponse.of(
+        explain_module.explain(
+            target.fen_before,
+            best_uci=target.best_move_uci,
+            best_reply_pv=best.pv,
+            best_eval=best.evaluation,
+            my_uci=target.my_move_uci,
+            my_reply_pv=mine.pv,
+            eval_before=target.eval_before,
+            eval_after=target.eval_after,
+            win_percent_drop=target.win_percent_drop,
+        )
+    )
 
 
 @router.post("/show-answer", response_model=ShowAnswerResponse)

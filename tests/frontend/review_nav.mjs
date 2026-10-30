@@ -7,8 +7,9 @@
  * answer sitting beside the move actually played. This drives that with real
  * key presses and mouse clicks and reads the board chessground is showing.
  *
- * It also pins down a duplicate-link bug: the game card used to gain one more
- * "Open on chess.com" link on every progress poll.
+ * It also covers the Hint button (a circle on the piece to move), the "Why"
+ * card that follows the review, and a duplicate-link bug: the game card used
+ * to gain one more "Open on chess.com" link on every progress poll.
  *
  *     npm install && npx playwright install chromium
  *     npm run review
@@ -53,7 +54,7 @@ const snapshot = (page) =>
       movable: board?.ground.state.movable.color ?? null,
       shapes: (board?.ground.state.drawable.autoShapes ?? [])
         .concat(board?.ground.state.drawable.shapes ?? [])
-        .map((s) => `${s.brush}:${s.orig}${s.dest}`)
+        .map((s) => `${s.brush}:${s.orig}${s.dest ?? ''}`)
         .sort(),
       moves: moves.map((m) => m.textContent),
       current: moves.findIndex((m) => m.classList.contains('move-current')),
@@ -167,7 +168,21 @@ async function testWhileDrilling(page, base) {
   await page.click('.move-list .move >> text=e4');
   await waitForFen(page, FENS[1], 'click on e4');
   check('clicking a move jumps to it', (await snapshot(page)).fen === FENS[1]);
-  await press(page, 'End', FENS[2], 'End back to the live position');
+
+  // A hint taken while browsing brings the board back to the live position.
+  await page.click('button:text-is("Hint")');
+  await waitForFen(page, FENS[2], 'the hint returning to the live position');
+  await waitForText(page, 'Hint: Move your bishop on f1.');
+  await page.waitForTimeout(100);
+  state = await snapshot(page);
+  check('Hint names the piece to move', (await page.innerText('.side-panel')).includes('Move your bishop on f1.'));
+  check('Hint circles its square', state.shapes.join() === 'yellow:f1', state.shapes.join());
+  check('the hint does not give the destination away', !(await page.innerText('.side-panel')).includes('c4'));
+
+  state = await press(page, 'ArrowLeft', FENS[1], '← away from the hinted position');
+  check('the circle stays with the live position', state.shapes.length === 0, state.shapes.join());
+  state = await press(page, 'End', FENS[2], 'End back to the live position');
+  check('and comes back with it', state.shapes.join() === 'yellow:f1', state.shapes.join());
 }
 
 // -- after solving --------------------------------------------------------
@@ -181,6 +196,7 @@ async function testAfterSolving(page) {
   await clickSquare(page, 'f1');
   await clickSquare(page, 'c4');
   await waitForText(page, 'Review complete');
+  check('the summary says a hint was used', (await page.innerText('.side-panel')).includes('with a hint'));
   await waitForFen(page, ANSWER_FEN, 'the answer position');
   await page.waitForTimeout(100);
 
@@ -212,6 +228,25 @@ async function testAfterSolving(page) {
   await page.click('.nav-row button[aria-label^="Next"]');
   await waitForFen(page, FENS[1], 'the ▶ button');
   check('the ▶ button steps too', (await snapshot(page)).fen === FENS[1]);
+
+  // -- why
+  await waitForText(page, 'You played: 2.Nf3');
+  const why = await page.innerText('.explanation');
+  check('Why shows the best line', why.includes('Best: 2.Bc4'), JSON.stringify(why.slice(0, 80)));
+  check('Why reads back the punishing reply', why.includes('The engine answers 2...Nc6.'));
+
+  await page.click('.explain-mine .explain-move >> text=Nc6');
+  await waitForFen(page, FENS[4], 'a move from my line');
+  state = await snapshot(page);
+  check('clicking a move in a line shows that position', state.fen === FENS[4]);
+  check('a line position carries no answer arrow', state.shapes.length === 0, state.shapes.join());
+
+  state = await press(page, 'ArrowLeft', FENS[2], '← from a line position');
+  check('← from a line position goes back to where it branched', state.fen === FENS[2]);
+
+  await page.click('.explain-best .explain-move');
+  await waitForFen(page, ANSWER_FEN, 'the best line');
+  check('the best line is clickable too', (await snapshot(page)).fen === ANSWER_FEN);
 }
 
 // -- run ------------------------------------------------------------------

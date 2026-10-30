@@ -22,6 +22,7 @@ class GameReview:
     reviewed_on: date
     attempts: int = 0
     used_show_answer: bool = False
+    used_hint: bool = False
     #: None throughout when the game contained no inaccuracy.
     first_inaccuracy_ply: int | None = None
     my_move_uci: str | None = None
@@ -68,6 +69,7 @@ def _row(row: sqlite3.Row) -> GameReview:
         win_percent_drop=row["win_percent_drop"],
         attempts=row["attempts"],
         used_show_answer=bool(row["used_show_answer"]),
+        used_hint=bool(row["used_hint"]),
     )
 
 
@@ -83,8 +85,8 @@ def record(conn: sqlite3.Connection, review: GameReview) -> GameReview:
                 my_move_uci, my_move_san, classification,
                 best_move_uci, best_move_san,
                 eval_before_cp, eval_before_mate, eval_after_cp, eval_after_mate,
-                win_percent_drop, attempts, used_show_answer
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                win_percent_drop, attempts, used_show_answer, used_hint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 review.game_id,
@@ -104,6 +106,7 @@ def record(conn: sqlite3.Connection, review: GameReview) -> GameReview:
                 review.win_percent_drop,
                 review.attempts,
                 int(review.used_show_answer),
+                int(review.used_hint),
             ),
         )
         new_id = int(cursor.lastrowid)

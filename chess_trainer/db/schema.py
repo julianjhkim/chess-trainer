@@ -183,7 +183,19 @@ _M003 = Migration(
     """,
 )
 
-MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003)
+#: Review hints and explanations: the engine's whole line is kept alongside its
+#: best move (space-separated UCI; NULL for results cached before this), and a
+#: review records whether a hint was taken.
+_M004 = Migration(
+    version=4,
+    name="engine_lines_and_review_hints",
+    sql="""
+    ALTER TABLE analysis_cache ADD COLUMN pv TEXT;
+    ALTER TABLE game_reviews ADD COLUMN used_hint INTEGER NOT NULL DEFAULT 0;
+    """,
+)
+
+MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003, _M004)
 
 
 def current_version(conn: sqlite3.Connection) -> int:

@@ -21,11 +21,19 @@ def analyse(
     depth: int,
     *,
     use_cache: bool = True,
+    need_line: bool = False,
 ) -> EngineAnalysis:
-    """Analyse one position, reading through the cache."""
+    """Analyse one position, reading through the cache.
+
+    ``need_line`` asks for the engine's whole line, not just its verdict. A
+    result cached before lines were kept has none, so that position is searched
+    again (once: the fresh result replaces it).
+    """
     if use_cache:
         cached = analysis_repo.get(conn, fen, depth)
-        if cached is not None:
+        if cached is not None and not (
+            need_line and not cached.pv and cached.best_move is not None
+        ):
             return cached
     result = engine.analyse(fen, depth)
     analysis_repo.put(conn, result)

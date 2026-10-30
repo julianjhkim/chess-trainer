@@ -16,12 +16,17 @@
  * board only takes a move back at the live position; once the review is over
  * it covers the whole game, with the engine's answer sitting beside the move I
  * actually played.
+ *
+ * *Hint* circles the piece the answer moves (the server sends only its square).
+ * Once the review is over, a "Why" card reads back the engine's line after its
+ * move and after mine; clicking a move in either line shows it on the board.
  */
 
 import * as api from './api.js';
 import { createPause, createReplay, replayDelayFor } from './animate.js';
 import { createBoard } from './board.js';
 import { createEvalBar } from './evalbar.js';
+import { renderExplanation } from './explanation_view.js';
 import { createMoveList } from './move_list.js';
 import { bindArrowKeys, createMoveNav } from './move_nav.js';
 import { createPgnPaste } from './pgn_paste.js';
@@ -54,6 +59,10 @@ export function renderReviewView(container, { step, onCompleted }) {
   let drawing = Promise.resolve();
   let evalTimer = null;
   let evalToken = 0;
+  /** The hint taken for this position (`{square, piece, text}`), if any. */
+  let hint = null;
+  let hintLine = null;
+  let explainToken = 0;
 
   // -- layout ------------------------------------------------------------
   const layout = document.createElement('div');
@@ -84,9 +93,11 @@ export function renderReviewView(container, { step, onCompleted }) {
   // -- side panel cards --------------------------------------------------
   const gameCard = card('Game', panelChanged);
   const promptCard = card(step.title, panelChanged);
+  const whyCard = card('Why', panelChanged);
   const movesCard = card('Moves', panelChanged);
   const attemptsCard = card('Attempts', panelChanged);
-  side.append(gameCard.root, promptCard.root, movesCard.root, attemptsCard.root);
+  side.append(gameCard.root, promptCard.root, whyCard.root, movesCard.root, attemptsCard.root);
+  whyCard.root.hidden = true;
   movesCard.root.hidden = true;
   attemptsCard.root.hidden = true;
 
@@ -162,6 +173,7 @@ export function renderReviewView(container, { step, onCompleted }) {
   function onReviewState() {
     if (destroyed) return;
     renderGameCard();
+    hint = review.hint ?? null;
 
     if (review.status === 'failed') {
       renderError(review.error || 'The review failed.');
@@ -274,14 +286,18 @@ export function renderReviewView(container, { step, onCompleted }) {
     const target = review.target;
     if (!target) return;
 
+    hideWhy();
     const body = document.createElement('div');
     const whose = target.mover_is_white ? 'White' : 'Black';
+    hintLine = paragraph('', 'hint-line');
+    hintLine.hidden = true;
     body.append(
       paragraph(`Move ${target.move_number}. This is where your game first went wrong, playing ${whose}.`, ''),
       paragraph(
         'Find the move the engine wants — only its top choice counts. Unlimited retries.',
         'choice-note',
       ),
+      hintLine,
       paragraph(
         '← → step through the moves that led here; End comes back to the position.',
         'choice-note',
@@ -291,6 +307,7 @@ export function renderReviewView(container, { step, onCompleted }) {
       pgnPasteWidget({ summary: 'Review a different game (paste PGN)' }).element,
     );
     promptCard.setBody(body);
+    renderHint();
 
     buildControls();
     await replayToTarget(target);
@@ -303,6 +320,7 @@ export function renderReviewView(container, { step, onCompleted }) {
     await fresh.setFen(fresh.START_FEN);
     fresh.setInteractive(false);
     fresh.setShapes([]);
+    fresh.setHighlights([]);
 
     setStatus(target.replay_ucis.length ? 'Replaying the game…' : 'Your move.');
     replay = createReplay({
@@ -315,6 +333,7 @@ export function renderReviewView(container, { step, onCompleted }) {
 
     await refreshEval(target.fen_before);
     showNav(review.moves ?? [], { index: target.replay_ucis.length });
+    fresh.setHighlights(hintShapes());
     fresh.setInteractive(true);
     fresh.setMoveHandler(handleAttempt);
     setStatus('Your move.');
@@ -323,6 +342,7 @@ export function renderReviewView(container, { step, onCompleted }) {
   function buildControls() {
     controls.replaceChildren();
     controls.append(
+      button('Hint', showHint),
       button('Show answer', showAnswer),
       button('Flip board', () => board?.flip()),
       button('Replay again', async () => {
@@ -375,6 +395,31 @@ export function renderReviewView(container, { step, onCompleted }) {
     navReady = true;
   }
 
+  async function showHint() {
+    if (!review?.target || review.finished) return;
+    const response = await withStatus('Asking for a hint…', () => api.reviewHint(step.step));
+    hint = response.hint;
+    review = response.review;
+    renderHint();
+    setStatus(hint.text);
+    // The circle belongs on the live position; come back to it if browsing.
+    if (nav.atEnd) board?.setHighlights(hintShapes());
+    else if (navReady) nav.last();
+  }
+
+  function renderHint() {
+    if (!hintLine) return;
+    hintLine.hidden = !hint;
+    hintLine.textContent = hint ? `Hint: ${hint.text}` : '';
+    panelChanged();
+  }
+
+  /** A circle on the piece the hint names, while the position is still open. */
+  function hintShapes() {
+    if (!hint || !review?.target || review.finished) return [];
+    return [{ orig: hint.square, brush: 'yellow' }];
+  }
+
   async function showAnswer() {
     const target = review?.target;
     if (!target) return;
@@ -416,6 +461,7 @@ export function renderReviewView(container, { step, onCompleted }) {
   // -- finished ----------------------------------------------------------
   async function renderFinished({ highlight = null, revealed = false } = {}) {
     const summary = review?.summary;
+    board?.setHighlights([]);
     controls.replaceChildren();
     controls.append(button('Flip board', () => board?.flip()));
 
@@ -445,11 +491,12 @@ export function renderReviewView(container, { step, onCompleted }) {
     const headline = document.createElement('p');
     headline.style.margin = '0 0 10px';
     headline.style.fontWeight = '600';
+    const withHint = summary.used_hint ? ', with a hint' : '';
     headline.textContent = revealed
       ? 'Answer revealed.'
       : summary.solved_first_try
-        ? 'Correct, first try.'
-        : `Correct, after ${summary.attempts} attempts.`;
+        ? `Correct, first try${withHint}.`
+        : `Correct, after ${summary.attempts} attempts${withHint}.`;
     body.append(headline);
 
     const list = document.createElement('dl');
@@ -462,6 +509,7 @@ export function renderReviewView(container, { step, onCompleted }) {
       addRow(list, 'Win% lost', summary.win_percent_drop.toFixed(1));
     }
     addRow(list, 'Attempts', String(summary.attempts));
+    if (summary.used_hint) addRow(list, 'Hint', 'used');
     if (summary.used_show_answer) addRow(list, 'Answer', 'revealed');
     body.append(list);
     body.append(paragraph('Review complete — this step is done.', 'choice-note'));
@@ -479,7 +527,43 @@ export function renderReviewView(container, { step, onCompleted }) {
     showNav(review.moves ?? [], { index: target.ply, marked: target.ply });
     // The board is on the answer position right now (just solved, revealed or
     // rebuilt), so that is what the aside shows.
-    nav.showAside({ after: target.ply, fen: board.getFen(), lastMove: answer });
+    nav.showAside({
+      after: target.ply,
+      fen: board.getFen(),
+      lastMove: answer,
+      shapes: [arrow(answer, 'green')].filter(Boolean),
+    });
+    void loadExplanation(target);
+  }
+
+  // -- why ---------------------------------------------------------------
+  async function loadExplanation(target) {
+    const token = ++explainToken;
+    whyCard.root.hidden = false;
+    whyCard.setBody(paragraph('Working out why…', 'choice-note'));
+    let explanation;
+    try {
+      explanation = await api.reviewExplain(step.step);
+    } catch (error) {
+      if (token === explainToken && !destroyed) {
+        whyCard.setBody(paragraph(`Could not explain this one: ${error.message}`, 'paste-error'));
+      }
+      return;
+    }
+    if (token !== explainToken || destroyed) return;
+    whyCard.setBody(
+      renderExplanation(explanation, {
+        // A position from either line sits beside the game, like the answer:
+        // ← and → from it step back into the game itself.
+        onShow: (move) =>
+          nav.showAside({ after: target.ply, fen: move.fen_after, lastMove: move.uci, move }),
+      }),
+    );
+  }
+
+  function hideWhy() {
+    explainToken += 1;
+    whyCard.root.hidden = true;
   }
 
   // -- move navigation ---------------------------------------------------
@@ -496,6 +580,7 @@ export function renderReviewView(container, { step, onCompleted }) {
   }
 
   function hideNav() {
+    hideWhy();
     navReady = false;
     movesCard.root.hidden = true;
     navRow.hidden = true;
@@ -529,6 +614,7 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (view !== latestView || destroyed) return;
 
     board.setShapes(shapesFor(view));
+    board.setHighlights(live ? hintShapes() : []);
     if (live) {
       board.setInteractive(true);
       board.setMoveHandler(handleAttempt);
@@ -547,8 +633,8 @@ export function renderReviewView(container, { step, onCompleted }) {
     const target = review?.target;
     const summary = review?.summary;
     if (!review?.finished || !target || !summary) return [];
+    if (view.aside) return view.shapes ?? [];
     const best = arrow(summary.best_move_uci, 'green');
-    if (view.aside) return [best].filter(Boolean);
     if (view.index !== target.ply) return [];
     const mine = summary.my_move_uci !== summary.best_move_uci
       ? arrow(summary.my_move_uci, 'red')

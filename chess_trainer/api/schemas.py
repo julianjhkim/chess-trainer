@@ -13,6 +13,8 @@ from chess_trainer.pgn import positions as positions_module
 from chess_trainer.pgn.positions import PositionMove
 from chess_trainer.review import my_moves
 from chess_trainer.review.browse import browsable_moves
+from chess_trainer.review.explain import ExplainedLine, Explanation
+from chess_trainer.review.hint import hint_for
 from chess_trainer.review.review_job import ReviewJob, ReviewStatus
 from chess_trainer.review.review_session import ReviewTarget
 from chess_trainer.openings import card_builder, line as line_module
@@ -244,6 +246,19 @@ class ReviewMoveOut(BaseModel):
         )
 
 
+class HintOut(BaseModel):
+    """Which piece the answer moves -- its square and kind, never its destination."""
+
+    square: str
+    piece: str
+    text: str
+
+    @classmethod
+    def of(cls, fen: str, square: str) -> "HintOut":
+        hint = hint_for(fen, square)
+        return cls(square=hint.square, piece=hint.piece, text=hint.text)
+
+
 class ReviewSummaryOut(BaseModel):
     found_an_inaccuracy: bool
     move_label: str | None = None
@@ -257,6 +272,7 @@ class ReviewSummaryOut(BaseModel):
     win_percent_drop: float | None = None
     attempts: int = 0
     used_show_answer: bool = False
+    used_hint: bool = False
     solved_first_try: bool = False
 
     @classmethod
@@ -274,6 +290,7 @@ class ReviewSummaryOut(BaseModel):
             win_percent_drop=summary.win_percent_drop,
             attempts=summary.attempts,
             used_show_answer=summary.used_show_answer,
+            used_hint=summary.used_hint,
             solved_first_try=summary.solved_first_try,
         )
 
@@ -296,6 +313,10 @@ class ReviewStateOut(BaseModel):
     no_inaccuracy: bool = False
     attempts: int = 0
     used_show_answer: bool = False
+    #: Once a hint is taken, the square and piece it pointed at, so coming
+    #: back to the review shows it again.
+    used_hint: bool = False
+    hint: HintOut | None = None
     solved: bool = False
     finished: bool = False
     summary: ReviewSummaryOut | None = None
@@ -325,6 +346,9 @@ class ReviewStateOut(BaseModel):
         target = session.target
         state.attempts = session.attempt_count
         state.used_show_answer = session.used_show_answer
+        state.used_hint = session.used_hint
+        if session.used_hint and target is not None:
+            state.hint = HintOut.of(target.fen_before, target.best_move_uci[:2])
         state.solved = session.solved
         state.finished = session.finished
         state.no_inaccuracy = target is None
@@ -407,6 +431,56 @@ class ShowAnswerResponse(BaseModel):
     review: ReviewStateOut
     session: SessionOut | None = None
     streak: StreakOut | None = None
+
+
+class HintResponse(BaseModel):
+    hint: HintOut
+    review: ReviewStateOut
+
+
+class LineMoveOut(BaseModel):
+    uci: str
+    san: str
+    label: str
+    fen_after: str
+    mover_is_white: bool
+
+
+class ExplainedLineOut(BaseModel):
+    moves: list[LineMoveOut]
+    evaluation: EvalOut
+    notes: list[str]
+
+    @classmethod
+    def of(cls, line: ExplainedLine) -> "ExplainedLineOut":
+        return cls(
+            moves=[
+                LineMoveOut(
+                    uci=m.uci,
+                    san=m.san,
+                    label=m.label,
+                    fen_after=m.fen_after,
+                    mover_is_white=m.mover_is_white,
+                )
+                for m in line.moves
+            ],
+            evaluation=EvalOut.of(line.evaluation),
+            notes=list(line.notes),
+        )
+
+
+class ExplanationResponse(BaseModel):
+    """The engine's line after its move, and after mine, read back in words."""
+
+    best: ExplainedLineOut
+    mine: ExplainedLineOut
+
+    @classmethod
+    def of(cls, explanation: Explanation) -> "ExplanationResponse":
+        return cls(
+            best=ExplainedLineOut.of(explanation.best),
+            mine=ExplainedLineOut.of(explanation.mine),
+        )
 
 
 # -- opening cards -------------------------------------------------------

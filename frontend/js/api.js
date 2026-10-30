@@ -82,6 +82,10 @@ export const reviewAttempt = (step, from, to, promotion) =>
   });
 export const reviewShowAnswer = (step) =>
   request('/api/review/show-answer', { method: 'POST', body: { step } });
+export const reviewHint = (step) =>
+  request('/api/review/hint', { method: 'POST', body: { step } });
+export const reviewExplain = (step) =>
+  request('/api/review/explain', { method: 'POST', body: { step } });
 export const reviewAcknowledge = (step) =>
   request('/api/review/acknowledge', { method: 'POST', body: { step } });
 

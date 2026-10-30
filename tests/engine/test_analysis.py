@@ -65,3 +65,34 @@ def test_analyse_many_reuses_cached_entries(conn, fake_engine):
     analysis.analyse(conn, fake_engine, FEN_A, 20)
     list(analysis.analyse_many(conn, fake_engine, [FEN_A, FEN_B], 20))
     assert fake_engine.call_count == 2  # FEN_A came from the cache
+
+
+def test_asking_for_a_line_re_searches_a_result_cached_without_one(conn, fake_engine):
+    from chess_trainer.engine.stockfish import EngineAnalysis
+
+    analysis_repo.put(
+        conn, EngineAnalysis(fen=FEN_A, depth=20, evaluation=Eval(cp=5), best_move="e2e4")
+    )
+    fake_engine.pvs[FEN_A] = ("e2e4", "e7e5")
+    result = analysis.analyse(conn, fake_engine, FEN_A, 20, need_line=True)
+    assert fake_engine.call_count == 1
+    assert result.pv == ("e2e4", "e7e5")
+    # ...and the fresh line replaces the old entry, so it is searched only once.
+    analysis.analyse(conn, fake_engine, FEN_A, 20, need_line=True)
+    assert fake_engine.call_count == 1
+
+
+def test_a_cached_line_is_used_as_is(conn, fake_engine):
+    analysis.analyse(conn, fake_engine, FEN_A, 20)
+    analysis.analyse(conn, fake_engine, FEN_A, 20, need_line=True)
+    assert fake_engine.call_count == 1
+
+
+def test_without_asking_for_a_line_an_old_entry_is_fine(conn, fake_engine):
+    from chess_trainer.engine.stockfish import EngineAnalysis
+
+    analysis_repo.put(
+        conn, EngineAnalysis(fen=FEN_A, depth=20, evaluation=Eval(cp=5), best_move="e2e4")
+    )
+    analysis.analyse(conn, fake_engine, FEN_A, 20)
+    assert fake_engine.call_count == 0

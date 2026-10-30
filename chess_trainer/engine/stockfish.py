@@ -26,6 +26,9 @@ class EngineAnalysis:
     depth: int
     evaluation: Eval
     best_move: str | None  # UCI, or None in a terminal position
+    #: The engine's principal variation in UCI, starting with ``best_move``.
+    #: Empty in a terminal position, and for results cached before it was kept.
+    pv: tuple[str, ...] = ()
 
 
 class Analyser(Protocol):
@@ -144,10 +147,10 @@ class StockfishEngine:
         score = info.get("score")
         if score is None:
             raise EngineNotAvailable("Stockfish returned no score")
-        pv = info.get("pv") or []
-        best = pv[0].uci() if pv else None
+        pv = tuple(move.uci() for move in info.get("pv") or [])
+        best = pv[0] if pv else None
         return EngineAnalysis(
-            fen=fen, depth=depth, evaluation=_score_to_eval(score), best_move=best
+            fen=fen, depth=depth, evaluation=_score_to_eval(score), best_move=best, pv=pv
         )
 
 

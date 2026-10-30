@@ -106,3 +106,11 @@ def test_score_to_eval_handles_mate_already_on_the_board():
     score = chess.engine.PovScore(chess.engine.Mate(0), chess.BLACK)
     # Mate-in-0 against the side to move: never represented as mate=0.
     assert _score_to_eval(score).mate != 0
+
+
+def test_the_line_starts_with_the_best_move(real_engine):
+    result = real_engine.analyse(
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 10
+    )
+    assert len(result.pv) > 1
+    assert result.pv[0] == result.best_move

@@ -65,8 +65,10 @@ counts the moves; a long game can take a minute or two the first time, and is
 instant afterwards because results are cached. Then the game auto-replays to the
 position just before your first slip and you play the move yourself. Only
 Stockfish's top choice is accepted; wrong tries are unlimited and each one updates
-the eval bar so you can see what it would have cost. *Show answer* gives up. When
-you find it, the review ends with a summary: the move you played and its
+the eval bar so you can see what it would have cost. *Hint* circles the piece the
+answer moves (and says which, e.g. "Move your bishop on f1") without saying where
+it goes; the summary and the review history note that a hint was used. *Show
+answer* gives up. When you find it, the review ends with a summary: the move you played and its
 classification, the engine's move, the evals either side and the win% you dropped.
 If the game had no inaccuracy, it says so.
 
@@ -78,6 +80,21 @@ is over the whole game opens up to the last move: the engine's answer sits besid
 it, ← from there shows the position with the engine's move (green) and yours (red),
 and → goes on to the move you actually played and the rest of the game. Your slip
 is marked red in the list.
+
+A **Why** card then reads back the engine's reasoning — not in prose, since there
+is no understanding behind it, but as its own lines with the facts that can be
+read straight off them:
+
+- **Best** — the engine's move and its continuation: what the move captures or
+  checks, the evaluation after it (or a forced mate), and the material each side
+  picks up along the line.
+- **You played** — your move and the engine's punishing reply: what that reply
+  captures or threatens ("The engine answers 2...Qh4#, which is checkmate"), how
+  much of your winning chances the move cost, and the material over the line.
+
+Lines stop after ten plies, but never half-way through an exchange or a run of
+checks. Every move in them is clickable and shows that position on the board; ←
+and → from there step back into the game.
 
 **Step 2 — Play a game.** *Open chess.com* opens a tab; play your game and come
 back. *I'm done — fetch my game* watches the chess.com archive for about two
@@ -211,7 +228,8 @@ npm run cards
 ```
 
 And a third, over stepping through a reviewed game with the arrow keys — before
-and after the slip is solved — and the game card's single chess.com link:
+and after the slip is solved — the Hint circle, the Why card, and the game card's
+single chess.com link:
 
 ```bash
 npm run review
@@ -258,7 +276,8 @@ chess_trainer/
              game_model.py
   pgn/       parse.py, positions.py
   review/    my_moves.py, first_inaccuracy.py, verdict.py, review_session.py,
-             review_job.py (background analysis + progress), browse.py
+             review_job.py (background analysis + progress), browse.py,
+             hint.py, explain.py (the "why", read off the engine's lines)
   explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
              explorer_types.py
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,
@@ -272,7 +291,8 @@ frontend/
 ```
 The frontend has one module per concern: `api.js`, `state.js`, `router.js`,
 `board.js`, `evalbar.js`, `stepbar.js`, `streak_view.js`, `start_screen.js`,
-`review_view.js`, `move_nav.js`, `move_list.js`, `play_view.js`, `cards_view.js`,
+`review_view.js`, `move_nav.js`, `move_list.js`, `explanation_view.js`,
+`play_view.js`, `cards_view.js`,
 `stats_table.js`, `arrows.js`, `animate.js`, `pgn_paste.js`.
 
 `rules.py` is the single authority on move legality: the browser carries no rules
@@ -287,7 +307,9 @@ opponent did). So Stockfish ends up scoring roughly every ply. Two things keep
 that bearable: only *your* moves are classified and given a best-move answer, and
 the walk **stops at your first inaccuracy** — a slip on move 8 costs a handful of
 searches rather than one per ply of the whole game. Everything is cached by
-`(fen, depth)`, so re-reviewing is instant.
+`(fen, depth)`, so re-reviewing is instant. The cache keeps the engine's whole
+principal variation too, for the Why card; a position cached before that was kept
+is searched once more when its line is first needed.
 
 Even so, a game where the first slip is the last move played can take a minute at
 depth 20. That would look like a hung page, so `review/review_job.py` runs the
@@ -376,7 +398,9 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/review/start` | begin a review; analyses in the background |
 | `GET /api/review/{step}` | review progress and state (polled while analysing), including the browsable `moves` |
 | `POST /api/review/attempt` | try a move; returns correctness and an eval |
+| `POST /api/review/hint` | the square and piece the answer moves from (not its destination) |
 | `POST /api/review/show-answer` | reveal the engine's move, ending the review |
+| `POST /api/review/explain` | once finished: the engine's line after its move and after mine, with notes |
 | `POST /api/review/acknowledge` | close a review that had no inaccuracy |
 | `GET /api/cards/state` | the card on screen and the queue behind it |
 | `POST /api/cards/next` | serve the next card (due first, then new) |

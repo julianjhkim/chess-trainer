@@ -47,3 +47,17 @@ def test_putting_the_same_key_updates_in_place(conn):
 
 def test_count_starts_at_zero(conn):
     assert analysis_repo.count(conn) == 0
+
+
+def test_the_engine_line_survives_the_round_trip(conn):
+    analysis_repo.put(
+        conn,
+        EngineAnalysis(fen=FEN, depth=20, evaluation=Eval(cp=25), best_move="e2e4",
+                       pv=("e2e4", "e7e5", "g1f3")),
+    )
+    assert analysis_repo.get(conn, FEN, 20).pv == ("e2e4", "e7e5", "g1f3")
+
+
+def test_a_result_without_a_line_reads_back_empty(conn):
+    analysis_repo.put(conn, analysis())
+    assert analysis_repo.get(conn, FEN, 20).pv == ()

@@ -56,7 +56,7 @@ Frontend (Node is dev-only; `npm install` and `npx playwright install chromium` 
 npm run smoke    # jsdom run of the real ES modules — needs a live server on :8791 (see above)
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
-npm run review   # Chromium: arrow-key move browsing in a review + single chess.com link
+npm run review   # Chromium: review move browsing, Hint circle, Why card, single chess.com link
 ```
 `clicks` and `cards` use `tests/frontend/stub_server.mjs` (real frontend, canned
 payloads) — no server, engine, DB or network. After changing the lines the stub
@@ -87,6 +87,21 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   move at the analysis depth (default 20) is accepted** — strict string match,
   judged server-side (`review/verdict.py`). Unlimited retries, eval bar updates
   on each; "Show answer" gives up. No inaccuracy → say so.
+- **Hint** (`review/hint.py`, `POST /api/review/hint`): reveals only the
+  from-square and piece type of the answer (yellow circle via
+  `board.setHighlights` = chessground autoShapes, which clicks don't erase).
+  Only while unsolved. Doesn't change correctness; recorded as `used_hint` in
+  the summary and `game_reviews` (migration 4).
+- **Why** (`review/explain.py`, `POST /api/review/explain`, `explanation_view.js`):
+  only after the review is finished (409 before — it names the answer). Two
+  lines from the slip position: best = answer + engine PV from the position
+  after it; mine = my move + engine PV after it. Notes are facts read off the
+  moves (capture/check/mate/promotion, the reply to my move, eval or mate,
+  material each side captures) — no LLM, stays local. Lines cut at 10 plies,
+  extended while the last move was a capture/check (max 20). Clicking a line
+  move shows it as a nav "aside". The analysis cache stores the PV (`pv`
+  column); `analysis.analyse(..., need_line=True)` re-searches entries cached
+  without one.
 - **Move browsing** (`review/browse.py`, `frontend/js/move_nav.js`, `move_list.js`):
   ← / → step, Home/↑ and End/↓ jump, the move list is clickable. While the drill
   is open the server sends only the moves *before* the slip (never my move or

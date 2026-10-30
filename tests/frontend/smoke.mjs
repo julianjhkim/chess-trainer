@@ -274,6 +274,12 @@ check('review view offers a PGN paste fallback', reviewHost.querySelector('.pgn-
 // Solve it through the API the way the board would, then confirm the summary renders.
 const targetFen = reviewState.target.fen_before;
 const best = (await api.evaluate(targetFen)).best_move;
+const hinted = await api.reviewHint('review_last_game');
+check('a hint names the square the answer moves from', hinted.hint.square === best.slice(0, 2), JSON.stringify(hinted.hint));
+check('the hint does not give the destination away', !JSON.stringify(hinted.hint).includes(best.slice(2, 4)) || best.slice(0, 2) === best.slice(2, 4));
+let explainedEarly = null;
+try { await api.reviewExplain('review_last_game'); } catch (error) { explainedEarly = error.message; }
+check('no explanation before the position is solved', explainedEarly !== null, explainedEarly ?? 'it explained');
 const wrongMove = 'h2h3';
 const wrong = await api.reviewAttempt('review_last_game', wrongMove.slice(0, 2), wrongMove.slice(2, 4), null);
 check('a wrong attempt is rejected with its own eval', wrong.correct === false && !!wrong.evaluation.text, wrong.evaluation.text);
@@ -285,6 +291,15 @@ check('the summary names my move and the best move',
       `${solved.review.summary.my_move_san} vs ${solved.review.summary.best_move_san}`);
 check('solving completes the step', solved.session?.steps.find((s) => s.step === 'review_last_game')?.completed === true);
 check('solving advances to the play step', solved.session?.current === 'play');
+check('the summary notes the hint', solved.review.summary.used_hint === true);
+const explained = await api.reviewExplain('review_last_game');
+check('the explanation starts the best line with the answer', explained.best.moves[0]?.uci === best,
+      explained.best.moves.map((m) => m.label).join(' '));
+check('the explanation starts my line with my move', explained.mine.moves[0]?.uci === solved.review.summary.my_move_uci,
+      explained.mine.moves.map((m) => m.label).join(' '));
+check('the real engine gives a line longer than one move', explained.best.moves.length > 1 && explained.mine.moves.length > 1);
+check('the explanation says something about each line', explained.best.notes.length > 0 && explained.mine.notes.length > 0,
+      JSON.stringify(explained.mine.notes));
 reviewView.destroy();
 
 // ---- play_view.js -----------------------------------------------------

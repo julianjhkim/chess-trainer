@@ -233,6 +233,15 @@ export function createBoard({
   }
 
   /**
+   * Draw marks the user cannot wipe: chessground clears ordinary shapes on any
+   * click, which would erase a hint the moment you picked up the piece it
+   * points at. Same shape format as `setShapes`; `{orig, brush}` is a circle.
+   */
+  function setHighlights(shapes) {
+    ground.setAutoShapes(shapes ?? []);
+  }
+
+  /**
    * Allow only one move to be played.
    *
    * An opening card shows its branch move as an arrow and expects that move to
@@ -280,6 +289,7 @@ export function createBoard({
     setInteractive,
     setMoveHandler,
     setShapes,
+    setHighlights,
     restrictTo,
     clearRestriction,
     getFen,

@@ -86,11 +86,12 @@ export function createMoveNav({ moves = [], index = null, onChange = null } = {}
 
     /**
      * Put a position beside the game, after position `after`, and move onto it.
-     * `fen` and `lastMove` describe what to draw there.
+     * `fen` and `lastMove` describe what to draw there; anything else given
+     * (arrows, say) is handed back in the view untouched.
      */
-    showAside({ after, fen, lastMove, move = null }) {
+    showAside({ after, fen, lastMove, move = null, ...extra }) {
       asideAfter = after;
-      asideView = { fen, lastMove, move };
+      asideView = { ...extra, fen, lastMove, move };
       onAside = true;
       cursor = after;
       changed();

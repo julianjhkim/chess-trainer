@@ -171,6 +171,7 @@ class ReviewSession:
     plan: ReviewPlan
     attempts: list[str] = field(default_factory=list)
     used_show_answer: bool = False
+    used_hint: bool = False
     solved: bool = False
     recorded: bool = False
 
@@ -199,6 +200,15 @@ class ReviewSession:
             self.solved = True
         return self.solved
 
+    def hint(self) -> str:
+        """The square of the piece the answer moves. Only while still solving."""
+        if self.target is None:
+            raise ValueError("This review has no position to solve.")
+        if self.finished:
+            raise ValueError("This review is already finished.")
+        self.used_hint = True
+        return self.target.best_move_uci[:2]
+
     def show_answer(self) -> str:
         """Reveal the answer, which ends the review."""
         if self.target is None:
@@ -224,6 +234,7 @@ class ReviewSession:
             attempts=self.attempt_count,
             used_show_answer=self.used_show_answer,
             found_an_inaccuracy=True,
+            used_hint=self.used_hint,
         )
 
     def to_history(self, reviewed_on: date) -> GameReview:
@@ -252,4 +263,5 @@ class ReviewSession:
             win_percent_drop=target.win_percent_drop,
             attempts=self.attempt_count,
             used_show_answer=self.used_show_answer,
+            used_hint=self.used_hint,
         )

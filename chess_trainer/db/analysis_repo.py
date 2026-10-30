@@ -22,7 +22,7 @@ def _now() -> str:
 def get(conn: sqlite3.Connection, fen: str, depth: int) -> EngineAnalysis | None:
     row = query_one(
         conn,
-        "SELECT cp, mate, best_move FROM analysis_cache WHERE fen = ? AND depth = ?",
+        "SELECT cp, mate, best_move, pv FROM analysis_cache WHERE fen = ? AND depth = ?",
         (fen, depth),
     )
     if row is None:
@@ -32,6 +32,7 @@ def get(conn: sqlite3.Connection, fen: str, depth: int) -> EngineAnalysis | None
         depth=depth,
         evaluation=Eval(cp=row["cp"], mate=row["mate"]),
         best_move=row["best_move"],
+        pv=tuple(row["pv"].split()) if row["pv"] else (),
     )
 
 
@@ -39,12 +40,13 @@ def put(conn: sqlite3.Connection, analysis: EngineAnalysis) -> None:
     with transaction(conn):
         conn.execute(
             """
-            INSERT INTO analysis_cache (fen, depth, cp, mate, best_move, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO analysis_cache (fen, depth, cp, mate, best_move, pv, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (fen, depth) DO UPDATE
                 SET cp = excluded.cp,
                     mate = excluded.mate,
                     best_move = excluded.best_move,
+                    pv = excluded.pv,
                     created_at = excluded.created_at
             """,
             (
@@ -53,6 +55,7 @@ def put(conn: sqlite3.Connection, analysis: EngineAnalysis) -> None:
                 analysis.evaluation.cp,
                 analysis.evaluation.mate,
                 analysis.best_move,
+                " ".join(analysis.pv) or None,
                 _now(),
             ),
         )

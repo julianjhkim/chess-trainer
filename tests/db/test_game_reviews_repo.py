@@ -153,3 +153,14 @@ def test_deleting_a_game_removes_its_reviews(conn):
     with transaction(conn):
         conn.execute("DELETE FROM games WHERE id = 'g1'")
     assert repo.count(conn) == 0
+
+
+def test_a_hint_survives_the_round_trip(conn):
+    a_game(conn)
+    stored = repo.record(conn, full_review(used_hint=True))
+    assert stored.used_hint is True
+
+
+def test_no_hint_is_the_default(conn):
+    a_game(conn)
+    assert repo.record(conn, full_review()).used_hint is False

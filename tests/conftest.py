@@ -62,6 +62,8 @@ class FakeEngine:
         self.best_moves = best_moves or {}
         self.default = default or Eval(cp=20)
         self.default_best = default_best
+        #: Per-FEN principal variations; otherwise the line is just the best move.
+        self.pvs: dict[str, tuple[str, ...]] = {}
         self.calls: list[tuple[str, int, tuple[str, ...] | None]] = []
 
     def _fallback_best(self, fen: str) -> str | None:
@@ -86,6 +88,7 @@ class FakeEngine:
             depth=depth,
             evaluation=self.results.get(fen, self.default),
             best_move=best,
+            pv=self.pvs.get(fen) or ((best,) if best else ()),
         )
 
     @property

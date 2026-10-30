@@ -348,6 +348,28 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 .move-list .move-current { background: var(--accent-dim); }
 .move-list .move:hover:not(.move-placeholder):not(.move-current) { background: var(--panel-2); }
 
+/* Review: hint and the "why" card. */
+.hint-line { color: var(--warn); font-weight: 600; }
+.explanation { display: grid; gap: 12px; }
+.explain-heading { margin: 0 0 4px; font-weight: 600; }
+.explain-best .explain-heading { color: var(--good); }
+.explain-mine .explain-heading { color: var(--bad); }
+.explain-notes { margin: 0 0 6px; padding-left: 18px; font-size: 13px; }
+.explain-notes li { margin: 2px 0; }
+.explain-moves { display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.explain-move {
+  border: 0;
+  background: none;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.explain-move:hover { background: var(--panel-2); }
+.explain-move-current { background: var(--accent-dim); }
+
 .card a { color: var(--accent); text-decoration: none; }
 .card a:hover { text-decoration: underline; }
 
