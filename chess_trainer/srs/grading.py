@@ -12,6 +12,9 @@ right on the 3rd or later        2  fail
 answer revealed                  1  fail
 =========================  =======  ======
 
+A hint (inaccuracy cards only) caps the grade at 3: still a pass, but the card
+climbs with a smaller ease.
+
 One wrong try is a stumble; two or more mean the card was not really known, so
 it fails like a reveal (the interval is halved and the card comes back later
 in the session), only with a gentler hit to its ease.
@@ -28,7 +31,7 @@ QUALITY_SHOWN = 1
 FAILING_ATTEMPTS = 3
 
 
-def quality_for(*, attempts: int, used_show_answer: bool) -> int:
+def quality_for(*, attempts: int, used_show_answer: bool, used_hint: bool = False) -> int:
     """The SM-2 quality for an answered card.
 
     ``attempts`` counts every move tried, so a first-try success is 1.
@@ -36,7 +39,7 @@ def quality_for(*, attempts: int, used_show_answer: bool) -> int:
     """
     if used_show_answer:
         return QUALITY_SHOWN
-    if attempts <= 1:
+    if attempts <= 1 and not used_hint:
         return QUALITY_FIRST_TRY
     if attempts < FAILING_ATTEMPTS:
         return QUALITY_SECOND_TRY
@@ -49,11 +52,13 @@ def is_pass(quality: int) -> bool:
     return quality >= PASS_QUALITY
 
 
-def describe(quality: int, attempts: int | None = None) -> str:
+def describe(quality: int, attempts: int | None = None, used_hint: bool = False) -> str:
     """A short explanation of a grade, for the UI.
 
     With ``attempts``, a fail after retries says how many tries went wrong.
     """
+    if used_hint and quality == QUALITY_SECOND_TRY:
+        return "right with a hint"
     if quality == QUALITY_AFTER_RETRIES and attempts is not None and attempts > 1:
         wrong = attempts - 1
         return f"right after {wrong} wrong tries"

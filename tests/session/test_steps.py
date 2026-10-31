@@ -16,7 +16,7 @@ from chess_trainer.session.steps import (
 
 def test_there_are_four_steps_in_spec_order():
     assert ORDER == (
-        Step.REVIEW_LAST_GAME,
+        Step.INACCURACY_CARDS,
         Step.PLAY,
         Step.REVIEW_NEW_GAME,
         Step.CARDS,
@@ -48,20 +48,20 @@ def test_parse_accepts_known_names():
 def test_parse_rejects_unknown_names_helpfully():
     with pytest.raises(ValueError, match="Unknown step"):
         parse("nonsense")
-    with pytest.raises(ValueError, match="review_last_game"):
+    with pytest.raises(ValueError, match="inaccuracy_cards"):
         parse("nonsense")
 
 
 def test_sort_steps_uses_canonical_order():
-    assert sort_steps({Step.CARDS, Step.REVIEW_LAST_GAME}) == [
-        Step.REVIEW_LAST_GAME,
+    assert sort_steps({Step.CARDS, Step.INACCURACY_CARDS}) == [
+        Step.INACCURACY_CARDS,
         Step.CARDS,
     ]
 
 
 def test_next_after_skips_disabled_steps():
-    enabled = {Step.REVIEW_LAST_GAME, Step.CARDS}
-    assert next_after(Step.REVIEW_LAST_GAME, enabled) is Step.CARDS
+    enabled = {Step.INACCURACY_CARDS, Step.CARDS}
+    assert next_after(Step.INACCURACY_CARDS, enabled) is Step.CARDS
 
 
 def test_next_after_the_last_step_is_none():
@@ -69,7 +69,7 @@ def test_next_after_the_last_step_is_none():
 
 
 def test_next_after_with_nothing_left_is_none():
-    assert next_after(Step.PLAY, {Step.REVIEW_LAST_GAME}) is None
+    assert next_after(Step.PLAY, {Step.INACCURACY_CARDS}) is None
 
 
 def test_first_enabled_follows_canonical_order():

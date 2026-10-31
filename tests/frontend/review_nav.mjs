@@ -115,7 +115,7 @@ async function press(page, key, fen, label) {
 async function testWhileDrilling(page, base) {
   console.log('\nWhile the drill is open');
   await page.request.post(`${base}/__scenario`, {
-    data: { step: 'review_last_game', review: 'browse' },
+    data: { step: 'review_new_game', review: 'browse' },
   });
   await page.goto(base, { waitUntil: 'load' });
   await waitForText(page, 'where your game first went wrong');
@@ -283,7 +283,7 @@ try {
 // -- a game without an inaccuracy -------------------------------------------
 async function openCleanGame(outcome) {
   await page.request.post(`${stub.url}/__scenario`, {
-    data: { step: 'review_last_game', review: 'clean', outcome },
+    data: { step: 'review_new_game', review: 'clean', outcome },
   });
   await page.goto(stub.url, { waitUntil: 'load' });
   await waitForText(page, 'of your moves were checked');

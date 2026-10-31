@@ -10,9 +10,14 @@ from enum import Enum
 
 
 class Step(str, Enum):
-    """The four steps of a daily session, in the order they run."""
+    """The four steps of a daily session, in the order they run.
 
-    REVIEW_LAST_GAME = "review_last_game"
+    Inaccuracy cards come first, to warm up on your own past slips before
+    playing; the game you then play is reviewed, and its first slip becomes a
+    new inaccuracy card.
+    """
+
+    INACCURACY_CARDS = "inaccuracy_cards"
     PLAY = "play"
     REVIEW_NEW_GAME = "review_new_game"
     CARDS = "cards"
@@ -29,14 +34,14 @@ class Step(str, Enum):
 
 #: Canonical running order.
 ORDER: tuple[Step, ...] = (
-    Step.REVIEW_LAST_GAME,
+    Step.INACCURACY_CARDS,
     Step.PLAY,
     Step.REVIEW_NEW_GAME,
     Step.CARDS,
 )
 
 TITLES: dict[Step, str] = {
-    Step.REVIEW_LAST_GAME: "Review last game",
+    Step.INACCURACY_CARDS: "Inaccuracy cards",
     Step.PLAY: "Play a game",
     Step.REVIEW_NEW_GAME: "Review that game",
     Step.CARDS: "Opening cards",

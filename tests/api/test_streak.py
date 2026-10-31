@@ -13,7 +13,7 @@ def test_streak_is_empty_initially(client):
 
 def test_streak_reflects_a_completed_step(client):
     client.post("/api/session/start", json={})
-    client.post("/api/session/complete/review_last_game")
+    client.post("/api/session/complete/inaccuracy_cards")
     payload = client.get("/api/streak").json()
     assert payload["current"] == 1
     assert payload["longest"] == 1

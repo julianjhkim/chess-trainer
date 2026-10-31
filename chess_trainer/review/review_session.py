@@ -174,6 +174,10 @@ class ReviewSession:
     used_hint: bool = False
     solved: bool = False
     recorded: bool = False
+    #: Once recorded: when the inaccuracy card for this slip is due, and
+    #: whether it was new (False: the position already had a card).
+    card_due_on: date | None = None
+    card_created: bool = False
 
     @property
     def target(self) -> ReviewTarget | None:

@@ -9,8 +9,9 @@ convention changes, update the matching section here in the same commit.
 
 ## What this is
 
-A local-only web app for a daily chess routine: review the last chess.com game,
-play a new one, review that, then drill openings as spaced-repetition cards.
+A local-only web app for a daily chess routine: drill the slips from past reviews
+(inaccuracy cards), play a game, review it, then drill openings as
+spaced-repetition cards.
 FastAPI + python-chess (Stockfish over UCI) + SQLite on the backend; plain HTML
 and vanilla JS ES modules with a vendored chessground on the frontend. No CDN,
 no Node at runtime. Status: all four steps complete (phases 0–3 done, plus fixes).
@@ -61,6 +62,7 @@ npm run smoke    # jsdom run of the real ES modules — needs a live server on :
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
 npm run review   # Chromium: review move browsing, Hint, Why, Lichess link, single chess.com link
+npm run inaccuracy  # Chromium: inaccuracy-card drill (empty deck, caught up, one card)
 ```
 `clicks` and `cards` use `tests/frontend/stub_server.mjs` (real frontend, canned
 payloads) — no server, engine, DB or network. After changing the lines the stub
@@ -70,8 +72,12 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 ## Product rules (don't change without being asked; update here if you do)
 
 ### Session flow
-- Four steps, in order: `review_last_game` → `play` → `review_new_game` → `cards`
-  (`session/steps.py`, `session/flow.py`).
+- Four steps, in order: `inaccuracy_cards` → `play` → `review_new_game` → `cards`
+  (titles: Inaccuracy cards, Play a game, Review that game, Opening cards;
+  `session/steps.py`, `session/flow.py`). There is no "review last game" step any
+  more: `review_new_game` is the only review step (it falls back to the latest
+  stored/fetched game if step 2 was skipped). Finishing the review advances to
+  `cards`.
 - **Start screen = one button per step** (no checkboxes): clicking a step starts
   the session there with all four steps enabled (`POST /api/session/start` with
   `start_at`); finishing a step advances to the next. All four are always on the
@@ -79,7 +85,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   (mid-review included). The backend still accepts a `steps` subset (dimmed on
   the bar) but the UI no longer sends one.
 - Play step: open chess.com, then poll the archive ~2 min for a game newer than
-  the baseline; fall back to PGN paste. PGN paste is available in both review steps.
+  the baseline; fall back to PGN paste. PGN paste is also available in the review.
 - Cards have no end; the step counts as completed once a card is answered, but
   the session stays on it (`mark_completed`).
 
@@ -132,6 +138,29 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   Keys typed in text fields (PGN box) are ignored.
 - Analysis runs in a background job with progress polling; cached by `(fen, depth)`.
   `AppState.shutdown` must cancel/join the job before closing the DB.
+
+### Inaccuracy cards (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
+- Step 1. A card = the position before my first inaccuracy in a reviewed game
+  (oriented to my colour, opponent's last move highlighted); answer = the engine
+  top-1 recorded by the review (strict match, same as the review). Created in
+  the review's `_finish` whenever the review had a target (solved or revealed);
+  clean games make none. **No backfill** of reviews from before this feature.
+- One card per position (unique EPD). A new card is scheduled as if passed once:
+  `n=1, I=1, EF=2.5`, **due the next day**. Slipping into an existing card's
+  position again brings its due date forward to tomorrow (never later).
+- Tables (migration 5): `inaccuracy_cards`, `inaccuracy_schedule` (same
+  `ScheduleRow` shape as `card_schedule`), `inaccuracy_reviews`.
+- Drill: unlimited retries with eval; Hint (from-square + piece) **caps the grade
+  at q=3** ("right with a hint", still a pass); Show answer q=1. Otherwise the
+  same attempt-based grading and SM-2 as opening cards; a failed card is
+  requeued later in the session; the first answer in a session decides the
+  schedule. Result shows answer (green arrow) and my game move (red).
+- First answer marks the step completed (streak) but the step stays until the
+  deck is empty. With nothing due (or no cards yet) it says so; "Continue to
+  Play a game" completes the step if a card was answered, otherwise just jumps
+  to `play` (an empty deck never counts towards the streak).
+- The review summary says "Added to your inaccuracy cards — first due …"
+  (`ReviewStateOut.inaccuracy_card`).
 
 ### Opening-card tree (`openings/tree_rules.py`)
 - **Root exception**: the start position is not a card; *all* of White's first

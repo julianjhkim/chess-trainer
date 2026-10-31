@@ -195,7 +195,64 @@ _M004 = Migration(
     """,
 )
 
-MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003, _M004)
+#: Inaccuracy cards: the first slip of each reviewed game, drilled again with
+#: the same SM-2 scheduling as the opening cards but in tables of their own.
+_M005 = Migration(
+    version=5,
+    name="inaccuracy_cards",
+    sql="""
+    -- One card per position (by EPD): the position before my first inaccuracy
+    -- in a reviewed game, and the engine's move there.
+    CREATE TABLE inaccuracy_cards (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        epd              TEXT NOT NULL UNIQUE,
+        fen              TEXT NOT NULL,
+        game_id          TEXT REFERENCES games (id) ON DELETE SET NULL,
+        ply              INTEGER NOT NULL,
+        move_number      INTEGER NOT NULL,
+        my_colour        TEXT NOT NULL CHECK (my_colour IN ('white', 'black')),
+        last_move_uci    TEXT,              -- the move that led here, for a highlight
+        my_move_uci      TEXT NOT NULL,     -- what I played in the game
+        my_move_san      TEXT NOT NULL,
+        best_move_uci    TEXT NOT NULL,     -- the answer
+        best_move_san    TEXT NOT NULL,
+        classification   TEXT NOT NULL,
+        win_percent_drop REAL,
+        depth            INTEGER NOT NULL,
+        created_at       TEXT NOT NULL
+    );
+
+    CREATE TABLE inaccuracy_schedule (
+        card_id          INTEGER PRIMARY KEY REFERENCES inaccuracy_cards (id) ON DELETE CASCADE,
+        n                INTEGER NOT NULL DEFAULT 0,
+        ef               REAL NOT NULL DEFAULT 2.5,
+        interval_days    INTEGER NOT NULL DEFAULT 0,
+        due_on           TEXT NOT NULL,                -- Asia/Seoul date
+        last_reviewed_on TEXT,
+        reps             INTEGER NOT NULL DEFAULT 0,
+        lapses           INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX inaccuracy_schedule_due ON inaccuracy_schedule (due_on);
+
+    CREATE TABLE inaccuracy_reviews (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id          INTEGER NOT NULL REFERENCES inaccuracy_cards (id) ON DELETE CASCADE,
+        reviewed_at      TEXT NOT NULL,
+        reviewed_on      TEXT NOT NULL,
+        quality          INTEGER NOT NULL,
+        attempts         INTEGER NOT NULL,
+        used_show_answer INTEGER NOT NULL DEFAULT 0,
+        used_hint        INTEGER NOT NULL DEFAULT 0,
+        interval_days    INTEGER,
+        ef               REAL
+    );
+
+    CREATE INDEX inaccuracy_reviews_by_card ON inaccuracy_reviews (card_id, reviewed_at DESC);
+    """,
+)
+
+MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003, _M004, _M005)
 
 
 def current_version(conn: sqlite3.Connection) -> int:

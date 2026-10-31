@@ -10,7 +10,7 @@ from chess_trainer.pgn.positions import from_parsed
 
 PGN = '[White "test-player"]\n[Black "rival"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *\n'
 BLACK_PGN = '[White "rival"]\n[Black "test-player"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *\n'
-STEP = "review_last_game"
+STEP = "review_new_game"
 
 
 def positions(pgn=PGN):
@@ -38,7 +38,7 @@ def wait_until_ready(client, step=STEP, timeout=10.0):
 
 def start_review(client, pgn=PGN, step=STEP):
     client.post("/api/game/paste", json={"pgn": pgn})
-    client.post("/api/session/start", json={})
+    client.post("/api/session/start", json={"start_at": step})
     client.post("/api/review/start", json={"step": step})
     return wait_until_ready(client, step)
 
@@ -310,10 +310,10 @@ def test_the_play_step_is_not_a_review_step(client):
     assert client.post("/api/review/start", json={"step": "play"}).status_code == 422
 
 
-def test_both_review_steps_have_their_own_review(client, fake_engine_for_api):
-    make_blunder(fake_engine_for_api, 2, "d2d4")
-    start_review(client, step="review_last_game")
-    assert client.get("/api/review/review_new_game").status_code == 409
+def test_only_the_review_step_runs_a_review(client):
+    client.post("/api/game/paste", json={"pgn": PGN})
+    response = client.post("/api/review/start", json={"step": "inaccuracy_cards"})
+    assert response.status_code == 422
 
 
 # -- state ---------------------------------------------------------------
@@ -411,7 +411,7 @@ def test_solving_completes_the_step_and_moves_the_streak(client, fake_engine_for
     payload = client.post(
         "/api/review/attempt", json={"step": STEP, "from": "d2", "to": "d4"}
     ).json()
-    assert payload["session"]["current"] == "play"
+    assert payload["session"]["current"] == "cards"
     assert payload["streak"]["current"] == 1
 
 
@@ -496,7 +496,7 @@ def test_showing_the_answer_completes_the_step(client, fake_engine_for_api):
     make_blunder(fake_engine_for_api, 2, "d2d4")
     start_review(client)
     payload = client.post("/api/review/show-answer", json={"step": STEP}).json()
-    assert payload["session"]["current"] == "play"
+    assert payload["session"]["current"] == "cards"
     assert payload["streak"]["current"] == 1
 
 
@@ -541,7 +541,7 @@ def test_showing_the_answer_on_a_clean_game_is_a_409(client):
 def test_acknowledging_a_clean_game_completes_the_step(client):
     start_review(client)
     payload = client.post("/api/review/acknowledge", json={"step": STEP}).json()
-    assert payload["session"]["current"] == "play"
+    assert payload["session"]["current"] == "cards"
     assert payload["streak"]["current"] == 1
 
 

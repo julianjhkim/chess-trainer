@@ -150,6 +150,8 @@ body {
 }
 .step-button:hover { border-color: var(--accent); background: var(--panel); }
 .perfect-game { font-size: 17px; font-weight: 700; color: var(--good); }
+.empty-headline { font-size: 16px; font-weight: 600; }
+.card-added { color: var(--accent); font-weight: 600; }
 
 button {
   font: inherit;

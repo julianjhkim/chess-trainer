@@ -16,7 +16,7 @@ def test_session_always_lists_four_steps(client):
 def test_starting_without_a_body_selects_everything(client):
     payload = client.post("/api/session/start", json={}).json()
     assert payload["started"] is True
-    assert payload["current"] == "review_last_game"
+    assert payload["current"] == "inaccuracy_cards"
 
 
 def test_starting_with_a_subset(client):
@@ -34,27 +34,27 @@ def test_starting_rejects_an_unknown_step(client):
 
 def test_completing_a_step_advances(client):
     client.post("/api/session/start", json={})
-    payload = client.post("/api/session/complete/review_last_game").json()
+    payload = client.post("/api/session/complete/inaccuracy_cards").json()
     assert payload["session"]["current"] == "play"
 
 
 def test_completing_the_play_step_goes_to_the_new_game_review(client):
     client.post("/api/session/start", json={})
-    client.post("/api/session/complete/review_last_game")
+    client.post("/api/session/complete/inaccuracy_cards")
     payload = client.post("/api/session/complete/play").json()
     assert payload["session"]["current"] == "review_new_game"
 
 
 def test_completing_a_step_counts_towards_the_streak(client):
     client.post("/api/session/start", json={})
-    payload = client.post("/api/session/complete/review_last_game").json()
+    payload = client.post("/api/session/complete/inaccuracy_cards").json()
     assert payload["streak"]["current"] == 1
     assert payload["streak"]["active_today"] is True
 
 
 def test_completing_two_steps_keeps_the_streak_at_one_day(client):
     client.post("/api/session/start", json={})
-    client.post("/api/session/complete/review_last_game")
+    client.post("/api/session/complete/inaccuracy_cards")
     payload = client.post("/api/session/complete/play").json()
     assert payload["streak"]["current"] == 1
 
@@ -90,7 +90,7 @@ def test_jumping_to_an_unknown_step_is_rejected(client):
 
 def test_reset_returns_to_the_start_screen(client):
     client.post("/api/session/start", json={})
-    client.post("/api/session/complete/review_last_game")
+    client.post("/api/session/complete/inaccuracy_cards")
     payload = client.post("/api/session/reset").json()
     assert payload["started"] is False
     assert not any(s["completed"] for s in payload["steps"])

@@ -65,3 +65,12 @@ def test_descriptions_are_readable():
 def test_a_fail_after_retries_counts_the_wrong_tries():
     assert grading.describe(2, attempts=4) == "right after 3 wrong tries"
     assert grading.describe(2, attempts=3) == "right after 2 wrong tries"
+
+
+def test_a_hint_caps_a_first_try_at_three():
+    assert grading.quality_for(attempts=1, used_show_answer=False, used_hint=True) == 3
+    assert grading.describe(3, 1, used_hint=True) == "right with a hint"
+
+
+def test_a_hint_does_not_rescue_a_third_try():
+    assert grading.quality_for(attempts=3, used_show_answer=False, used_hint=True) == 2

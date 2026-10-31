@@ -21,6 +21,7 @@ from chess_trainer.review.review_job import ReviewJob
 from chess_trainer.session.flow import SessionFlow
 from chess_trainer.session.steps import Step
 from chess_trainer.srs.scheduler import CardQueue
+from chess_trainer.inaccuracies.deck import InaccuracyDeck
 
 T = TypeVar("T")
 
@@ -42,6 +43,13 @@ class AppState:
         self.card_attempts: list[str] = []
         self.card_shown: bool = False
         self.card_finished: bool = False
+        #: The inaccuracy deck for this session, and the card on screen.
+        self.inaccuracy_deck = InaccuracyDeck()
+        self.current_inaccuracy_id: int | None = None
+        self.inaccuracy_attempts: list[str] = []
+        self.inaccuracy_hinted: bool = False
+        self.inaccuracy_shown: bool = False
+        self.inaccuracy_finished: bool = False
         self._chesscom: ChessComClient | None = None
         self._explorer: LichessExplorerClient | None = None
 
@@ -77,6 +85,14 @@ class AppState:
         self.card_attempts = []
         self.card_shown = False
         self.card_finished = False
+
+    def reset_inaccuracy(self) -> None:
+        """Forget the inaccuracy card on screen."""
+        self.current_inaccuracy_id = None
+        self.inaccuracy_attempts = []
+        self.inaccuracy_hinted = False
+        self.inaccuracy_shown = False
+        self.inaccuracy_finished = False
 
     def shutdown(self) -> None:
         """Tear down in an order that cannot pull the rug from a worker thread.

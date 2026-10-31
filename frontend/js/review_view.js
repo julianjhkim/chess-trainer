@@ -533,6 +533,17 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (summary.used_hint) addRow(list, 'Hint', 'used');
     if (summary.used_show_answer) addRow(list, 'Answer', 'revealed');
     body.append(list);
+    const added = review.inaccuracy_card;
+    if (added) {
+      body.append(
+        paragraph(
+          added.created
+            ? `Added to your inaccuracy cards — first due ${added.due_on}.`
+            : `You already had a card for this position — it is now due ${added.due_on}.`,
+          'card-added',
+        ),
+      );
+    }
     body.append(paragraph('Review complete — this step is done.', 'choice-note'));
     body.append(
       paragraph(

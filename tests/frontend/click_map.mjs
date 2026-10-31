@@ -214,7 +214,7 @@ async function testCardsView(page, base) {
 
 async function testReviewView(page, base) {
   console.log('\nGame review view');
-  await page.request.post(`${base}/__scenario`, { data: { step: 'review_last_game' } });
+  await page.request.post(`${base}/__scenario`, { data: { step: 'review_new_game' } });
   await page.goto(base, { waitUntil: 'load' });
 
   // 1. The target is ready: game card, prompt and PGN paste all just rendered.

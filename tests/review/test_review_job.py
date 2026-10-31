@@ -187,7 +187,7 @@ def test_shutdown_during_analysis_does_not_use_a_closed_connection(config):
 
     state = AppState(config)
     created = job()
-    state.reviews[Step.REVIEW_LAST_GAME] = created
+    state.reviews[Step.REVIEW_NEW_GAME] = created
     created.start(state.conn, SlowEngine(delay=0.05))
 
     state.shutdown()

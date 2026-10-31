@@ -1,14 +1,14 @@
 # chess-trainer
 
-A local-only web app for a daily chess routine: review your latest chess.com game,
-play a new one, review that, and drill openings as spaced-repetition cards.
+A local-only web app for a daily chess routine: warm up on the slips from your past
+games, play a new one, review it, and drill openings as spaced-repetition cards.
 
 Runs entirely on `localhost`. Stockfish does the analysis, the Lichess masters
 database supplies the opening lines, and all frontend libraries are vendored into
 the repo so the app works offline.
 
-**Status: complete** — all four steps work: review your last chess.com game, play
-a new one, review that, and drill openings as spaced-repetition cards.
+**Status: complete** — all four steps work: inaccuracy cards, playing a game,
+reviewing it, and opening cards.
 
 ---
 
@@ -66,8 +66,29 @@ The start screen has one button per step: click the one you want and the session
 starts there. When a step is done the next one follows, and the step bar jumps
 anywhere at any time.
 
-**Step 1 — Review last game.** Your most recent chess.com game is fetched and your
-moves are analysed at depth 20, stopping at the first inaccuracy. A progress bar
+**Step 1 — Inaccuracy cards.** A warm-up on your own past slips before you play.
+Every review that finds an inaccuracy turns that position into a card — the
+position before your slip, from your side of the board, with the move that led
+there highlighted — first due the day after the review. Find the engine's move:
+only its top choice counts (the one the review recorded), retries are unlimited
+and the eval bar updates on each. *Hint* circles the piece to move; *Show answer*
+gives up. The result shows the answer in green and the move you played in the
+game in red, with the grade and the next due date. Cards are graded and scheduled
+exactly like the opening cards (see *The SM-2 variant*), except that a hint caps
+the grade at "right with a hint" (q=3, still a pass). One position is only ever
+one card: slipping there again in a later game brings the card back the next day.
+With nothing due — including before your first review — the step says so and
+*Continue to Play a game* moves on without counting towards the streak.
+
+**Step 2 — Play a game.** *Open chess.com* opens a tab; play your game and come
+back. *I'm done — fetch my game* watches the chess.com archive for about two
+minutes for a game newer than the one you had before (the archive lags a minute or
+so behind a finished game), counting down as it goes. If nothing turns up, a PGN
+paste box appears. Either way, finishing hands straight over to step 3.
+
+**Step 3 — Review that game.** The game you just played (or, if you skipped step 2,
+your most recent chess.com game) is fetched and your moves are analysed at depth
+20, stopping at the first inaccuracy. A progress bar
 counts the moves; a long game can take a minute or two the first time, and is
 instant afterwards because results are cached. Then the game auto-replays to the
 position just before your first slip and you play the move yourself. Only
@@ -76,7 +97,8 @@ the eval bar so you can see what it would have cost. *Hint* circles the piece th
 answer moves (and says which, e.g. "Move your bishop on f1") without saying where
 it goes; the summary and the review history note that a hint was used. *Show
 answer* gives up. When you find it, the review ends with a summary: the move you played and its
-classification, the engine's move, the evals either side and the win% you dropped.
+classification, the engine's move, the evals either side and the win% you dropped
+— and that the slip is now an inaccuracy card, first due the next day (step 1).
 If the game had no inaccuracy, it says so — and if you also won or drew it, it
 congratulates you on a perfect game.
 
@@ -109,14 +131,6 @@ read straight off them:
 Lines stop after ten plies, but never half-way through an exchange or a run of
 checks. Every move in them is clickable and shows that position on the board; ←
 and → from there step back into the game.
-
-**Step 2 — Play a game.** *Open chess.com* opens a tab; play your game and come
-back. *I'm done — fetch my game* watches the chess.com archive for about two
-minutes for a game newer than the one you had before (the archive lags a minute or
-so behind a finished game), counting down as it goes. If nothing turns up, a PGN
-paste box appears. Either way, finishing hands straight over to step 3.
-
-**Step 3 — Review that game.** The same drill on the game you just played.
 
 **Step 4 — Opening cards.** Anki-style drills built from the Lichess masters
 database, grown lazily as you go. The first card is 1.e4; the tree expands only
@@ -168,7 +182,7 @@ Other things worth poking at:
   *Flip board* turns it round.
 - **Eval bar** — always visible, always from White's perspective
   (`+0.45`, `−1.20`, `M3`).
-- **PGN paste** — available in both review steps at any point, for when chess.com
+- **PGN paste** — available in the review step at any point, for when chess.com
   is unreachable or the game has not appeared in the archive yet.
 - **Streak** — top right, current and longest. Finishing a review counts the day;
   the boundary is midnight in Asia/Seoul, and a second step the same day does not
@@ -248,6 +262,13 @@ single chess.com link, and the Lichess link:
 npm run review
 ```
 
+and a fourth over the inaccuracy-card drill (an empty deck, an all-caught-up deck,
+and one card solved with a hint after a wrong try):
+
+```bash
+npm run inaccuracy
+```
+
 Regenerate the stub's legal-move data from the real rules module after changing the
 lines it plays:
 
@@ -291,7 +312,8 @@ chess_trainer/
   review/    my_moves.py, first_inaccuracy.py, verdict.py, review_session.py,
              review_job.py (background analysis + progress), browse.py,
              hint.py, explain.py (the "why", read off the engine's lines),
-             lichess_link.py
+             lichess_link.py, outcome.py
+  inaccuracies/  card_from_review.py, deck.py (adding, serving, grading)
   explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
              explorer_types.py
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,
@@ -305,9 +327,9 @@ frontend/
 ```
 The frontend has one module per concern: `api.js`, `state.js`, `router.js`,
 `board.js`, `evalbar.js`, `stepbar.js`, `streak_view.js`, `start_screen.js`,
-`review_view.js`, `move_nav.js`, `move_list.js`, `explanation_view.js`,
-`play_view.js`, `cards_view.js`,
-`stats_table.js`, `arrows.js`, `animate.js`, `pgn_paste.js`.
+`inaccuracy_cards_view.js`, `review_view.js`, `move_nav.js`, `move_list.js`,
+`explanation_view.js`, `play_view.js`, `cards_view.js`, `stats_table.js`,
+`arrows.js`, `animate.js`, `pgn_paste.js`.
 
 `rules.py` is the single authority on move legality: the browser carries no rules
 engine and asks the server instead, which also means a drill answer can never be
@@ -431,6 +453,11 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/cards/next` | serve the next card (due first, then new) |
 | `POST /api/cards/attempt` | try a move on the current card |
 | `POST /api/cards/show-answer` | reveal the answer, grading it as a failure |
+| `GET /api/inaccuracy-cards/state` | the inaccuracy card on screen and the deck's counts |
+| `POST /api/inaccuracy-cards/next` | serve the next due inaccuracy card (or say the deck is done) |
+| `POST /api/inaccuracy-cards/attempt` | try a move; correct only if it is the recorded engine move |
+| `POST /api/inaccuracy-cards/hint` | the square and piece the answer moves (caps the grade at q=3) |
+| `POST /api/inaccuracy-cards/show-answer` | reveal the answer, grading it as a failure |
 
 ## Troubleshooting
 

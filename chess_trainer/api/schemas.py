@@ -261,6 +261,13 @@ class ReviewMoveOut(BaseModel):
         )
 
 
+class InaccuracyCardAddedOut(BaseModel):
+    """The inaccuracy card a finished review made (or brought back)."""
+
+    created: bool
+    due_on: str
+
+
 class HintOut(BaseModel):
     """Which piece the answer moves -- its square and kind, never its destination."""
 
@@ -342,6 +349,8 @@ class ReviewStateOut(BaseModel):
     #: Once the review is over: the game on Lichess's analysis board, opened
     #: at the position before my first inaccuracy, to try moves there.
     lichess_url: str | None = None
+    #: Once the review is over: the inaccuracy card made from the slip.
+    inaccuracy_card: InaccuracyCardAddedOut | None = None
 
     @classmethod
     def of(cls, step: Step, job: ReviewJob) -> "ReviewStateOut":
@@ -387,6 +396,10 @@ class ReviewStateOut(BaseModel):
                 finished=session.finished,
             )
         ]
+        if session.card_due_on is not None:
+            state.inaccuracy_card = InaccuracyCardAddedOut(
+                created=session.card_created, due_on=session.card_due_on.isoformat()
+            )
         if session.finished:
             state.lichess_url = analysis_url(
                 positions,
@@ -757,5 +770,81 @@ class ShowCardAnswerResponse(BaseModel):
     dead_ends: list[DeadEndOut] = Field(default_factory=list)
     branches_created: int = 0
     counts: QueueCountsOut
+    session: SessionOut | None = None
+    streak: StreakOut | None = None
+
+
+# -- inaccuracy cards ----------------------------------------------------
+class InaccuracyCountsOut(BaseModel):
+    due: int
+    relearning: int
+    total: int
+    #: When the next card is due, if none is due now.
+    next_due_on: str | None = None
+
+
+class InaccuracyCardOut(BaseModel):
+    """A position to solve. The answer and the move I played stay server-side."""
+
+    id: int
+    fen: str
+    orientation: str
+    #: The move that led here, highlighted on the board.
+    last_move_uci: str | None = None
+    move_number: int
+    classification: str
+    source: str
+    #: Where the slip came from, for the prompt.
+    opponent: str | None = None
+    played_on: int | None = None
+    interval_days: int | None = None
+    reps: int = 0
+
+
+class InaccuracyGradeOut(BaseModel):
+    quality: int
+    description: str
+    passed: bool
+    requeued: bool
+    interval_days: int | None = None
+    due_on: str | None = None
+    ef: float | None = None
+
+
+class InaccuracyResultOut(BaseModel):
+    """The report once a card is answered: the answer, my game move, the grade."""
+
+    answer_uci: str
+    answer_san: str
+    my_move_uci: str
+    my_move_san: str
+    move_label: str
+    classification: str
+    win_percent_drop: float | None = None
+    revealed: bool = False
+    grade: InaccuracyGradeOut
+
+
+class InaccuracyStateOut(BaseModel):
+    card: InaccuracyCardOut | None = None
+    counts: InaccuracyCountsOut
+    attempts: int = 0
+    hint: HintOut | None = None
+    finished: bool = False
+    result: InaccuracyResultOut | None = None
+    #: True when /next found nothing left to drill.
+    exhausted: bool = False
+
+
+class InaccuracyAttemptResponse(BaseModel):
+    correct: bool
+    uci: str
+    san: str
+    evaluation: EvalOut
+    fen_after: str
+    attempts: int
+    finished: bool
+    result: InaccuracyResultOut | None = None
+    counts: InaccuracyCountsOut | None = None
     session: SessionOut | None = None
     streak: StreakOut | None = None

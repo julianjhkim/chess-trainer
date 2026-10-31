@@ -12,7 +12,7 @@ def test_a_new_flow_has_not_started():
 
 def test_start_selects_the_first_step():
     flow = SessionFlow()
-    assert flow.start() is Step.REVIEW_LAST_GAME
+    assert flow.start() is Step.INACCURACY_CARDS
     assert flow.started
 
 
@@ -35,13 +35,13 @@ def test_finishing_the_play_step_moves_to_the_review_step():
     """The spec requires step 2 to hand straight over to step 3."""
     flow = SessionFlow()
     flow.start()
-    flow.complete(Step.REVIEW_LAST_GAME)
+    flow.complete(Step.INACCURACY_CARDS)
     assert flow.complete(Step.PLAY) is Step.REVIEW_NEW_GAME
 
 
 def test_completing_skips_unselected_steps():
     flow = SessionFlow()
-    flow.start({Step.REVIEW_LAST_GAME, Step.CARDS})
+    flow.start({Step.INACCURACY_CARDS, Step.CARDS})
     assert flow.complete_current() is Step.CARDS
 
 
@@ -67,8 +67,8 @@ def test_jump_moves_backward():
     flow = SessionFlow()
     flow.start()
     flow.complete_current()
-    flow.jump_to(Step.REVIEW_LAST_GAME)
-    assert flow.current is Step.REVIEW_LAST_GAME
+    flow.jump_to(Step.INACCURACY_CARDS)
+    assert flow.current is Step.INACCURACY_CARDS
 
 
 def test_jumping_to_an_unselected_step_selects_it():
@@ -81,17 +81,17 @@ def test_jumping_to_an_unselected_step_selects_it():
 def test_jumping_does_not_clear_completion():
     flow = SessionFlow()
     flow.start()
-    flow.complete(Step.REVIEW_LAST_GAME)
-    flow.jump_to(Step.REVIEW_LAST_GAME)
-    assert Step.REVIEW_LAST_GAME in flow.completed
+    flow.complete(Step.INACCURACY_CARDS)
+    flow.jump_to(Step.INACCURACY_CARDS)
+    assert Step.INACCURACY_CARDS in flow.completed
 
 
 def test_uncomplete_allows_rerunning_a_step():
     flow = SessionFlow()
     flow.start()
-    flow.complete(Step.REVIEW_LAST_GAME)
-    flow.uncomplete(Step.REVIEW_LAST_GAME)
-    assert Step.REVIEW_LAST_GAME not in flow.completed
+    flow.complete(Step.INACCURACY_CARDS)
+    flow.uncomplete(Step.INACCURACY_CARDS)
+    assert Step.INACCURACY_CARDS not in flow.completed
     assert not flow.is_finished
 
 
@@ -112,7 +112,7 @@ def test_remaining_lists_outstanding_steps_in_order():
     flow = SessionFlow()
     flow.start()
     flow.complete(Step.PLAY)
-    assert flow.remaining == [Step.REVIEW_LAST_GAME, Step.REVIEW_NEW_GAME, Step.CARDS]
+    assert flow.remaining == [Step.INACCURACY_CARDS, Step.REVIEW_NEW_GAME, Step.CARDS]
 
 
 def test_reset_clears_everything():
@@ -135,10 +135,10 @@ def test_step_bar_always_shows_all_four_steps():
 
 def test_step_bar_flags_state_correctly():
     flow = SessionFlow()
-    flow.start({Step.REVIEW_LAST_GAME, Step.PLAY})
-    flow.complete(Step.REVIEW_LAST_GAME)
+    flow.start({Step.INACCURACY_CARDS, Step.PLAY})
+    flow.complete(Step.INACCURACY_CARDS)
     bar = {info.step: info for info in flow.step_bar()}
-    assert bar[Step.REVIEW_LAST_GAME].completed
+    assert bar[Step.INACCURACY_CARDS].completed
     assert bar[Step.PLAY].current
     assert not bar[Step.CARDS].enabled
 

@@ -133,18 +133,18 @@ check('eval bar accepts a live engine payload', bar.element.querySelector('.eval
 
 // ---- session + step bar + streak ---------------------------------------
 await api.resetSession();
-const started = await api.startSession(['review_last_game', 'cards']);
-check('startSession selects a subset', started.current === 'review_last_game');
+const started = await api.startSession(['inaccuracy_cards', 'cards']);
+check('startSession selects a subset', started.current === 'inaccuracy_cards');
 const { createStepBar } = await import(`${REPO}/js/stepbar.js`);
 const barHost = document.createElement('nav');
 document.body.append(barHost);
 createStepBar(barHost).render(started);
 check('step bar renders all four steps', barHost.querySelectorAll('.step').length === 4,
       `${barHost.querySelectorAll('.step').length} rendered`);
-check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Review last game'));
+check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Inaccuracy cards'));
 check('step bar dims unselected steps', barHost.querySelectorAll('.step.disabled').length === 2);
 
-const done = await api.completeStep('review_last_game');
+const done = await api.completeStep('inaccuracy_cards');
 check('completing a step advances', done.session.current === 'cards');
 check('completing a step moves the streak', done.streak.current === 1);
 
@@ -230,15 +230,15 @@ check('focus() opens the widget', paste.element.open === true);
 const me = (await api.getHealth()).chesscom_username || 'test-player';
 const BLUNDER_PGN = `[White "${me}"]\n[Black "rival"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1\n`;
 await api.resetSession();
-await api.startSession(null);
+await api.startSession(null, { startAt: 'review_new_game' });
 const pastedGame = (await api.pastePgn(BLUNDER_PGN)).game;
 check('a pasted game reports its own move count', pastedGame.move_count === 4, `${pastedGame.move_count}`);
-await api.startReview('review_last_game', { gameId: pastedGame.id, restart: true });
+await api.startReview('review_new_game', { gameId: pastedGame.id, restart: true });
 
 const { renderReviewView } = await import(`${REPO}/js/review_view.js`);
 const reviewHost = document.createElement('main');
 document.body.append(reviewHost);
-const reviewStep = { step: 'review_last_game', position: 1, title: 'Review last game' };
+const reviewStep = { step: 'review_new_game', position: 3, title: 'Review that game' };
 let completedSession = null;
 // The play step hands a game over through the store; mimic that here so the
 // view reviews the pasted game rather than the most recently *played* one.
@@ -252,7 +252,7 @@ const reviewView = renderReviewView(reviewHost, {
 let reviewState = null;
 for (let i = 0; i < 120; i++) {
   await sleep(250);
-  reviewState = await api.reviewState('review_last_game');
+  reviewState = await api.reviewState('review_new_game');
   if (reviewState.status === 'ready') break;
 }
 check('review reaches ready', reviewState?.status === 'ready', reviewState?.status);
@@ -279,25 +279,30 @@ check('review view offers a PGN paste fallback', reviewHost.querySelector('.pgn-
 // Solve it through the API the way the board would, then confirm the summary renders.
 const targetFen = reviewState.target.fen_before;
 const best = (await api.evaluate(targetFen)).best_move;
-const hinted = await api.reviewHint('review_last_game');
+const hinted = await api.reviewHint('review_new_game');
 check('a hint names the square the answer moves from', hinted.hint.square === best.slice(0, 2), JSON.stringify(hinted.hint));
 check('the hint does not give the destination away', !JSON.stringify(hinted.hint).includes(best.slice(2, 4)) || best.slice(0, 2) === best.slice(2, 4));
 let explainedEarly = null;
-try { await api.reviewExplain('review_last_game'); } catch (error) { explainedEarly = error.message; }
+try { await api.reviewExplain('review_new_game'); } catch (error) { explainedEarly = error.message; }
 check('no explanation before the position is solved', explainedEarly !== null, explainedEarly ?? 'it explained');
 const wrongMove = 'h2h3';
-const wrong = await api.reviewAttempt('review_last_game', wrongMove.slice(0, 2), wrongMove.slice(2, 4), null);
+const wrong = await api.reviewAttempt('review_new_game', wrongMove.slice(0, 2), wrongMove.slice(2, 4), null);
 check('a wrong attempt is rejected with its own eval', wrong.correct === false && !!wrong.evaluation.text, wrong.evaluation.text);
-const solved = await api.reviewAttempt('review_last_game', best.slice(0, 2), best.slice(2, 4), best.length > 4 ? best[4] : null);
+const solved = await api.reviewAttempt('review_new_game', best.slice(0, 2), best.slice(2, 4), best.length > 4 ? best[4] : null);
 check('the engine move solves the review', solved.correct === true);
 check('solving returns a summary', solved.review.summary?.found_an_inaccuracy === true);
 check('the summary names my move and the best move',
       !!solved.review.summary.my_move_san && !!solved.review.summary.best_move_san,
       `${solved.review.summary.my_move_san} vs ${solved.review.summary.best_move_san}`);
-check('solving completes the step', solved.session?.steps.find((s) => s.step === 'review_last_game')?.completed === true);
-check('solving advances to the play step', solved.session?.current === 'play');
+check('solving completes the step', solved.session?.steps.find((s) => s.step === 'review_new_game')?.completed === true);
+check('solving advances to the opening cards', solved.session?.current === 'cards');
 check('the summary notes the hint', solved.review.summary.used_hint === true);
-const explained = await api.reviewExplain('review_last_game');
+check('the review adds its slip as an inaccuracy card', solved.review.inaccuracy_card?.created === true,
+      JSON.stringify(solved.review.inaccuracy_card));
+const deckAfter = await api.nextInaccuracyCard();
+check('the new card is not due until tomorrow', deckAfter.exhausted === true && deckAfter.counts.total >= 1,
+      JSON.stringify(deckAfter.counts));
+const explained = await api.reviewExplain('review_new_game');
 check('the explanation starts the best line with the answer', explained.best.moves[0]?.uci === best,
       explained.best.moves.map((m) => m.label).join(' '));
 check('the explanation starts my line with my move', explained.mine.moves[0]?.uci === solved.review.summary.my_move_uci,

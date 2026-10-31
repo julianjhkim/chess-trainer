@@ -7,6 +7,7 @@
  */
 
 import { renderCardsView } from './cards_view.js';
+import { renderInaccuracyCardsView } from './inaccuracy_cards_view.js';
 import { renderPlayView } from './play_view.js';
 import { renderReviewView } from './review_view.js';
 import { renderStartScreen } from './start_screen.js';
@@ -48,7 +49,8 @@ function renderStep(container, { step, onCompleted }) {
   };
 
   switch (step.step) {
-    case 'review_last_game':
+    case 'inaccuracy_cards':
+      return renderInaccuracyCardsView(container, { step, onCompleted: handleCompleted });
     case 'review_new_game':
       return renderReviewView(container, { step, onCompleted: handleCompleted });
     case 'play':

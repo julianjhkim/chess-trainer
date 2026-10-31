@@ -9,7 +9,7 @@ import * as api from './api.js';
 import { set, withStatus } from './state.js';
 
 const NOTES = {
-  review_last_game: 'Analyse your most recent chess.com game',
+  inaccuracy_cards: 'Warm up on the slips from your past reviews',
   play: 'Open chess.com, then fetch the game you just played',
   review_new_game: 'Analyse the game you just played',
   cards: 'Opening drills from the Lichess masters database',

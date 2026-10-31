@@ -28,6 +28,8 @@ from chess_trainer.db import game_reviews_repo, games_repo
 from chess_trainer.engine import analysis
 from chess_trainer.pgn import parse
 from chess_trainer.pgn.parse import PgnParseError
+from chess_trainer.inaccuracies import deck
+from chess_trainer.inaccuracies.card_from_review import card_from_review
 from chess_trainer.review import explain as explain_module, review_job
 from chess_trainer.review.review_job import ReviewJob
 from chess_trainer.session.steps import Step
@@ -35,8 +37,8 @@ from chess_trainer.streak import seoul_day, tracker
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
-#: Only these two steps run a game review.
-REVIEW_STEPS = (Step.REVIEW_LAST_GAME, Step.REVIEW_NEW_GAME)
+#: Only this step runs a game review.
+REVIEW_STEPS = (Step.REVIEW_NEW_GAME,)
 
 
 def _require_review_step(step: Step) -> Step:
@@ -350,6 +352,21 @@ def _finish(
     session.recorded = True
     today = seoul_day.today(tz_name=config.timezone)
     game_reviews_repo.record(conn, session.to_history(today))
+
+    # The slip becomes an inaccuracy card, first due tomorrow.
+    if session.target is not None:
+        added = deck.add_card(
+            conn,
+            card_from_review(
+                session.target,
+                game_id=job.game.id,
+                my_colour=job.my_colour,
+                depth=job.depth,
+            ),
+            today=today,
+        )
+        session.card_due_on = added.due_on
+        session.card_created = added.created
 
     state.flow.complete(step)
     streak = tracker.record_step(conn, tz_name=config.timezone)

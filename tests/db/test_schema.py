@@ -77,7 +77,7 @@ def test_a_version_3_database_upgrades_in_place():
         " VALUES ('x', 20, 10, NULL, 'e2e4', 'now')"
     )
     applied = schema.migrate(conn)
-    assert [m.version for m in applied] == [4]
+    assert [m.version for m in applied] == [4, 5]
     row = conn.execute("SELECT pv FROM analysis_cache WHERE fen = 'x'").fetchone()
     assert row[0] is None
     conn.close()

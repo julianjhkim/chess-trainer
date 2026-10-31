@@ -42,7 +42,7 @@ const MIME = {
 };
 
 const STEPS = [
-  ['review_last_game', 'Review last game'],
+  ['inaccuracy_cards', 'Inaccuracy cards'],
   ['play', 'Play a game'],
   ['review_new_game', 'Review that game'],
   ['cards', 'Opening cards'],
@@ -251,6 +251,77 @@ function browseExplanation() {
   };
 }
 
+// -- inaccuracy cards ---------------------------------------------------------
+/** 'empty' (no cards at all), 'caught-up' (none due) or 'one' (one due card). */
+let inaccuracyScenario = 'empty';
+let inaccuracyServed = false;
+let inaccuracyAnswered = false;
+let inaccuracyHinted = false;
+let inaccuracyAttempts = 0;
+
+const INACCURACY_CARD = {
+  id: 7,
+  fen: BROWSE_TARGET.fen_before,
+  orientation: 'white',
+  last_move_uci: 'e7e5',
+  move_number: 2,
+  classification: 'mistake',
+  source: 'due',
+  opponent: GAME.opponent,
+  played_on: 1736942614,
+  interval_days: 1,
+  reps: 0,
+};
+
+function inaccuracyCounts() {
+  const total = inaccuracyScenario === 'empty' ? 0 : 3;
+  const due = inaccuracyScenario === 'one' && !inaccuracyAnswered ? 1 : 0;
+  return { due, relearning: 0, total, next_due_on: total ? '2026-11-03' : null };
+}
+
+function inaccuracyAttempt(body) {
+  inaccuracyAttempts += 1;
+  const uci = `${body.from}${body.to}${body.promotion ?? ''}`;
+  const move = boardMove({ ...body, fen: INACCURACY_CARD.fen });
+  const correct = uci === BROWSE_ANSWER;
+  const base = {
+    correct,
+    uci,
+    san: move?.san ?? uci,
+    evaluation: EVALUATION,
+    fen_after: move?.fen ?? INACCURACY_CARD.fen,
+    attempts: inaccuracyAttempts,
+    finished: correct,
+  };
+  if (!correct) return base;
+  inaccuracyAnswered = true;
+  return {
+    ...base,
+    result: {
+      answer_uci: BROWSE_ANSWER,
+      answer_san: 'Bc4',
+      my_move_uci: 'g1f3',
+      my_move_san: 'Nf3',
+      move_label: '2.Nf3',
+      classification: 'mistake',
+      win_percent_drop: 21.4,
+      revealed: false,
+      grade: {
+        quality: 3,
+        description: inaccuracyHinted ? 'right with a hint' : 'right on the 2nd try',
+        passed: true,
+        requeued: false,
+        interval_days: 6,
+        due_on: '2026-11-06',
+        ef: 2.36,
+      },
+    },
+    counts: inaccuracyCounts(),
+    session: { ...session(currentStep), steps: session(currentStep).steps.map((st) => st.step === 'inaccuracy_cards' ? { ...st, completed: true } : st) },
+    streak: STREAK,
+  };
+}
+
 /** Which step the session reports as current; set through `/__scenario`. */
 let currentStep = 'cards';
 /** What the served card says about Stockfish agreeing with the masters. */
@@ -447,10 +518,6 @@ const routes = {
   },
   'POST /api/review/explain': () =>
     reviewFinished ? browseExplanation() : { error: 'Solve the position or show the answer first.' },
-  'GET /api/review/review_last_game': () => {
-    reviewPolls += 1;
-    return reviewState();
-  },
   'GET /api/review/review_new_game': () => {
     reviewPolls += 1;
     return reviewState();
@@ -473,11 +540,36 @@ const routes = {
     };
   },
 
+  // -- inaccuracy cards -------------------------------------------------
+  'POST /api/inaccuracy-cards/next': () => {
+    inaccuracyAttempts = 0;
+    inaccuracyHinted = false;
+    if (inaccuracyScenario === 'one' && !inaccuracyServed) {
+      inaccuracyServed = true;
+      return { card: INACCURACY_CARD, counts: inaccuracyCounts(), attempts: 0, finished: false, exhausted: false };
+    }
+    return { card: null, counts: inaccuracyCounts(), attempts: 0, finished: false, exhausted: true };
+  },
+  'POST /api/inaccuracy-cards/hint': () => {
+    inaccuracyHinted = true;
+    return { square: 'f1', piece: 'bishop', text: 'Move your bishop on f1.' };
+  },
+  'POST /api/inaccuracy-cards/attempt': (body) => inaccuracyAttempt(body),
+  'POST /api/session/jump/play': () => {
+    currentStep = 'play';
+    return session('play');
+  },
+
   // -- test control -----------------------------------------------------
   'POST /__scenario': (body) => {
     currentStep = body.step;
     engineAgrees = body.engineAgrees ?? null;
     reviewScenario = body.review ?? null;
+    inaccuracyScenario = body.inaccuracy ?? 'empty';
+    inaccuracyServed = false;
+    inaccuracyAnswered = false;
+    inaccuracyHinted = false;
+    inaccuracyAttempts = 0;
     cleanOutcome = body.outcome ?? 'win';
     reviewAttempts = 0;
     reviewPolls = 0;
