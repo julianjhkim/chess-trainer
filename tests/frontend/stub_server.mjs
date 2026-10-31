@@ -219,6 +219,8 @@ let reviewScenario = null;
 let reviewPolls = 0;
 let reviewFinished = false;
 let reviewHinted = false;
+/** How the `clean` scenario's game ended for me: 'win', 'draw' or 'loss'. */
+let cleanOutcome = 'win';
 
 const BROWSE_HINT = { square: 'f1', piece: 'bishop', text: 'Move your bishop on f1.' };
 
@@ -276,6 +278,7 @@ const STREAK = { current: 4, longest: 9, active_today: true, total_days: 21 };
 
 function reviewState(extra = {}) {
   if (reviewScenario === 'browse') return browseReviewState(extra);
+  if (reviewScenario === 'clean') return cleanReviewState(extra);
   return {
     step: currentStep,
     status: 'ready',
@@ -293,6 +296,33 @@ function reviewState(extra = {}) {
     solved: false,
     finished: false,
     summary: null,
+    ...extra,
+  };
+}
+
+/** A game without a single inaccuracy, ending as `cleanOutcome` says. */
+function cleanReviewState(extra = {}) {
+  return {
+    step: currentStep,
+    status: 'ready',
+    game: { ...GAME, move_count: BROWSE_LINE.length, my_outcome: cleanOutcome },
+    orientation: 'white',
+    depth: 20,
+    assessed: 3,
+    total_moves: 3,
+    progress: 1,
+    error: null,
+    target: null,
+    no_inaccuracy: true,
+    attempts: 0,
+    used_show_answer: false,
+    used_hint: false,
+    hint: null,
+    solved: false,
+    finished: true,
+    summary: { found_an_inaccuracy: false, attempts: 0, used_show_answer: false, used_hint: false, solved_first_try: false },
+    lichess_url: 'https://lichess.org/analysis/pgn/1.e4?color=white#0',
+    moves: BROWSE_MOVES,
     ...extra,
   };
 }
@@ -448,6 +478,7 @@ const routes = {
     currentStep = body.step;
     engineAgrees = body.engineAgrees ?? null;
     reviewScenario = body.review ?? null;
+    cleanOutcome = body.outcome ?? 'win';
     reviewAttempts = 0;
     reviewPolls = 0;
     reviewFinished = false;

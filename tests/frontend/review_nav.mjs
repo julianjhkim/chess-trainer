@@ -280,6 +280,30 @@ try {
   check('the review ran through', false, error.message.split('\n')[0]);
 }
 
+// -- a game without an inaccuracy -------------------------------------------
+async function openCleanGame(outcome) {
+  await page.request.post(`${stub.url}/__scenario`, {
+    data: { step: 'review_last_game', review: 'clean', outcome },
+  });
+  await page.goto(stub.url, { waitUntil: 'load' });
+  await waitForText(page, 'of your moves were checked');
+  return page.innerText('.side-panel');
+}
+
+try {
+  console.log('\nA game without an inaccuracy');
+  const won = await openCleanGame('win');
+  check('a clean win is congratulated', won.includes('Congratulations — a perfect game!'));
+  check('and says it was won', won.includes('You won without a single inaccuracy'));
+  const drawn = await openCleanGame('draw');
+  check('a clean draw is congratulated too', drawn.includes('Congratulations — a perfect game!') && drawn.includes('You drew'));
+  const lost = await openCleanGame('loss');
+  check('a clean loss is not congratulated', !lost.includes('Congratulations'), JSON.stringify(lost.slice(0, 80)));
+  check('but still says there was no inaccuracy', lost.includes('No inaccuracy in this game'));
+} catch (error) {
+  check('the clean-game case ran through', false, error.message.split('\n')[0]);
+}
+
 await browser.close();
 await stub.close();
 

@@ -1,8 +1,8 @@
 /**
- * The start screen: four checkboxes (all checked) and a Start button.
+ * The start screen: one button per step.
  *
- * Checked steps run in order. Unchecking everything disables Start, since an
- * empty session has nothing to do.
+ * Clicking a step starts the session right there, with all four steps on: when
+ * it is done the next one follows, and the step bar jumps anywhere at any time.
  */
 
 import * as api from './api.js';
@@ -26,21 +26,16 @@ export function renderStartScreen(container, { session, onStarted }) {
 
   const sub = document.createElement('p');
   sub.className = 'sub';
-  sub.textContent = 'Pick the steps to run. They run in this order, and you can jump between them at any time.';
+  sub.textContent = 'Pick a step to start with. The next one follows when it is done, and you can jump between them at any time.';
 
   const choices = document.createElement('div');
-  choices.className = 'step-choices';
+  choices.className = 'step-buttons';
 
-  const boxes = new Map();
   for (const step of session.steps) {
-    const label = document.createElement('label');
-    label.className = 'choice';
-
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = true;
-    box.addEventListener('change', updateStartButton);
-    boxes.set(step.step, box);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'step-button';
+    button.dataset.step = step.step;
 
     const num = document.createElement('span');
     num.className = 'choice-num';
@@ -52,43 +47,21 @@ export function renderStartScreen(container, { session, onStarted }) {
 
     const note = document.createElement('span');
     note.className = 'choice-note';
-    note.textContent = NOTES[step.step] ? `— ${NOTES[step.step]}` : '';
+    note.textContent = NOTES[step.step] ?? '';
 
-    label.append(box, num, title, note);
-    choices.append(label);
+    button.append(num, title, note);
+    button.addEventListener('click', () => begin(step.step));
+    choices.append(button);
   }
 
-  const row = document.createElement('div');
-  row.className = 'button-row';
-
-  const start = document.createElement('button');
-  start.className = 'primary';
-  start.textContent = 'Start';
-  start.addEventListener('click', onStart);
-
-  const hint = document.createElement('span');
-  hint.className = 'choice-note';
-
-  row.append(start, hint);
-  panel.append(heading, sub, choices, row);
+  panel.append(heading, sub, choices);
   container.append(panel);
 
-  function selected() {
-    return [...boxes.entries()].filter(([, box]) => box.checked).map(([name]) => name);
-  }
-
-  function updateStartButton() {
-    const count = selected().length;
-    start.disabled = count === 0;
-    hint.textContent = count === 0 ? 'Select at least one step.' : '';
-  }
-
-  async function onStart() {
-    const steps = selected();
-    const next = await withStatus('Starting session…', () => api.startSession(steps));
+  async function begin(stepName) {
+    const next = await withStatus('Starting…', () =>
+      api.startSession(null, { startAt: stepName }),
+    );
     set({ session: next });
     if (onStarted) onStarted(next);
   }
-
-  updateStartButton();
 }

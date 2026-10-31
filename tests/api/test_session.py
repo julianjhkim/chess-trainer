@@ -100,3 +100,14 @@ def test_session_state_persists_across_requests(client):
     client.post("/api/session/start", json={})
     client.post("/api/session/jump/cards")
     assert client.get("/api/session").json()["current"] == "cards"
+
+
+def test_starting_at_a_chosen_step(client):
+    payload = client.post("/api/session/start", json={"start_at": "cards"}).json()
+    assert payload["started"] is True
+    assert payload["current"] == "cards"
+    assert all(s["enabled"] for s in payload["steps"])
+
+
+def test_starting_at_an_unknown_step_is_rejected(client):
+    assert client.post("/api/session/start", json={"start_at": "nope"}).status_code == 422

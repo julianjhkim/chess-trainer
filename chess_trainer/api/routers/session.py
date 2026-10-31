@@ -24,8 +24,9 @@ def get_session(flow: Flow) -> SessionOut:
 
 @router.post("/start", response_model=SessionOut)
 def start_session(payload: StartSessionRequest, flow: Flow) -> SessionOut:
-    """Begin a session with the selected steps (all four when none are given)."""
-    flow.start(set(payload.steps) if payload.steps else None)
+    """Begin a session with the selected steps (all four when none are given),
+    at ``start_at`` if given, else the first of them."""
+    flow.start(set(payload.steps) if payload.steps else None, at=payload.start_at)
     return SessionOut.of(flow)
 
 

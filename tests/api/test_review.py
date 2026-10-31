@@ -141,6 +141,23 @@ def test_moves_are_mine_by_colour_when_i_played_black(client):
     assert [m["is_mine"] for m in payload["moves"]] == [False, True] * 3
 
 
+# -- how the game went ----------------------------------------------------
+def test_a_clean_win_is_reported_as_a_win(client):
+    won = '[White "test-player"]\n[Black "rival"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0\n'
+    payload = start_review(client, pgn=won)
+    assert payload["no_inaccuracy"]
+    assert payload["game"]["my_outcome"] == "win"
+
+
+def test_a_draw_is_reported_as_a_draw(client):
+    drawn = '[White "rival"]\n[Black "test-player"]\n[Result "1/2-1/2"]\n\n1. e4 e5 1/2-1/2\n'
+    assert start_review(client, pgn=drawn)["game"]["my_outcome"] == "draw"
+
+
+def test_an_unfinished_game_has_no_outcome(client):
+    assert start_review(client)["game"]["my_outcome"] is None
+
+
 # -- the Lichess link ------------------------------------------------------
 def test_no_lichess_link_while_still_solving(client, fake_engine_for_api):
     make_blunder(fake_engine_for_api, 2, "d2d4")

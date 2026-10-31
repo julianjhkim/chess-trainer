@@ -39,8 +39,11 @@ export const getHealth = () => request('/api/health');
 
 // -- session --------------------------------------------------------------
 export const getSession = () => request('/api/session');
-export const startSession = (steps) =>
-  request('/api/session/start', { method: 'POST', body: { steps: steps ?? null } });
+export const startSession = (steps, { startAt = null } = {}) =>
+  request('/api/session/start', {
+    method: 'POST',
+    body: { steps: steps ?? null, start_at: startAt },
+  });
 export const resetSession = () => request('/api/session/reset', { method: 'POST' });
 export const jumpToStep = (step) => request(`/api/session/jump/${step}`, { method: 'POST' });
 export const completeStep = (step) => request(`/api/session/complete/${step}`, { method: 'POST' });

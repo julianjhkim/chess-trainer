@@ -139,6 +139,18 @@ body {
 .choice-title { font-weight: 500; }
 .choice-note { color: var(--muted); font-size: 13px; }
 
+/* Start screen: each step is its own button. */
+.step-buttons { display: grid; gap: 8px; margin: 6px 0 4px; }
+.step-button {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: left;
+  padding: 12px 16px;
+}
+.step-button:hover { border-color: var(--accent); background: var(--panel); }
+.perfect-game { font-size: 17px; font-weight: 700; color: var(--good); }
+
 button {
   font: inherit;
   padding: 9px 18px;

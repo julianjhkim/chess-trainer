@@ -192,7 +192,9 @@ def paste_pgn(payload: PastePgnRequest, conn: Conn, config: Cfg) -> GameResponse
         ),
     )
     state_repo.set_last_seen_game_id(conn, stored.id)
-    return GameResponse(game=GameOut.of(stored, move_count=parsed.move_count))
+    return GameResponse(
+        game=GameOut.of(stored, move_count=parsed.move_count, pgn_result=parsed.result)
+    )
 
 
 def _colour_from_pgn(parsed: parse.ParsedGame, config: Config) -> str:

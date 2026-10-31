@@ -141,3 +141,21 @@ def test_step_bar_flags_state_correctly():
     assert bar[Step.REVIEW_LAST_GAME].completed
     assert bar[Step.PLAY].current
     assert not bar[Step.CARDS].enabled
+
+
+def test_start_can_begin_at_any_step():
+    flow = SessionFlow()
+    assert flow.start(at=Step.CARDS) is Step.CARDS
+    assert flow.enabled == set(ORDER)
+
+
+def test_starting_at_a_step_then_completing_it_moves_on():
+    flow = SessionFlow()
+    flow.start(at=Step.PLAY)
+    assert flow.complete_current() is Step.REVIEW_NEW_GAME
+
+
+def test_starting_at_an_unselected_step_selects_it():
+    flow = SessionFlow()
+    assert flow.start({Step.PLAY}, at=Step.CARDS) is Step.CARDS
+    assert Step.CARDS in flow.enabled

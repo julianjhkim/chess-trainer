@@ -262,8 +262,23 @@ export function renderReviewView(container, { step, onCompleted }) {
 
   function renderNoInaccuracy() {
     const body = document.createElement('div');
+    const outcome = review.game?.my_outcome;
+    if (outcome === 'win' || outcome === 'draw') {
+      // A clean game that also didn't lose deserves more than a shrug.
+      const headline = paragraph('Congratulations — a perfect game!', 'perfect-game');
+      body.append(
+        headline,
+        paragraph(
+          `You ${outcome === 'win' ? 'won' : 'drew'} without a single inaccuracy: none of your moves lost 10% or more.`,
+          '',
+        ),
+      );
+    } else {
+      body.append(
+        paragraph('No inaccuracy in this game — nothing of yours lost 10% or more. Well played.', ''),
+      );
+    }
     body.append(
-      paragraph('No inaccuracy in this game — nothing of yours lost 10% or more. Well played.', ''),
       paragraph(
         `All ${review.total_moves} of your moves were checked at depth ${review.depth}.`,
         'choice-note',

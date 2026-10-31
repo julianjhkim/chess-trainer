@@ -16,6 +16,7 @@ from chess_trainer.review.browse import browsable_moves
 from chess_trainer.review.explain import ExplainedLine, Explanation
 from chess_trainer.review.hint import hint_for
 from chess_trainer.review.lichess_link import analysis_url
+from chess_trainer.review.outcome import my_outcome
 from chess_trainer.review.review_job import ReviewJob, ReviewStatus
 from chess_trainer.review.review_session import ReviewTarget
 from chess_trainer.openings import card_builder, line as line_module
@@ -104,6 +105,10 @@ class StartSessionRequest(BaseModel):
         default=None,
         description="Steps to run; omit or send null for all four.",
     )
+    start_at: Step | None = Field(
+        default=None,
+        description="Begin at this step rather than the first one.",
+    )
 
 
 # -- streak --------------------------------------------------------------
@@ -152,13 +157,21 @@ class GameOut(BaseModel):
     white_username: str | None = None
     black_username: str | None = None
     my_result: str | None = None
+    #: ``win`` / ``draw`` / ``loss`` from my side, when the game says.
+    my_outcome: str | None = None
     time_class: str | None = None
     end_time: int | None = None
     source: str
     move_count: int | None = None
 
     @classmethod
-    def of(cls, game: StoredGame, *, move_count: int | None = None) -> "GameOut":
+    def of(
+        cls,
+        game: StoredGame,
+        *,
+        move_count: int | None = None,
+        pgn_result: str | None = None,
+    ) -> "GameOut":
         return cls(
             id=game.id,
             url=game.url,
@@ -167,6 +180,7 @@ class GameOut(BaseModel):
             white_username=game.white_username,
             black_username=game.black_username,
             my_result=game.my_result,
+            my_outcome=my_outcome(game.my_result, pgn_result, game.my_color),
             time_class=game.time_class,
             end_time=game.end_time,
             source=game.source,
@@ -335,7 +349,9 @@ class ReviewStateOut(BaseModel):
         state = cls(
             step=step,
             status=job.status,
-            game=GameOut.of(job.game, move_count=job.parsed.move_count),
+            game=GameOut.of(
+                job.game, move_count=job.parsed.move_count, pgn_result=job.parsed.result
+            ),
             orientation=orientation,
             depth=job.depth,
             assessed=job.assessed,

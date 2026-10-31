@@ -62,7 +62,9 @@ chess-trainer --help
 
 ## Trying it
 
-Press *Start* with all four boxes ticked and work through it.
+The start screen has one button per step: click the one you want and the session
+starts there. When a step is done the next one follows, and the step bar jumps
+anywhere at any time.
 
 **Step 1 — Review last game.** Your most recent chess.com game is fetched and your
 moves are analysed at depth 20, stopping at the first inaccuracy. A progress bar
@@ -75,7 +77,8 @@ answer moves (and says which, e.g. "Move your bishop on f1") without saying wher
 it goes; the summary and the review history note that a hint was used. *Show
 answer* gives up. When you find it, the review ends with a summary: the move you played and its
 classification, the engine's move, the evals either side and the win% you dropped.
-If the game had no inaccuracy, it says so.
+If the game had no inaccuracy, it says so — and if you also won or drew it, it
+congratulates you on a perfect game.
 
 Once the board is up, **← / →** step through the game, **Home / End** (or ↑ / ↓)
 jump to either end, and the move list beside the board is clickable. While you
@@ -160,8 +163,7 @@ board* button.
 Other things worth poking at:
 
 - **Step bar** — all four steps always visible; click any one to jump forward or
-  back at any time, mid-review included. A step you left unticked is dimmed, and
-  clicking it selects it on the way in.
+  back at any time, mid-review included.
 - **Board orientation** — a review orients the board to the colour you played.
   *Flip board* turns it round.
 - **Eval bar** — always visible, always from White's perspective

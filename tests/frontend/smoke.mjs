@@ -158,13 +158,16 @@ const { renderStartScreen } = await import(`${REPO}/js/start_screen.js`);
 const screenHost = document.createElement('div');
 await api.resetSession();
 renderStartScreen(screenHost, { session: await api.getSession(), onStarted: () => {} });
-const boxes = screenHost.querySelectorAll('input[type=checkbox]');
-check('start screen has four checkboxes', boxes.length === 4);
-check('all checkboxes start checked', [...boxes].every((b) => b.checked));
-const startBtn = screenHost.querySelector('button.primary');
-check('Start button is enabled', startBtn && !startBtn.disabled);
-boxes.forEach((b) => { b.checked = false; b.dispatchEvent(new dom.window.Event('change')); });
-check('Start is disabled with nothing selected', startBtn.disabled);
+const stepButtons = [...screenHost.querySelectorAll('button.step-button')];
+check('start screen has one button per step', stepButtons.length === 4);
+check('start screen asks nothing to tick', screenHost.querySelectorAll('input[type=checkbox]').length === 0);
+let startedWith = null;
+renderStartScreen(screenHost, { session: await api.getSession(), onStarted: (s) => { startedWith = s; } });
+screenHost.querySelector('button.step-button[data-step="cards"]').click();
+for (let i = 0; i < 50 && !startedWith; i++) await new Promise((r) => setTimeout(r, 20));
+check('clicking a step starts the session there', startedWith?.current === 'cards', JSON.stringify(startedWith?.current));
+check('every step stays available', startedWith?.steps.every((s) => s.enabled));
+await api.resetSession();
 
 
 // ---- animate.js: auto-replay ------------------------------------------

@@ -72,9 +72,12 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 ### Session flow
 - Four steps, in order: `review_last_game` → `play` → `review_new_game` → `cards`
   (`session/steps.py`, `session/flow.py`).
-- Each step is skippable via the start-screen checkboxes. All four are always
-  shown on the step bar; clicking any one jumps there, forward or back, at any
-  time (mid-review included). An unticked step is dimmed and clicking it enables it.
+- **Start screen = one button per step** (no checkboxes): clicking a step starts
+  the session there with all four steps enabled (`POST /api/session/start` with
+  `start_at`); finishing a step advances to the next. All four are always on the
+  step bar; clicking any one jumps there, forward or back, at any time
+  (mid-review included). The backend still accepts a `steps` subset (dimmed on
+  the bar) but the UI no longer sends one.
 - Play step: open chess.com, then poll the archive ~2 min for a game newer than
   the baseline; fall back to PGN paste. PGN paste is available in both review steps.
 - Cards have no end; the step counts as completed once a card is answered, but
@@ -90,7 +93,10 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - The drill replays to the position before that move. **Only Stockfish's top-1
   move at the analysis depth (default 20) is accepted** — strict string match,
   judged server-side (`review/verdict.py`). Unlimited retries, eval bar updates
-  on each; "Show answer" gives up. No inaccuracy → say so.
+  on each; "Show answer" gives up. No inaccuracy → say so; if I also **won or
+  drew**, the review says "Congratulations — a perfect game!" (outcome from
+  chess.com's result code, else the PGN `Result` header: `review/outcome.py`,
+  `GameOut.my_outcome`). A clean loss gets no congratulation.
 - **Hint** (`review/hint.py`, `POST /api/review/hint`): reveals only the
   from-square and piece type of the answer (yellow circle via
   `board.setHighlights` = chessground autoShapes, which clicks don't erase).

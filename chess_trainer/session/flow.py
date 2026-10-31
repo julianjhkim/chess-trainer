@@ -30,13 +30,26 @@ class SessionFlow:
     started: bool = False
 
     # -- lifecycle -------------------------------------------------------
-    def start(self, enabled: set[Step] | frozenset[Step] | None = None) -> Step | None:
-        """Begin a session with the given steps selected (default: all four)."""
+    def start(
+        self,
+        enabled: set[Step] | frozenset[Step] | None = None,
+        *,
+        at: Step | None = None,
+    ) -> Step | None:
+        """Begin a session with the given steps selected (default: all four).
+
+        ``at`` begins at that step instead of the first one -- the start screen
+        is one button per step -- and selects it if it was not.
+        """
         if enabled is not None:
             self.enabled = set(enabled)
         self.completed = set()
         self.started = True
-        self.current = first_enabled(self.enabled)
+        if at is not None:
+            self.enabled.add(at)
+            self.current = at
+        else:
+            self.current = first_enabled(self.enabled)
         return self.current
 
     def reset(self) -> None:
