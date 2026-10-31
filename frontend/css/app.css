@@ -152,6 +152,8 @@ body {
 .perfect-game { font-size: 17px; font-weight: 700; color: var(--good); }
 .empty-headline { font-size: 16px; font-weight: 600; }
 .card-added { color: var(--accent); font-weight: 600; }
+.played-line { color: var(--bad); }
+.played-line strong { font-family: inherit; }
 
 button {
   font: inherit;

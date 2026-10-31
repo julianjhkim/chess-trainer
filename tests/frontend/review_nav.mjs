@@ -129,6 +129,9 @@ async function testWhileDrilling(page, base) {
   check('the game card has exactly one chess.com link after several polls', state.links === 1, `${state.links} links`);
   check('the list holds only the moves before the slip', JSON.stringify(state.moves) === '["e4","e5"]', JSON.stringify(state.moves));
   check('the last of them is current', state.current === 1, String(state.current));
+  check('the prompt names the move I played', (await page.innerText('.side-panel')).includes('You played 2.Nf3 here — an inaccuracy.'));
+  check('and the board shows it as a red arrow', state.shapes.join() === 'red:g1f3', state.shapes.join());
+  check('but not the moves after it', JSON.stringify(state.moves) === '["e4","e5"]');
   check('the board is on the position to solve', state.fen === FENS[2]);
 
   state = await press(page, 'ArrowLeft', FENS[1], '← to after 1.e4');
@@ -177,13 +180,13 @@ async function testWhileDrilling(page, base) {
   await page.waitForTimeout(100);
   state = await snapshot(page);
   check('Hint names the piece to move', (await page.innerText('.side-panel')).includes('Move your bishop on f1.'));
-  check('Hint circles its square', state.shapes.join() === 'yellow:f1', state.shapes.join());
+  check('Hint circles its square, beside the game move', state.shapes.join() === 'red:g1f3,yellow:f1', state.shapes.join());
   check('the hint does not give the destination away', !(await page.innerText('.side-panel')).includes('c4'));
 
   state = await press(page, 'ArrowLeft', FENS[1], '← away from the hinted position');
   check('the circle stays with the live position', state.shapes.length === 0, state.shapes.join());
   state = await press(page, 'End', FENS[2], 'End back to the live position');
-  check('and comes back with it', state.shapes.join() === 'yellow:f1', state.shapes.join());
+  check('and comes back with it', state.shapes.join() === 'red:g1f3,yellow:f1', state.shapes.join());
 }
 
 // -- after solving --------------------------------------------------------

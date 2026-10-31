@@ -314,6 +314,7 @@ export function renderReviewView(container, { step, onCompleted }) {
     hintLine.hidden = true;
     body.append(
       paragraph(`Move ${target.move_number}. This is where your game first went wrong, playing ${whose}.`, ''),
+      playedLine(target.move_label, target.classification),
       paragraph(
         'Find the move the engine wants — only its top choice counts. Unlimited retries.',
         'choice-note',
@@ -435,10 +436,17 @@ export function renderReviewView(container, { step, onCompleted }) {
     panelChanged();
   }
 
-  /** A circle on the piece the hint names, while the position is still open. */
+  /**
+   * Marks for the live position while it is still open: the move I played in
+   * the game (red, what not to play) and the hint's circle. Drawn as
+   * highlights, which a click on the board does not wipe.
+   */
   function hintShapes() {
-    if (!hint || !review?.target || review.finished) return [];
-    return [{ orig: hint.square, brush: 'yellow' }];
+    const target = review?.target;
+    if (!target || review.finished) return [];
+    const marks = [arrow(target.my_move_uci, 'red')];
+    if (hint) marks.push({ orig: hint.square, brush: 'yellow' });
+    return marks.filter(Boolean);
   }
 
   async function showAnswer() {
@@ -824,6 +832,16 @@ function card(title, onChange) {
       if (onChange) onChange();
     },
   };
+}
+
+/** "You played 2.Nf3 here — a mistake." */
+function playedLine(moveLabel, classification) {
+  const element = paragraph('', 'played-line');
+  element.append('You played ');
+  const move = document.createElement('strong');
+  move.textContent = moveLabel;
+  element.append(move, ` here — ${CLASSIFICATION_LABEL[classification] ?? classification}. The red arrow shows it.`);
+  return element;
 }
 
 function squares(uci) {

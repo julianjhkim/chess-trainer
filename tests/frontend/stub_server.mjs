@@ -196,6 +196,9 @@ const BROWSE_TARGET = {
   replay_ucis: BROWSE_LINE.slice(0, BROWSE_TARGET_PLY),
   mover_is_white: true,
   orientation: 'white',
+  my_move_uci: 'g1f3',
+  my_move_san: 'Nf3',
+  classification: 'inaccuracy',
 };
 
 const BROWSE_SUMMARY = {
@@ -266,6 +269,9 @@ const INACCURACY_CARD = {
   last_move_uci: 'e7e5',
   move_number: 2,
   classification: 'mistake',
+  my_move_uci: 'g1f3',
+  my_move_san: 'Nf3',
+  move_label: '2.Nf3',
   source: 'due',
   opponent: GAME.opponent,
   played_on: 1736942614,

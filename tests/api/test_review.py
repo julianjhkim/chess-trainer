@@ -265,6 +265,13 @@ def test_the_explanation_shows_both_lines(client, fake_engine_for_api):
     assert payload["best"]["moves"][0]["fen_after"] == after_best
 
 
+def test_the_target_shows_the_move_i_played(client, fake_engine_for_api):
+    make_blunder(fake_engine_for_api, 2, "d2d4")
+    target = start_review(client)["target"]
+    assert (target["my_move_uci"], target["my_move_san"]) == ("g1f3", "Nf3")
+    assert target["classification"] == "blunder"
+
+
 def test_the_board_is_oriented_to_my_colour(client, fake_engine_for_api):
     make_blunder(fake_engine_for_api, 2, "d2d4")
     assert start_review(client)["orientation"] == "white"

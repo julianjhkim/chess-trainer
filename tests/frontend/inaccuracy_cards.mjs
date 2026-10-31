@@ -115,8 +115,9 @@ async function testOneCard(page, base) {
 
   const prompt = await page.innerText('.side-panel');
   check('the prompt names the game and the move', prompt.includes('From your game vs a-very-long-opponent-username') && prompt.includes('move 2, White to play'));
-  check('and what kind of slip it was', prompt.includes('You played a mistake here.'));
-  check('the answer is not on screen', !prompt.includes('Bc4') && !prompt.includes('Nf3'));
+  check('the answer is not on screen', !prompt.includes('Bc4'));
+  check('the move I played is, with what kind of slip it was', prompt.includes('You played 2.Nf3 here — a mistake.'));
+  check('and drawn as a red arrow', (await board(page)).highlights.join() === 'red:g1f3', (await board(page)).highlights.join());
   let state = await board(page);
   check('the board shows the position', state.fen === POSITION);
   check('from my side', state.orientation === 'white');
@@ -124,7 +125,7 @@ async function testOneCard(page, base) {
 
   await page.click('button:text-is("Hint")');
   await waitForText(page, 'Hint: Move your bishop on f1.');
-  check('Hint circles the piece', (await board(page)).highlights.join() === 'yellow:f1');
+  check('Hint circles the piece', (await board(page)).highlights.join() === 'red:g1f3,yellow:f1');
 
   await clickSquare(page, 'g1');
   await clickSquare(page, 'f3');
@@ -134,7 +135,7 @@ async function testOneCard(page, base) {
     return b && b.getFen() === fen && b.ground.state.movable.color === 'white';
   }, POSITION);
   check('a wrong try goes into the attempts', (await page.innerText('.attempt-list')).includes('Nf3'));
-  check('the hint survives a wrong try', (await board(page)).highlights.join() === 'yellow:f1');
+  check('the marks survive a wrong try', (await board(page)).highlights.join() === 'red:g1f3,yellow:f1');
 
   await clickSquare(page, 'f1');
   await clickSquare(page, 'c4');
@@ -146,7 +147,7 @@ async function testOneCard(page, base) {
   state = await board(page);
   check('the board shows the answer played', state.fen === ANSWERED);
   check('answer in green, game move in red', state.shapes.join() === 'green:f1c4,red:g1f3', state.shapes.join());
-  check('the hint circle is gone', state.highlights.length === 0);
+  check('the solving marks are gone', state.highlights.length === 0);
   check('the step counts once a card is answered', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'inaccuracy_cards')?.completed === true));
 

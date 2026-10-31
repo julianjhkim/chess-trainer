@@ -109,6 +109,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (destroyed) return;
     renderPrompt();
     buildControls();
+    fresh.setHighlights(hintShapes());
     void refreshEval(card.fen);
     fresh.setMoveHandler(handleAttempt);
     fresh.setInteractive(true);
@@ -263,9 +264,10 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     body.append(
       tag,
       paragraph(
-        `From ${from}: move ${card.move_number}, ${side} to play. You played ${CLASSIFICATION_LABEL[card.classification] ?? card.classification} here.`,
+        `From ${from}: move ${card.move_number}, ${side} to play.`,
         '',
       ),
+      playedLine(card.move_label, card.classification),
       paragraph('Find the engine’s move — only its top choice counts. Unlimited retries.', 'choice-note'),
     );
     if (hint) body.append(paragraph(`Hint: ${hint.text}`, 'hint-line'));
@@ -330,8 +332,15 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     controls.append(button('Flip board', () => board?.flip()));
   }
 
+  /**
+   * While solving: the move played in the game (red, what not to play) and
+   * the hint's circle, as highlights a click on the board does not wipe.
+   */
   function hintShapes() {
-    return hint && phase === 'solving' ? [{ orig: hint.square, brush: 'yellow' }] : [];
+    if (phase !== 'solving' || !card) return [];
+    const marks = [arrow(card.my_move_uci, 'red')];
+    if (hint) marks.push({ orig: hint.square, brush: 'yellow' });
+    return marks.filter(Boolean);
   }
 
   // -- helpers -----------------------------------------------------------
@@ -368,6 +377,16 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
 }
 
 // -- small DOM helpers ----------------------------------------------------
+/** "You played 2.Nf3 here — a mistake." */
+function playedLine(moveLabel, classification) {
+  const element = paragraph('', 'played-line');
+  element.append('You played ');
+  const move = document.createElement('strong');
+  move.textContent = moveLabel;
+  element.append(move, ` here — ${CLASSIFICATION_LABEL[classification] ?? classification}. The red arrow shows it.`);
+  return element;
+}
+
 function squares(uci) {
   return uci ? [uci.slice(0, 2), uci.slice(2, 4)] : undefined;
 }

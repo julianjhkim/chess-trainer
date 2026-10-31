@@ -69,7 +69,8 @@ anywhere at any time.
 **Step 1 — Inaccuracy cards.** A warm-up on your own past slips before you play.
 Every review that finds an inaccuracy turns that position into a card — the
 position before your slip, from your side of the board, with the move that led
-there highlighted — first due the day after the review. Find the engine's move:
+there highlighted — first due the day after the review. The move you played in
+the game is named and drawn as a red arrow, so you know what not to play. Find the engine's move:
 only its top choice counts (the one the review recorded), retries are unlimited
 and the eval bar updates on each. *Hint* circles the piece to move; *Show answer*
 gives up. The result shows the answer in green and the move you played in the
@@ -91,8 +92,10 @@ your most recent chess.com game) is fetched and your moves are analysed at depth
 20, stopping at the first inaccuracy. A progress bar
 counts the moves; a long game can take a minute or two the first time, and is
 instant afterwards because results are cached. Then the game auto-replays to the
-position just before your first slip and you play the move yourself. Only
-Stockfish's top choice is accepted; wrong tries are unlimited and each one updates
+position just before your first slip and you play the move yourself. The move you
+actually played there is named ("You played 2.Nf3 here — an inaccuracy") and drawn
+as a red arrow, so you know what not to play. Only Stockfish's top choice is
+accepted; wrong tries are unlimited and each one updates
 the eval bar so you can see what it would have cost. *Hint* circles the piece the
 answer moves (and says which, e.g. "Move your bishop on f1") without saying where
 it goes; the summary and the review history note that a hint was used. *Show

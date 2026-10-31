@@ -74,8 +74,9 @@ def test_a_due_card_is_the_slip_position_without_its_answer(client, fake_engine_
     assert card["move_number"] == 2
     assert card["last_move_uci"] == "e7e5"
     assert card["opponent"] == "rival"
-    blob = str(card)
-    assert "d2d4" not in blob and "g1f3" not in blob
+    assert "d2d4" not in str(card)
+    # What I played is shown while solving -- it is what not to play.
+    assert (card["my_move_uci"], card["move_label"]) == ("g1f3", "2.Nf3")
 
 
 def test_a_wrong_move_is_unlimited_and_evaluated(client, fake_engine_for_api):

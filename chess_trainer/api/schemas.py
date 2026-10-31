@@ -222,7 +222,11 @@ class PollResponse(BaseModel):
 
 # -- review --------------------------------------------------------------
 class ReviewTargetOut(BaseModel):
-    """The position to solve. The answer itself is deliberately not included."""
+    """The position to solve. The answer itself is deliberately not included.
+
+    The move I actually played here is: knowing what not to play helps, and
+    it gives nothing about the engine's move away.
+    """
 
     ply: int
     move_number: int
@@ -231,6 +235,9 @@ class ReviewTargetOut(BaseModel):
     replay_ucis: list[str]
     mover_is_white: bool
     orientation: str
+    my_move_uci: str
+    my_move_san: str
+    classification: str
 
 
 class ReviewMoveOut(BaseModel):
@@ -419,6 +426,9 @@ def _target_out(target: ReviewTarget, orientation: str) -> ReviewTargetOut:
         replay_ucis=list(target.replay_ucis),
         mover_is_white=target.mover_is_white,
         orientation=orientation,
+        my_move_uci=target.my_move_uci,
+        my_move_san=target.my_move_san,
+        classification=target.classification,
     )
 
 
@@ -793,6 +803,10 @@ class InaccuracyCardOut(BaseModel):
     last_move_uci: str | None = None
     move_number: int
     classification: str
+    #: What I played here in the game, shown while solving (not the answer).
+    my_move_uci: str
+    my_move_san: str
+    move_label: str
     source: str
     #: Where the slip came from, for the prompt.
     opponent: str | None = None

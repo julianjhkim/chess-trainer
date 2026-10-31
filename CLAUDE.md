@@ -130,8 +130,14 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   Why → Attempts. Side panel: Game → prompt → Moves.
 - **Move browsing** (`review/browse.py`, `frontend/js/move_nav.js`, `move_list.js`):
   ← / → step, Home/↑ and End/↓ jump, the move list is clickable. While the drill
-  is open the server sends only the moves *before* the slip (never my move or
-  anything after it) and the board accepts a move only at the live position.
+  is open the move list holds only the moves *before* the slip (nothing after
+  it) and the board accepts a move only at the live position.
+- **My game move is shown while solving** (review and inaccuracy cards): the
+  prompt says "You played 2.Nf3 here — a mistake." and the live position draws
+  it as a red arrow (a highlight/autoShape, with the hint circle, so clicks
+  don't erase it). `ReviewTargetOut` and `InaccuracyCardOut` carry
+  `my_move_uci/san` + classification; the engine's answer is still never sent
+  before the position is finished.
   Once finished (solved, revealed, or no inaccuracy) the whole game is sent; the
   engine's answer is an "aside" between the position before the slip and the
   move I played (← from it: green best + red mine arrows; →: my actual move).
