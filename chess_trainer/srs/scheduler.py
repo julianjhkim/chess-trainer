@@ -38,6 +38,8 @@ class AnswerOutcome:
     #: True when the card goes back into this session's queue.
     requeued: bool
     result: SchedulingResult | None = None
+    #: Moves tried, the correct one included.
+    attempts: int = 0
 
     @property
     def interval_days(self) -> int | None:
@@ -189,6 +191,7 @@ class CardQueue:
             was_new=was_new and not already_scheduled,
             requeued=requeued,
             result=result,
+            attempts=attempts,
         )
 
     # -- requeue bookkeeping ---------------------------------------------

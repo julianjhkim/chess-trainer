@@ -143,7 +143,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
     the engine's move.
   - **<5** (or no recorded continuation): not a card — show **"Max depth
     reached"** with that line's stats.
-- Tree is lazy: children are created when a card is first answered correctly
+- Tree is lazy: children are created when a card is first **passed** (q≥3)
   (from the cached record, no extra request); a position's explorer record is
   fetched only when the card is first served. Cache keyed by EPD (transpositions
   share a card). New cards arrive breadth-first. Lichess calls are throttled; a
@@ -157,8 +157,10 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - White always at the bottom, with a Flip board button.
 
 ### Scheduling — modified SM-2 (`srs/sm2.py`, `srs/grading.py`)
-- Automatic grading: right first try q=4, right after retry q=3, revealed q=1.
-  Pass is q≥3.
+- Automatic grading by attempts: right on the 1st try q=4, **2nd try q=3**,
+  **3rd try or later q=2 (a fail: halved interval, requeued, lapse)**, revealed
+  q=1. Pass is q≥3. Labels: "right first time", "right on the 2nd try",
+  "right after N wrong tries" (`AnswerOutcome.attempts`).
 - Pass: `n=0 → I=1`, `n=1 → I=6`, else `I=round(I×EF)`; `n += 1`.
 - **Fail: `I = max(1, round(I × 0.5))` and `n` is NOT reset** (`lapses` is
   tracked separately).

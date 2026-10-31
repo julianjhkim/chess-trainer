@@ -120,7 +120,7 @@ paste box appears. Either way, finishing hands straight over to step 3.
 
 **Step 4 — Opening cards.** Anki-style drills built from the Lichess masters
 database, grown lazily as you go. The first card is 1.e4; the tree expands only
-when you get a card right.
+when you pass a card (right on the first or second try).
 
 Each card runs the same way: the earlier moves of the line auto-play, then the
 branch move appears as an **arrow** for you to play — only that move is draggable.
@@ -337,7 +337,7 @@ connection is a use-after-free that segfaults the interpreter.
 The tree is never prebuilt. Two moments do the work, and only one of them can
 touch the network:
 
-* **Expansion**, when a card is first answered correctly. The card's own cached
+* **Expansion**, when a card is first passed. The card's own cached
   explorer record already says how often each branch move was played — and the
   number of games that played a move from a position is exactly the number that
   reached the position after it. So every child row, *including whether it is a
@@ -357,9 +357,20 @@ Requests are throttled, and an HTTP 429 waits 60 seconds and retries once.
 ### The SM-2 variant
 
 Per card: `n`, its position on the interval ladder, an ease factor `EF` (2.5 to
-start, floor 1.3) and an interval `I` in days. Grading is automatic — right first
-time is q=4, right after a retry is q=3, revealing the answer is q=1 — so only a
-reveal actually fails a card.
+start, floor 1.3) and an interval `I` in days. Grading is automatic, from the
+attempts:
+
+| Outcome | q | |
+|---|---|---|
+| right on the 1st try | 4 | pass |
+| right on the 2nd try | 3 | pass |
+| right on the 3rd try or later | 2 | fail |
+| answer revealed | 1 | fail |
+
+One wrong try is a stumble; two or more mean the card wasn't really known, so it
+fails like a reveal (with a gentler hit to its ease) and comes back later in the
+session. The result screen says which: "right on the 2nd try", "right after 3
+wrong tries".
 
 Passing gives `I = 1`, then `6`, then `round(I × EF)`, and `n += 1`; the ladder
 runs 1 → 6 → 15 → 38 → 95 days at the default ease. The interval is computed with

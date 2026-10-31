@@ -144,13 +144,24 @@ def test_a_first_try_pass_grades_four(conn):
     assert outcome.quality == 4
 
 
-def test_a_retry_pass_grades_three(conn):
+def test_a_second_try_pass_grades_three(conn):
+    card = make_card(conn, 1)
+    outcome = CardQueue().record_answer(
+        conn, card, attempts=2, used_show_answer=False, today=TODAY
+    )
+    assert outcome.quality == 3
+    assert outcome.passed
+
+
+def test_a_third_try_grades_two_and_fails(conn):
     card = make_card(conn, 1)
     outcome = CardQueue().record_answer(
         conn, card, attempts=3, used_show_answer=False, today=TODAY
     )
-    assert outcome.quality == 3
-    assert outcome.passed
+    assert outcome.quality == 2
+    assert not outcome.passed
+    assert outcome.requeued
+    assert outcome.attempts == 3
 
 
 def test_revealing_the_answer_fails_the_card(conn):

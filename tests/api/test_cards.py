@@ -168,6 +168,27 @@ def test_answering_a_finished_card_is_a_409(client):
 
 
 # -- grading -------------------------------------------------------------
+def test_a_second_try_still_passes(client):
+    start_cards(client)
+    client.post("/api/cards/attempt", json={"from": "a7", "to": "a6"})
+    grade = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()["grade"]
+    assert grade["quality"] == 3
+    assert grade["description"] == "right on the 2nd try"
+    assert grade["passed"]
+
+
+def test_a_third_try_fails_and_says_how_many_went_wrong(client):
+    start_cards(client)
+    client.post("/api/cards/attempt", json={"from": "a7", "to": "a6"})
+    client.post("/api/cards/attempt", json={"from": "h7", "to": "h6"})
+    grade = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()["grade"]
+    assert grade["quality"] == 2
+    assert grade["description"] == "right after 2 wrong tries"
+    assert not grade["passed"]
+    assert grade["requeued"]
+    assert grade["interval_days"] == 1
+
+
 def test_a_first_try_grades_four(client):
     start_cards(client)
     grade = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()["grade"]

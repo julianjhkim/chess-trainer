@@ -7,9 +7,13 @@ def test_right_first_time_is_four():
     assert grading.quality_for(attempts=1, used_show_answer=False) == 4
 
 
-def test_right_after_a_retry_is_three():
+def test_right_on_the_second_try_is_three():
     assert grading.quality_for(attempts=2, used_show_answer=False) == 3
-    assert grading.quality_for(attempts=9, used_show_answer=False) == 3
+
+
+def test_right_on_the_third_try_or_later_is_two():
+    assert grading.quality_for(attempts=3, used_show_answer=False) == 2
+    assert grading.quality_for(attempts=9, used_show_answer=False) == 2
 
 
 def test_a_revealed_answer_is_one():
@@ -36,9 +40,13 @@ def test_failing_grades():
     assert not grading.is_pass(0)
 
 
-def test_a_retry_is_still_a_pass():
-    """Only revealing the answer fails a card."""
-    assert grading.is_pass(grading.quality_for(attempts=4, used_show_answer=False))
+def test_one_wrong_try_is_still_a_pass():
+    assert grading.is_pass(grading.quality_for(attempts=2, used_show_answer=False))
+
+
+def test_two_or_more_wrong_tries_fail_the_card():
+    assert not grading.is_pass(grading.quality_for(attempts=3, used_show_answer=False))
+    assert not grading.is_pass(grading.quality_for(attempts=4, used_show_answer=False))
 
 
 def test_revealing_fails_the_card():
@@ -49,6 +57,11 @@ def test_revealing_fails_the_card():
 
 def test_descriptions_are_readable():
     assert grading.describe(4) == "right first time"
-    assert grading.describe(3) == "right after a retry"
+    assert grading.describe(3) == "right on the 2nd try"
     assert grading.describe(1) == "answer revealed"
     assert "2" in grading.describe(2)
+
+
+def test_a_fail_after_retries_counts_the_wrong_tries():
+    assert grading.describe(2, attempts=4) == "right after 3 wrong tries"
+    assert grading.describe(2, attempts=3) == "right after 2 wrong tries"

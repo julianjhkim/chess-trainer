@@ -706,7 +706,7 @@ class CardGradeOut(BaseModel):
 
         return cls(
             quality=outcome.quality,
-            description=grading.describe(outcome.quality),
+            description=grading.describe(outcome.quality, outcome.attempts),
             passed=outcome.passed,
             was_new=outcome.was_new,
             rescheduled=outcome.rescheduled,
