@@ -8,11 +8,21 @@
   --border: #33333f;
   --text: #e8e8ef;
   --muted: #9a9aab;
-  --accent: #7aa2f7;
+  --accent: #9db8f0;
   --accent-dim: #3b4d78;
-  --good: #7fbf6a;
-  --warn: #e0af68;
-  --bad: #e06c75;
+  --good: #93c98c;
+  --warn: #e3bd84;
+  --bad: #e58b92;
+  /* Soft, pastel fills for anything painted solid (the current step, primary
+     buttons, badges), each with the text colour that sits on it. */
+  --accent-fill: #4a5d8c;
+  --on-accent: #eef2ff;
+  --good-fill: #45664a;
+  --on-good: #e6f6e3;
+  --warn-fill: #6e5c38;
+  --on-warn: #fff3dc;
+  --bad-fill: #7c4249;
+  --on-bad: #ffe8ea;
   --white-eval: #f2f2f5;
   --black-eval: #3a3a46;
   /* Win / draw / loss bar in the stats table: three clearly separate steps,
@@ -33,8 +43,19 @@
     --border: #d6d6e0;
     --text: #1b1b22;
     --muted: #63636f;
-    --accent: #3056a8;
-    --accent-dim: #b9c8ea;
+    --accent: #4a6db3;
+    --accent-dim: #d3def5;
+    --good: #4f9a5c;
+    --warn: #b9862f;
+    --bad: #c4525c;
+    --accent-fill: #cddcf7;
+    --on-accent: #1f3567;
+    --good-fill: #d3ecd3;
+    --on-good: #23502c;
+    --warn-fill: #f6e3bd;
+    --on-warn: #5a4212;
+    --bad-fill: #f6d0d4;
+    --on-bad: #7a1f2a;
     --white-eval: #ffffff;
     --black-eval: #4a4a58;
     --wdl-white: #ffffff;
@@ -93,7 +114,7 @@ body {
   white-space: nowrap;
 }
 .step:hover { border-color: var(--accent-dim); color: var(--text); }
-.step.current { background: var(--accent); border-color: var(--accent); color: #11131a; font-weight: 600; }
+.step.current { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent); font-weight: 600; }
 .step.completed:not(.current) { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
 .step.disabled { opacity: .5; }
 .step-num {
@@ -210,19 +231,31 @@ button {
 button:hover:not(:disabled) { border-color: var(--accent-dim); }
 button:disabled { opacity: .5; cursor: default; }
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #11131a;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
   font-weight: 600;
 }
-button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.primary:hover:not(:disabled) { filter: brightness(1.05); border-color: var(--accent); }
 button.danger {
-  background: var(--bad);
-  border-color: var(--bad);
-  color: #11131a;
+  background: var(--bad-fill);
+  border-color: var(--bad-fill);
+  color: var(--on-bad);
   font-weight: 600;
 }
-button.danger:hover:not(:disabled) { filter: brightness(1.08); }
+button.danger:hover:not(:disabled) { filter: brightness(1.05); border-color: var(--bad); }
+/* A link that sits in a row of buttons and looks like one. */
+a.button-link {
+  display: inline-block;
+  font: inherit;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  text-decoration: none;
+}
+a.button-link:hover { border-color: var(--accent-dim); }
 button.subtle-danger { color: var(--bad); }
 button.subtle-danger:hover:not(:disabled) { border-color: var(--bad); }
 .delete-question { flex-basis: 100%; color: var(--bad); }
@@ -547,7 +580,7 @@ button.subtle-danger:hover:not(:disabled) { border-color: var(--bad); }
   border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
   font-variant-numeric: tabular-nums;
 }
-.stats-table tr.stats-answer { background: color-mix(in srgb, var(--good) 14%, transparent); }
+.stats-table tr.stats-answer { background: color-mix(in srgb, var(--good-fill) 45%, transparent); }
 .stats-table tr.stats-answer td { font-weight: 600; }
 .stats-move { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
@@ -559,10 +592,10 @@ button.subtle-danger:hover:not(:disabled) { border-color: var(--bad); }
   padding: 1px 5px;
   border-radius: 4px;
 }
-.badge-answer { background: var(--good); color: #0f1a0c; }
+.badge-answer { background: var(--good-fill); color: var(--on-good); }
 .badge-played { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
-.badge-engine { background: var(--accent); color: #11131a; }
-.badge-tied   { background: var(--warn); color: #241a05; }
+.badge-engine { background: var(--accent-fill); color: var(--on-accent); }
+.badge-tied   { background: var(--warn-fill); color: var(--on-warn); }
 
 .wdl-bar {
   display: inline-flex;

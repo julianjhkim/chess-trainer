@@ -21,6 +21,7 @@ import * as api from './api.js';
 import { sleep } from './animate.js';
 import { createBoard } from './board.js';
 import { createEvalBar } from './evalbar.js';
+import { lichessButton } from './lichess_button.js';
 import { createMoveList } from './move_list.js';
 import { bindArrowKeys, createMoveNav } from './move_nav.js';
 import { set, setStatus, withStatus } from './state.js';
@@ -334,18 +335,6 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (grade.ef != null) addRow(list, 'Ease', grade.ef.toFixed(2));
     if (grade.requeued) addRow(list, 'Again', 'later this session');
     body.append(list);
-    if (shown.lichess_url) {
-      const link = document.createElement('a');
-      link.className = 'lichess-link';
-      link.href = shown.lichess_url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = 'Analyse at Lichess ↗';
-      const linkLine = document.createElement('p');
-      linkLine.style.margin = '0 0 10px';
-      linkLine.append(link);
-      body.append(linkLine);
-    }
     if (shown.moves?.length) {
       body.append(
         paragraph('← → step through the whole game. The engine’s move sits between the position and the move you played.', 'choice-note'),
@@ -390,6 +379,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     }
     if (phase === 'finished') {
       controls.append(button('Next card', serveNext, 'primary'));
+      if (result?.lichess_url) controls.append(lichessButton(result.lichess_url));
     }
     if (phase === 'solving' || phase === 'finished') {
       controls.append(button('Flip board', () => board?.flip()));

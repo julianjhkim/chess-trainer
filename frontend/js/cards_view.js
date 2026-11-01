@@ -18,6 +18,7 @@ import { createReplay, replayDelayFor, sleep } from './animate.js';
 import * as arrows from './arrows.js';
 import { createBoard } from './board.js';
 import { createEvalBar } from './evalbar.js';
+import { lichessButton } from './lichess_button.js';
 import { set, setStatus, withStatus } from './state.js';
 import { renderStatsTable } from './stats_table.js';
 
@@ -361,21 +362,6 @@ export function renderCardsView(container, { step, onCompleted }) {
       body.append(opening);
     }
 
-    // Trying moves of your own is left to Lichess: the line opens there at
-    // this position, with the answer one move on.
-    if (response.lichess_url) {
-      const link = document.createElement('a');
-      link.className = 'lichess-link';
-      link.href = response.lichess_url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = 'Analyse at Lichess ↗';
-      const line = document.createElement('p');
-      line.style.margin = '0 0 10px';
-      line.append(link);
-      body.append(line);
-    }
-
     body.append(renderStatsTable(response.stats));
 
     for (const dead of response.dead_ends ?? []) {
@@ -385,9 +371,14 @@ export function renderCardsView(container, { step, onCompleted }) {
     promptCard.setBody(body);
     resultCard.root.hidden = true;
 
+    // Trying moves of your own is left to Lichess: the line opens there at
+    // this position, with the answer one move on.
     controls.replaceChildren(
-      button('Next card', serveNext, 'primary'),
-      button('Flip board', () => board?.flip()),
+      ...[
+        button('Next card', serveNext, 'primary'),
+        response.lichess_url ? lichessButton(response.lichess_url) : null,
+        button('Flip board', () => board?.flip()),
+      ].filter(Boolean),
     );
   }
 

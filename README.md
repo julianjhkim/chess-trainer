@@ -100,7 +100,7 @@ card back to the next day. *Delete card* (it asks first) takes a card out of the
 deck; making that card again restores it. With nothing due the step says so; an
 empty deck never counts towards the streak.
 
-Once a card is answered, **Analyse at Lichess ↗** opens the game on the Lichess
+Once a card is answered, **Analyse at Lichess ↗** (next to *Next card*) opens the game on the Lichess
 analysis board at the card's position, from your side, for trying moves of your
 own — something this app deliberately leaves to Lichess. The link carries only
 the moves (no names), in the URL itself; nothing is sent to Lichess unless you
@@ -117,9 +117,10 @@ Playing it reveals the **opening name**, and then you have to find the answer mo
 with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
 answer* gives up. Afterwards you get the **stats table**: every master move with
 its share, game count, white/draw/black split and average rating, with the answer,
-the most played move and Stockfish's own choice all marked. Above it, **Analyse at
-Lichess ↗** opens the line on the Lichess analysis board at the card's position
-(White at the bottom), with the answer one move on — press → there to see it.
+the most played move and Stockfish's own choice all marked. Next to *Next card*,
+**Analyse at Lichess ↗** opens that opening line (not one of your games) on the
+Lichess analysis board at the card's position, White at the bottom, with the answer
+one move on — press → there to see it.
 
 On a frequency card the question also says whether the most played move is the
 one Stockfish would play:

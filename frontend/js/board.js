@@ -12,6 +12,17 @@ import * as api from './api.js';
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 /**
+ * Arrow and circle colours: chessground's defaults, softened to match the
+ * app's pastel palette while staying clear on both square colours.
+ */
+const BRUSHES = {
+  green: { key: 'g', color: '#4f9d5f', opacity: 0.78, lineWidth: 10 },
+  red: { key: 'r', color: '#d0575f', opacity: 0.78, lineWidth: 10 },
+  blue: { key: 'b', color: '#5a84cf', opacity: 0.78, lineWidth: 10 },
+  yellow: { key: 'y', color: '#e2b23f', opacity: 0.8, lineWidth: 10 },
+};
+
+/**
  * Every live board, newest last.
  *
  * `app.js` hands this to `window.chessTrainer` so a board can be inspected
@@ -49,7 +60,7 @@ export function createBoard({
     highlight: { lastMove: true, check: true },
     movable: { free: false, color: undefined, dests: new Map(), showDests: true },
     draggable: { enabled: interactive, showGhost: true },
-    drawable: { enabled: true, visible: true },
+    drawable: { enabled: true, visible: true, brushes: BRUSHES },
     events: { move: handleUserMove },
   });
 

@@ -152,7 +152,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   Once answered the whole game is browsable (`InaccuracyResultOut.moves/ply`):
   the board sits on the answer as a nav "aside"; ← from it = slip position with
   green answer + red mine arrows.
-- **Analyse at Lichess ↗** (`InaccuracyResultOut.lichess_url`): only once the
+- **Analyse at Lichess ↗** (`InaccuracyResultOut.lichess_url`; a button right
+  of Next card, `lichess_button.js`): only once the
   card is answered (never while solving — Lichess's engine would give it away),
   opened at the card's position, my colour at the bottom.
 - **Delete card** (`DELETE /api/inaccuracy-cards/{id}`), while solving or after
@@ -180,7 +181,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - Card flow: earlier moves auto-play → branch move shown as an arrow (only it is
   draggable) → opening name revealed → find the answer with no arrow → stats
   table (answer, most played, Stockfish's choice marked) and **Analyse at
-  Lichess ↗** (`lichess_url` on the attempt/show-answer response, only once
+  Lichess ↗** as a button right of Next card (`lichess_url` on the attempt/show-answer response, only once
   finished): `/analysis/pgn/<line + answer>?color=white#<line length>`, i.e. the
   card's position with the answer one move on (`pgn/lichess_link.py`, shared
   with revision cards).
@@ -231,6 +232,14 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   (force-push) without explicit approval.
 - License **GPL-3.0-or-later** (forced by vendored chessground). Keep it on new files/metadata.
 - Update README.md as well when behaviour changes.
+
+## Look and feel
+
+- Colours are tokens in `frontend/css/app.css` for both themes. Anything painted
+  solid (current step, primary/danger buttons, badges) uses the soft pastel
+  `--*-fill` tokens with their `--on-*` text colour — the user found the
+  saturated blue and green too strong. Board arrows use the softened
+  chessground brushes in `board.js` (`BRUSHES`).
 
 ## Known gotchas
 

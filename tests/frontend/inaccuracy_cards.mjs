@@ -167,6 +167,10 @@ async function testOneCard(page, base) {
   check('Analyse at Lichess appears once answered', (await lichess.count()) === 1 && (await lichess.innerText()).includes('Analyse at Lichess'));
   check('it opens the game at the card position, my side down', (await lichess.getAttribute('href')).endsWith('?color=white#2'));
   check('in a new tab', (await lichess.getAttribute('target')) === '_blank');
+  check('it sits right after Next card', await page.evaluate(() => {
+    const link = document.querySelector('a.lichess-link');
+    return link?.previousElementSibling?.textContent === 'Next card';
+  }));
   check('the whole game is listed now', (await page.innerText('.move-list')).includes('Bb5'));
   await page.keyboard.press('ArrowLeft');
   await waitFor(page, 'the slip position with arrows', (fen) => {

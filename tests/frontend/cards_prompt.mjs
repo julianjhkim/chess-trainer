@@ -200,6 +200,10 @@ async function testTheTableMarksBothMoves(page, base) {
   check('Analyse at Lichess appears once answered', (await lichess.count()) === 1 && (await lichess.innerText()).includes('Analyse at Lichess'));
   check('it opens the line at the card position, White at the bottom', (await lichess.getAttribute('href')).endsWith('?color=white#1'));
   check('in a new tab', (await lichess.getAttribute('target')) === '_blank');
+  check('it sits right after Next card', await page.evaluate(() => {
+    const link = document.querySelector('a.lichess-link');
+    return link?.previousElementSibling?.textContent === 'Next card';
+  }));
 }
 
 const quote = (text) => JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 120));
