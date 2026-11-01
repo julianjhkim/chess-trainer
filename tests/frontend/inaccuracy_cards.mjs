@@ -89,12 +89,12 @@ async function testEmptyDeck(page, base) {
   await open(page, base, 'empty');
   await waitForText(page, 'No revision cards yet.');
   const text = await page.innerText('.side-panel');
-  check('it says how cards are made', text.includes('paste its PGN and give the number of the move you got wrong'));
-  check('the step is first on the bar', (await page.innerText('.step.current')).includes('Revision cards'));
+  check('it points to step 1 for making cards', text.includes('Make one in step 1'));
+  check('there is no card-making button here', (await page.locator('button:text-is("Make a card"), button:text-is("New card")').count()) === 0);
+  check('the step is current on the bar', (await page.innerText('.step.current')).includes('Revision cards'));
   await page.click('button:text-is("Continue to Opening cards")');
   await waitFor(page, 'the opening cards', () => document.querySelector('.step.current')?.textContent.includes('Opening cards'));
   check('Continue moves on to Opening cards', (await page.innerText('.step.current')).includes('Opening cards'));
-  check('there are only two steps', (await page.locator('.step').count()) === 2);
 }
 
 async function testCaughtUp(page, base) {
@@ -190,11 +190,12 @@ async function testOneCard(page, base) {
 const PGN = '[White "test-player"]\n[Black "test-opponent"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *';
 
 async function testMakeCard(page, base) {
-  console.log('\nMaking a card');
-  await open(page, base, 'empty');
-  await waitForText(page, 'No revision cards yet.');
-  await page.click('button:text-is("Make a card")');
+  console.log('\nMaking a card (step 1)');
+  await page.request.post(`${base}/__scenario`, { data: { step: 'make_card', inaccuracy: 'empty' } });
+  await page.goto(base, { waitUntil: 'load' });
   await waitForText(page, 'type the number of the move you got wrong');
+  check('it is the first step', (await page.innerText('.step.current')).includes('Make a revision card'));
+  check('three steps on the bar', (await page.locator('.step').count()) === 3);
 
   await page.fill('textarea[aria-label="PGN"]', PGN);
   await page.fill('input[aria-label="Move number"]', '9');
@@ -207,7 +208,7 @@ async function testMakeCard(page, base) {
   await page.keyboard.press('Enter');
   await waitForText(page, 'You played 2.Nf3 here.');
   await waitFor(page, 'the slip position', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, POSITION);
-  let state = await board(page);
+  const state = await board(page);
   check('the board shows the position before the move', state.fen === POSITION);
   check('with the move I played as a red arrow', state.highlights.join() === 'red:g1f3', state.highlights.join());
   check('and the moves before it listed', (await page.innerText('.move-list')).replace(/\s+/g, ' ').includes('1. e4 e5'));
@@ -220,12 +221,14 @@ async function testMakeCard(page, base) {
   await page.click('button:text-is("Save card")');
   await waitForText(page, 'Card saved for 2.Nf3 — first due 2026-11-03.');
   check('saving says when it is due', true);
-  check('the deck grows', /In the deck\s*1/.test(await page.innerText('.side-panel')));
   check('the answer is never shown', !(await page.innerText('body')).includes('Bc4'));
+  check('the first card completes the step', await page.evaluate(() =>
+    window.chessTrainer.state().session?.steps.find((s) => s.step === 'make_card')?.completed === true));
+  check('the form stays, for another card', await page.isVisible('textarea[aria-label="PGN"]'));
 
-  await page.click('button:text-is("Back to cards")');
-  await waitForText(page, 'All caught up — no revision cards due.');
-  check('Back to cards goes back to the deck', true);
+  await page.click('button:text-is("Continue to Revision cards")');
+  await waitFor(page, 'the revision cards', () => document.querySelector('.step.current')?.textContent.includes('Revision cards'));
+  check('Continue goes on to Revision cards', (await page.innerText('.step.current')).includes('Revision cards'));
 }
 
 // -- deleting --------------------------------------------------------------------

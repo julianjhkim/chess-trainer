@@ -389,6 +389,8 @@ button.subtle-danger:hover:not(:disabled) { border-color: var(--bad); }
 /* ---------- links in cards ---------- */
 /* Review: the game score, stepped through with the arrow keys. */
 .nav-row { justify-content: center; }
+/* `.button-row` sets display, which would otherwise beat the hidden attribute. */
+.nav-row[hidden] { display: none; }
 .nav-row button { min-width: 44px; padding-left: 0; padding-right: 0; }
 .move-list {
   position: relative;          /* move offsets are measured from the list */

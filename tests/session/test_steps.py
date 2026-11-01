@@ -14,16 +14,17 @@ from chess_trainer.session.steps import (
 )
 
 
-def test_there_are_two_steps_in_spec_order():
-    assert ORDER == (Step.INACCURACY_CARDS, Step.CARDS)
+def test_there_are_three_steps_in_spec_order():
+    assert ORDER == (Step.MAKE_CARD, Step.INACCURACY_CARDS, Step.CARDS)
 
 
 def test_positions_are_one_based():
-    assert [s.position for s in ORDER] == [1, 2]
+    assert [s.position for s in ORDER] == [1, 2, 3]
 
 
 def test_every_step_has_a_title():
     assert all(s.title for s in ORDER)
+    assert Step.MAKE_CARD.title == "Make a revision card"
     assert Step.INACCURACY_CARDS.title == "Revision cards"
 
 

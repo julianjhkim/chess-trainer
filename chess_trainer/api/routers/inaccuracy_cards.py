@@ -389,13 +389,21 @@ async def create(
         previous=earlier[-1] if earlier else None,
     )
     added = deck_module.add_card(conn, card, today=_today(config))
-    return NewCardOut(
+    response = NewCardOut(
         move_label=added.card.move_label,
         due_on=added.due_on.isoformat(),
         created=added.created,
         restored=added.restored,
         counts=_counts(state, conn, config),
     )
+    # Making a card completes the "Make a revision card" step (and counts the
+    # day), but the step stays on screen so more cards can be made.
+    if Step.MAKE_CARD not in state.flow.completed:
+        state.flow.mark_completed(Step.MAKE_CARD)
+        streak = tracker.record_step(conn, tz_name=config.timezone)
+        response.session = SessionOut.of(state.flow)
+        response.streak = StreakOut.of(streak)
+    return response
 
 
 @router.delete("/{card_id}", response_model=InaccuracyCountsOut)

@@ -8,6 +8,7 @@
 
 import { renderCardsView } from './cards_view.js';
 import { renderInaccuracyCardsView } from './inaccuracy_cards_view.js';
+import { renderMakeCardView } from './make_card_view.js';
 import { renderStartScreen } from './start_screen.js';
 
 export function createRouter(container, { onStarted, onCompleted }) {
@@ -47,6 +48,8 @@ function renderStep(container, { step, onCompleted }) {
   };
 
   switch (step.step) {
+    case 'make_card':
+      return renderMakeCardView(container, { step, onCompleted: handleCompleted });
     case 'inaccuracy_cards':
       return renderInaccuracyCardsView(container, { step, onCompleted: handleCompleted });
     case 'cards':

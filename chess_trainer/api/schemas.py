@@ -557,3 +557,6 @@ class NewCardOut(BaseModel):
     created: bool
     restored: bool = False
     counts: InaccuracyCountsOut
+    #: Set on the first card made in a session, which completes the step.
+    session: SessionOut | None = None
+    streak: StreakOut | None = None

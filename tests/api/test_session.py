@@ -9,15 +9,15 @@ def test_session_starts_unstarted(client):
 
 def test_session_always_lists_every_step(client):
     steps = client.get("/api/session").json()["steps"]
-    assert [s["step"] for s in steps] == ["inaccuracy_cards", "cards"]
-    assert [s["title"] for s in steps] == ["Revision cards", "Opening cards"]
+    assert [s["step"] for s in steps] == ["make_card", "inaccuracy_cards", "cards"]
+    assert [s["title"] for s in steps] == ["Make a revision card", "Revision cards", "Opening cards"]
     assert all(s["enabled"] for s in steps)
 
 
 def test_starting_without_a_body_selects_everything(client):
     payload = client.post("/api/session/start", json={}).json()
     assert payload["started"] is True
-    assert payload["current"] == "inaccuracy_cards"
+    assert payload["current"] == "make_card"
 
 
 def test_starting_with_a_subset(client):
@@ -35,8 +35,8 @@ def test_starting_rejects_an_unknown_step(client):
 
 def test_completing_a_step_advances(client):
     client.post("/api/session/start", json={})
-    payload = client.post("/api/session/complete/inaccuracy_cards").json()
-    assert payload["session"]["current"] == "cards"
+    payload = client.post("/api/session/complete/make_card").json()
+    assert payload["session"]["current"] == "inaccuracy_cards"
 
 
 def test_completing_a_step_counts_towards_the_streak(client):

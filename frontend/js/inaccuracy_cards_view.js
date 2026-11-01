@@ -1,14 +1,8 @@
 /**
- * Revision cards (step 1; internally "inaccuracy cards"): slips I picked from
- * my own games, drilled again.
+ * Revision cards (step 2; internally "inaccuracy cards"): slips I picked from
+ * my own games, drilled again. Cards are made in step 1 (`make_card_view.js`).
  *
- * Making a card: paste a game's PGN and type the number of my move that went
- * wrong ("9" for my ninth move, White or Black). The board shows the position
- * before it with that move as a red arrow, and the moves leading there can be
- * stepped through; *Save card* asks Stockfish for the answer (never shown) and
- * schedules the card for the next day.
- *
- * Drilling: each card is the position before the slip, from my side of the
+ * Each card is the position before the slip, from my side of the
  * board, with my move drawn as a red arrow. Find the engine's move: retries
  * are unlimited and the eval bar updates on each; *Hint* circles the piece to
  * move (which caps the grade at "right with a hint"); *Show answer* fails the
@@ -19,8 +13,8 @@
  * board at the card's position -- the app has no board of its own for trying
  * moves. *Delete card* (after an inline confirm) takes a card out of the deck.
  *
- * With nothing due -- including before any card has been made -- it says so,
- * offers to make a card, and to go on to the next step.
+ * With nothing due -- including before any card has been made -- it says so
+ * and offers to go on to the next step.
  */
 
 import * as api from './api.js';
@@ -50,11 +44,8 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
   let result = null;
   let counts = null;
   let hint = null;
-  let phase = 'loading'; // loading | solving | finished | empty | creating
+  let phase = 'loading'; // loading | solving | finished | empty
   let confirmingDelete = false;
-  /** While making a card: what was typed, and the position it gave. */
-  const draft = { pgn: '', moveNumber: '', colour: '' };
-  let preview = null;
   const attemptLog = [];
 
   // -- layout ------------------------------------------------------------
@@ -115,14 +106,12 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     card = null;
     result = null;
     hint = null;
-    preview = null;
     confirmingDelete = false;
     attemptLog.length = 0;
     renderAttempts();
     hideNav();
     resultCard.root.hidden = true;
     controls.replaceChildren();
-    promptCard.setTitle(step.title);
     promptCard.setBody(paragraph('Finding your next card…', 'choice-note'));
 
     let state;
@@ -173,7 +162,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       body.append(
         paragraph('No revision cards yet.', 'empty-headline'),
         paragraph(
-          'Make one from a game: paste its PGN and give the number of the move you got wrong.',
+          'Make one in step 1, “Make a revision card”: paste a game and give the number of the move you got wrong.',
           'choice-note',
         ),
       );
@@ -190,7 +179,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     }
     const row = document.createElement('div');
     row.className = 'button-row';
-    row.append(button('Make a card', startCreating), button('Continue to Opening cards', moveOn, 'primary'));
+    row.append(button('Continue to Opening cards', moveOn, 'primary'));
     body.append(row);
     promptCard.setBody(body);
     buildControls();
@@ -308,178 +297,14 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (phase !== 'empty') setStatus(`Deleted the card for ${label}. Your move.`);
   }
 
-  // -- making a card -----------------------------------------------------
-  function startCreating() {
-    phase = 'creating';
-    card = null;
-    result = null;
-    preview = null;
-    confirmingDelete = false;
-    attemptLog.length = 0;
-    renderAttempts();
-    resultCard.root.hidden = true;
-    hideNav();
-    const fresh = ensureBoard();
-    fresh.setInteractive(false);
-    fresh.setShapes([]);
-    fresh.setHighlights([]);
-    promptCard.setTitle('New card');
-    renderCreateForm();
-    buildControls();
-    setStatus('Paste a game and give the move you got wrong.');
-  }
-
-  function renderCreateForm({ error = null, saved = null } = {}) {
-    const body = document.createElement('div');
-    body.className = 'new-card';
-
-    if (saved) body.append(paragraph(savedText(saved), 'card-added'));
-
-    body.append(
-      paragraph(
-        'Paste the game, then type the number of the move you got wrong — "9" for your 9th move, as White or Black.',
-        'choice-note',
-      ),
-    );
-    const textarea = document.createElement('textarea');
-    textarea.rows = 6;
-    textarea.spellcheck = false;
-    textarea.placeholder = '[White "..."]\n[Black "..."]\n\n1. e4 e5 2. Nf3 ...';
-    textarea.value = draft.pgn;
-    textarea.setAttribute('aria-label', 'PGN');
-    textarea.addEventListener('input', () => {
-      draft.pgn = textarea.value;
-    });
-
-    const fields = document.createElement('div');
-    fields.className = 'new-card-fields';
-    const numberLabel = document.createElement('label');
-    numberLabel.append('Your move number');
-    const number = document.createElement('input');
-    number.type = 'number';
-    number.min = '1';
-    number.value = draft.moveNumber;
-    number.setAttribute('aria-label', 'Move number');
-    number.addEventListener('input', () => {
-      draft.moveNumber = number.value;
-    });
-    number.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') void runPreview();
-    });
-    numberLabel.append(number);
-
-    const colourLabel = document.createElement('label');
-    colourLabel.append('You played');
-    const colour = document.createElement('select');
-    colour.setAttribute('aria-label', 'Your colour');
-    for (const [value, text] of [['', 'Auto (from the PGN)'], ['white', 'White'], ['black', 'Black']]) {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = text;
-      colour.append(option);
-    }
-    colour.value = draft.colour;
-    colour.addEventListener('change', () => {
-      draft.colour = colour.value;
-    });
-    colourLabel.append(colour);
-    fields.append(numberLabel, colourLabel);
-
-    const row = document.createElement('div');
-    row.className = 'button-row';
-    row.append(button('Show position', runPreview, preview ? '' : 'primary'));
-    body.append(textarea, fields, row);
-
-    if (error) body.append(paragraph(error, 'paste-error'));
-    if (preview) body.append(previewNote(preview));
-    promptCard.setBody(body);
-  }
-
-  function request() {
-    return {
-      pgn: draft.pgn,
-      move_number: Number.parseInt(draft.moveNumber, 10),
-      colour: draft.colour || null,
-    };
-  }
-
-  async function runPreview() {
-    if (phase !== 'creating') return;
-    const payload = request();
-    if (!draft.pgn.trim()) return renderCreateForm({ error: 'Paste a game first.' });
-    if (!(payload.move_number >= 1)) return renderCreateForm({ error: 'Type the number of your move.' });
-    try {
-      preview = await withStatus('Finding the position…', () => api.previewInaccuracyCard(payload));
-    } catch (error) {
-      preview = null;
-      hideNav();
-      board?.setHighlights([]);
-      buildControls();
-      renderCreateForm({ error: error.message });
-      setStatus(error.message, 'error');
-      return;
-    }
-    if (destroyed || phase !== 'creating') return;
-    board.setOrientation(preview.colour);
-    renderCreateForm();
-    buildControls();
-    showNav(preview.moves, { index: preview.moves.length });
-    setStatus(`You played ${preview.move_label} here — the red arrow. Save the card to drill it.`);
-  }
-
-  async function saveCard() {
-    if (phase !== 'creating' || !preview) return;
-    const made = await withStatus('Asking Stockfish for the answer…', () =>
-      api.createInaccuracyCard(request()),
-    );
-    counts = made.counts;
-    renderDeck();
-    preview = null;
-    draft.moveNumber = '';
-    hideNav();
-    board?.setHighlights([]);
-    buildControls();
-    renderCreateForm({ saved: made });
-    setStatus(savedText(made));
-  }
-
-  function savedText(made) {
-    if (made.restored) return `Restored the card for ${made.move_label} you had deleted — due ${made.due_on}.`;
-    if (!made.created) return `You already had a card for ${made.move_label} — it is now due ${made.due_on}.`;
-    return `Card saved for ${made.move_label} — first due ${made.due_on}.`;
-  }
-
-  function previewNote(shown) {
-    const box = document.createElement('div');
-    const side = shown.colour === 'white' ? 'White' : 'Black';
-    box.append(
-      playedLine(shown.move_label, null),
-      paragraph(
-        `You had ${side}${shown.opponent ? ` against ${shown.opponent}` : ''}. ← → step through the moves before it.`,
-        'choice-note',
-      ),
-    );
-    if (shown.existing === 'active') {
-      box.append(paragraph('You already have a card for this position: saving brings it back to tomorrow.', 'choice-note'));
-    } else if (shown.existing === 'deleted') {
-      box.append(paragraph('You deleted a card for this position before: saving restores it.', 'choice-note'));
-    }
-    return box;
-  }
-
   // -- panels ------------------------------------------------------------
   function renderDeck() {
-    const body = document.createElement('div');
     const list = document.createElement('dl');
     list.className = 'kv';
     addRow(list, 'Due', String(counts?.due ?? 0));
     if (counts?.relearning) addRow(list, 'Again today', String(counts.relearning));
     addRow(list, 'In the deck', String(counts?.total ?? 0));
-    const row = document.createElement('div');
-    row.className = 'button-row';
-    row.append(button('New card', startCreating));
-    body.append(list, row);
-    deckCard.setBody(body);
+    deckCard.setBody(list);
   }
 
   function renderPrompt() {
@@ -585,11 +410,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (phase === 'finished') {
       controls.append(button('Next card', serveNext, 'primary'));
     }
-    if (phase === 'creating') {
-      if (preview) controls.append(button('Save card', saveCard, 'primary'));
-      controls.append(button('Back to cards', serveNext));
-    }
-    if (phase === 'solving' || phase === 'finished' || phase === 'creating') {
+    if (phase === 'solving' || phase === 'finished') {
       controls.append(button('Flip board', () => board?.flip()));
     }
     if (phase === 'solving' || phase === 'finished') {
@@ -637,22 +458,17 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       .catch((error) => setStatus(error.message, 'error'));
   }
 
-  /** The position the card (or the preview) is about. */
-  function slipFen() {
-    return card?.fen ?? preview?.fen ?? null;
-  }
-
-  /** The slip position, while solving (where a move is asked for) or previewing. */
+  /** The slip position while solving, where a move is asked for. */
   function isLive(view) {
-    return !view.aside && view.index === nav.length && (phase === 'solving' || phase === 'creating');
+    return !view.aside && view.index === nav.length && phase === 'solving';
   }
 
   async function drawView(view) {
     if (!board || destroyed) return;
     const live = isLive(view);
-    const fen = live ? slipFen() : (view.fen ?? slipFen());
+    const fen = live ? card?.fen : (view.fen ?? card?.fen);
     if (!fen) return;
-    const lastMove = live ? (card?.last_move_uci ?? preview?.last_move_uci) : view.lastMove;
+    const lastMove = live ? card?.last_move_uci : view.lastMove;
 
     board.setInteractive(false);
     // Marks belong to one position: clear them before the board moves.
@@ -686,11 +502,10 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
   }
 
   /**
-   * At the slip position: the move played in the game (red, what not to play)
+   * While solving: the move played in the game (red, what not to play)
    * and the hint's circle, as highlights a click on the board does not wipe.
    */
   function hintShapes() {
-    if (phase === 'creating' && preview) return [arrow(preview.my_move_uci, 'red')];
     if (phase !== 'solving' || !card) return [];
     const marks = [arrow(card.my_move_uci, 'red')];
     if (hint) marks.push({ orig: hint.square, brush: 'yellow' });
@@ -762,9 +577,6 @@ function card_(title, onChange) {
   root.append(heading, body);
   return {
     root,
-    setTitle(text) {
-      heading.textContent = text;
-    },
     setBody(node) {
       body.replaceChildren(node);
       if (onChange) onChange();

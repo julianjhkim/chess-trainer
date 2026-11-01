@@ -7,7 +7,8 @@ Runs entirely on `localhost`. Stockfish does the analysis, the Lichess masters
 database supplies the opening lines, and all frontend libraries are vendored into
 the repo so the app works offline.
 
-**Status: complete** — both steps work: revision cards and opening cards. (Playing
+**Status: complete** — all three steps work: making revision cards, drilling them,
+and opening cards. (Playing
 and reviewing a game used to be steps too; they were removed — review your games on
 chess.com or Lichess, and make cards from the slips worth drilling.)
 
@@ -68,9 +69,8 @@ The start screen has one button per step: click the one you want and the session
 starts there. When a step is done the next one follows, and the step bar jumps
 anywhere at any time.
 
-**Step 1 — Revision cards.** A warm-up on slips from your own games before you
-play. You make the cards yourself: *New card* (or *Make a card* on an empty deck),
-paste a game's PGN and type the number of the move you got wrong — "9" for your
+**Step 1 — Make a revision card.** Pick the slips worth drilling from your own
+games: paste a game's PGN and type the number of the move you got wrong — "9" for your
 ninth move, whether you were White or Black. Your side is read from your chess.com
 name in the PGN; if it isn't there, pick White or Black. *Show position* puts the
 board on the position before that move, with the move you played as a red arrow,
@@ -78,7 +78,12 @@ and ← / → (or the buttons and the move list) step through the moves leading 
 *Save card* asks Stockfish (at the analysis depth) for its top move there, which
 becomes the answer — it is never shown while you make the card. If the engine's
 top move *is* the move you played, the card is refused (check the move number).
-A new card is first due the next day.
+A new card is first due the next day. The first card you save completes the step
+(and counts the day); the form stays for more, and *Continue to Revision cards*
+moves on (without counting the step if you made none).
+
+**Step 2 — Revision cards.** Drilling the cards you made, as a warm-up before the
+openings.
 
 Drilling a card: the position before your slip, from your side of the board, with
 the move you played named and drawn as a red arrow, so you know what not to play.
@@ -101,7 +106,7 @@ the moves (no names), in the URL itself; nothing is sent to Lichess unless you
 click it. It is not offered while you are solving, since Lichess's engine would
 give the answer away.
 
-**Step 2 — Opening cards.** Anki-style drills built from the Lichess masters
+**Step 3 — Opening cards.** Anki-style drills built from the Lichess masters
 database, grown lazily as you go. The first card is 1.e4; the tree expands only
 when you pass a card (right on the first or second try).
 
@@ -145,8 +150,8 @@ board* button.
 
 Other things worth poking at:
 
-- **Step bar** — both steps always visible; click either to jump there at any
-  time.
+- **Step bar** — all three steps always visible; click any one to jump there at
+  any time.
 - **Board orientation** — a revision card puts your colour at the bottom; opening
   cards keep White there. *Flip board* turns it round.
 - **Eval bar** — always visible, always from White's perspective

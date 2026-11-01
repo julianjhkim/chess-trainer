@@ -114,6 +114,17 @@ def test_making_a_card_schedules_it_for_tomorrow(client, fake_engine_for_api):
     assert "d2d4" not in str(payload) and "d4" not in payload["move_label"]
 
 
+def test_the_first_card_made_completes_the_step_and_counts_the_day(client, fake_engine_for_api):
+    client.post("/api/session/start", json={})
+    first = make_card(client, fake_engine_for_api).json()
+    steps = {s["step"]: s for s in first["session"]["steps"]}
+    assert steps["make_card"]["completed"] is True
+    assert first["session"]["current"] == "make_card"  # stays, to make more
+    assert first["streak"]["current"] == 1
+    second = make_card(client, fake_engine_for_api).json()
+    assert second["session"] is None
+
+
 def test_the_card_records_the_engine_move_and_the_slip(client, fake_engine_for_api):
     make_card(client, fake_engine_for_api)
     conn = connect(client.app.state.ctx.config.db_path)

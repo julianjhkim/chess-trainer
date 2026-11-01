@@ -139,10 +139,10 @@ const { createStepBar } = await import(`${REPO}/js/stepbar.js`);
 const barHost = document.createElement('nav');
 document.body.append(barHost);
 createStepBar(barHost).render(started);
-check('step bar renders both steps', barHost.querySelectorAll('.step').length === 2,
+check('step bar renders every step', barHost.querySelectorAll('.step').length === 3,
       `${barHost.querySelectorAll('.step').length} rendered`);
 check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Revision cards'));
-check('step bar dims unselected steps', barHost.querySelectorAll('.step.disabled').length === 1);
+check('step bar dims unselected steps', barHost.querySelectorAll('.step.disabled').length === 2);
 
 const done = await api.completeStep('inaccuracy_cards');
 check('completing the only selected step finishes the session', done.session.current === null && done.session.finished);
@@ -159,7 +159,7 @@ const screenHost = document.createElement('div');
 await api.resetSession();
 renderStartScreen(screenHost, { session: await api.getSession(), onStarted: () => {} });
 const stepButtons = [...screenHost.querySelectorAll('button.step-button')];
-check('start screen has one button per step', stepButtons.length === 2);
+check('start screen has one button per step', stepButtons.length === 3);
 check('start screen asks nothing to tick', screenHost.querySelectorAll('input[type=checkbox]').length === 0);
 let startedWith = null;
 renderStartScreen(screenHost, { session: await api.getSession(), onStarted: (s) => { startedWith = s; } });
@@ -232,8 +232,20 @@ const revisionView = renderInaccuracyCardsView(revisionHost, {
 });
 for (let i = 0; i < 50 && !revisionHost.textContent.includes('All caught up'); i++) await sleep(50);
 check('the revision view says nothing is due yet', revisionHost.textContent.includes('All caught up'));
-check('and offers to make a card', [...revisionHost.querySelectorAll('button')].some((b) => b.textContent === 'Make a card'));
+check('and does not offer to make a card itself', ![...revisionHost.querySelectorAll('button')].some((b) => /Make a card|New card/.test(b.textContent)));
 revisionView.destroy();
+
+const { renderMakeCardView } = await import(`${REPO}/js/make_card_view.js`);
+const makeHost = document.createElement('main');
+document.body.append(makeHost);
+const makeView = renderMakeCardView(makeHost, {
+  step: { step: 'make_card', position: 1, title: 'Make a revision card' },
+  onCompleted: () => {},
+});
+check('the make-card view asks for a PGN and a move number',
+      makeHost.querySelector('textarea') !== null && makeHost.querySelector('input[type=number]') !== null);
+check('the make-card view renders a board', realPieces(makeHost).length > 0, `${realPieces(makeHost).length} pieces`);
+makeView.destroy();
 await api.resetSession();
 
 // ---- router wires the real views to their steps ----------------------

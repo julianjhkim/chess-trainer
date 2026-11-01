@@ -9,8 +9,8 @@ convention changes, update the matching section here in the same commit.
 
 ## What this is
 
-A local-only web app for a daily chess routine in two steps: drill slips I
-picked from my own games (revision cards), then drill openings as
+A local-only web app for a daily chess routine in three steps: make revision
+cards from slips I pick in my own games, drill them, then drill openings as
 spaced-repetition cards. (Play-a-game and game-review steps existed and were
 **removed on purpose** — the user reviews games elsewhere. Don't bring back
 chess.com fetching, a review step or an in-app analysis board without being asked.)
@@ -74,12 +74,15 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 ## Product rules (don't change without being asked; update here if you do)
 
 ### Session flow
-- Two steps, in order: `inaccuracy_cards` → `cards` (titles: Revision cards,
-  Opening cards; `session/steps.py`, `session/flow.py`).
+- Three steps, in order: `make_card` → `inaccuracy_cards` → `cards` (titles:
+  Make a revision card, Revision cards, Opening cards; `session/steps.py`,
+  `session/flow.py`). Making cards and drilling them are separate steps on
+  purpose — the drill screen has **no** card-making button (the user found two
+  buttons for one thing confusing).
 - **Start screen = one button per step** (no checkboxes): clicking a step starts
   the session there with every step enabled (`POST /api/session/start` with
   `start_at`); finishing a step advances to the next. Both are always on the
-  step bar; clicking either jumps there at any time. The backend still accepts a
+  step bar; clicking any one jumps there at any time. The backend still accepts a
   `steps` subset (dimmed on the bar) but the UI no longer sends one.
 - Cards have no end; the step counts as completed once a card is answered, but
   the session stays on it (`mark_completed`).
@@ -108,11 +111,12 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   between the slip position and my move).
 
 ### Revision cards (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
-- Step 1, titled **"Revision cards"** in the UI. Internally everything keeps the
+- Step 1 **"Make a revision card"** (`make_card`, `make_card_view.js`) makes
+  them; step 2 **"Revision cards"** drills them. Internally the drill keeps the
   old name — step `inaccuracy_cards`, `/api/inaccuracy-cards`, tables
   `inaccuracy_*`, `InaccuracyCard`, `inaccuracy_cards_view.js`. Don't rename one
   without the others.
-- **Made by hand only**. "New card"/"Make a card": paste PGN + type **my move number**
+- **Made by hand only**, in step 1: paste PGN + type **my move number**
   ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:
   the request's `colour`, else my chess.com name in the PGN, else 422 asking to
   pick. `POST /preview` (no engine) returns the position before the move, my move
@@ -123,6 +127,9 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   then the prompt just says "You played X here."). **Refused (422) if the top
   move is the move I played.** The game is stored in `games` (`paste_id`) so the
   card can show its moves. The answer is never sent before the card is answered.
+  The first card saved in a session marks `make_card` completed (streak) but the
+  step stays open for more; "Continue to Revision cards" completes it, or just
+  jumps to `inaccuracy_cards` if none was made.
 - One card per position (unique EPD). A new card is scheduled as if passed once:
   `n=1, I=1, EF=2.5`, **due the next day**. Making an existing card again brings
   its due date forward to tomorrow (never later); making a deleted one restores it.
@@ -147,8 +154,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   answering, behind an inline confirm: soft delete (`deleted_at` set, schedule
   row removed, review log kept). Doesn't grade or count the step.
 - First answer marks the step completed (streak) but the step stays until the
-  deck is empty. With nothing due (or no cards yet) it says so, offers "Make a
-  card", and "Continue to Opening cards" completes the step if a card was
+  deck is empty. With nothing due (or no cards yet) it says so (pointing to step
+  1), and "Continue to Opening cards" completes the step if a card was
   answered, otherwise just jumps to `cards` (an empty deck never counts).
 
 ### Opening-card tree (`openings/tree_rules.py`)

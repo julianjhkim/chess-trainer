@@ -41,6 +41,7 @@ const MIME = {
 };
 
 const STEPS = [
+  ['make_card', 'Make a revision card'],
   ['inaccuracy_cards', 'Revision cards'],
   ['cards', 'Opening cards'],
 ];
@@ -292,6 +293,10 @@ function session(step) {
 
 const STREAK = { current: 4, longest: 9, active_today: true, total_days: 21 };
 
+function withCompleted(base, step) {
+  return { ...base, steps: base.steps.map((st) => (st.step === step ? { ...st, completed: true } : st)) };
+}
+
 function boardMove(body) {
   const key = `${body.fen}|${body.from}${body.to}${body.promotion ?? ''}`;
   const move = fixture.moves[key];
@@ -388,7 +393,16 @@ const routes = {
   'POST /api/inaccuracy-cards': (body) => {
     if (body.move_number !== 2) return { error: 'no such move' };
     inaccuracyCreated += 1;
-    return { move_label: '2.Nf3', due_on: '2026-11-03', created: true, restored: false, counts: inaccuracyCounts() };
+    const first = inaccuracyCreated === 1;
+    return {
+      move_label: '2.Nf3',
+      due_on: '2026-11-03',
+      created: true,
+      restored: false,
+      counts: inaccuracyCounts(),
+      session: first ? withCompleted(session(currentStep), 'make_card') : null,
+      streak: first ? STREAK : null,
+    };
   },
   [`DELETE /api/inaccuracy-cards/${INACCURACY_CARD.id}`]: () => {
     inaccuracyDeleted = true;
@@ -397,6 +411,14 @@ const routes = {
   'POST /api/session/jump/cards': () => {
     currentStep = 'cards';
     return session('cards');
+  },
+  'POST /api/session/jump/inaccuracy_cards': () => {
+    currentStep = 'inaccuracy_cards';
+    return session('inaccuracy_cards');
+  },
+  'POST /api/session/complete/make_card': () => {
+    currentStep = 'inaccuracy_cards';
+    return { session: withCompleted(session('inaccuracy_cards'), 'make_card'), streak: STREAK };
   },
 
   // -- test control -----------------------------------------------------
