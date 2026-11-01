@@ -361,6 +361,21 @@ export function renderCardsView(container, { step, onCompleted }) {
       body.append(opening);
     }
 
+    // Trying moves of your own is left to Lichess: the line opens there at
+    // this position, with the answer one move on.
+    if (response.lichess_url) {
+      const link = document.createElement('a');
+      link.className = 'lichess-link';
+      link.href = response.lichess_url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Analyse at Lichess ↗';
+      const line = document.createElement('p');
+      line.style.margin = '0 0 10px';
+      line.append(link);
+      body.append(line);
+    }
+
     body.append(renderStatsTable(response.stats));
 
     for (const dead of response.dead_ends ?? []) {

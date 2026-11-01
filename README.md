@@ -117,7 +117,9 @@ Playing it reveals the **opening name**, and then you have to find the answer mo
 with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
 answer* gives up. Afterwards you get the **stats table**: every master move with
 its share, game count, white/draw/black split and average rating, with the answer,
-the most played move and Stockfish's own choice all marked.
+the most played move and Stockfish's own choice all marked. Above it, **Analyse at
+Lichess ↗** opens the line on the Lichess analysis board at the card's position
+(White at the bottom), with the answer one move on — press → there to see it.
 
 On a frequency card the question also says whether the most played move is the
 one Stockfish would play:

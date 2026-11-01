@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
+import chess
 from fastapi import APIRouter, HTTPException
 
 from chess_trainer.api.deps import Cfg, Conn, Engine, Explorer, State
@@ -31,6 +32,8 @@ from chess_trainer.explorer.lichess_client import ExplorerError
 from chess_trainer.openings import card_builder, line as line_module, stats_table
 from chess_trainer.openings.card_types import CardMode
 from chess_trainer.openings.tree_rules import MIN_GAMES, describe_threshold
+from chess_trainer.pgn.lichess_link import analysis_url
+from chess_trainer.pgn.positions import walk
 from chess_trainer.session.steps import Step
 from chess_trainer.srs import grading
 from chess_trainer.srs.due import CardSource
@@ -248,6 +251,16 @@ async def _evaluate(state: State, conn: Conn, engine: Engine, fen: str, config: 
     return await state.in_thread(run)
 
 
+def _lichess_url(card: CardRow) -> str:
+    """The line on Lichess, at the card's position (White at the bottom, as
+    here); the answer is the next move, so → on Lichess plays it."""
+    ucis = list(card.ucis)
+    line = ucis + [card.answer_uci] if card.answer_uci else ucis
+    return analysis_url(
+        walk(line), start_fen=chess.STARTING_FEN, ply=len(ucis), my_colour="white"
+    )
+
+
 async def _finish_card(
     state: State,
     conn: sqlite3.Connection,
@@ -301,6 +314,7 @@ async def _finish_card(
 
     response.answer_uci = card.answer_uci
     response.answer_san = card.answer_san
+    response.lichess_url = _lichess_url(card)
     response.stats = StatsTableOut.of(table)
     response.grade = CardGradeOut.of(outcome)
     response.dead_ends = _dead_ends_out(conn, card, stats)

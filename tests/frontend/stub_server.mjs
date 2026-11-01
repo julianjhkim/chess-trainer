@@ -380,6 +380,7 @@ const routes = {
       counts: { due: 2, new: 7, relearning: 1 },
       session: session(currentStep),
       streak: STREAK,
+      lichess_url: 'https://lichess.org/analysis/pgn/1.e4%20e5?color=white#1',
     };
   },
 

@@ -42,7 +42,7 @@ from chess_trainer.engine.winpct import win_percent_drop
 from chess_trainer.inaccuracies import deck as deck_module
 from chess_trainer.inaccuracies import slip as slip_module
 from chess_trainer.inaccuracies.deck import DeckAnswer, DeckItem
-from chess_trainer.inaccuracies.lichess_link import analysis_url
+from chess_trainer.pgn.lichess_link import analysis_url
 from chess_trainer.pgn import my_side, parse
 from chess_trainer.pgn import positions as positions_module
 from chess_trainer.pgn.parse import ParsedGame, PgnParseError

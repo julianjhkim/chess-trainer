@@ -385,6 +385,7 @@ check('the stats table marks the answer', revealed.stats.rows.some((r) => r.is_a
 check('the stats table marks the most played move', revealed.stats.rows.some((r) => r.is_most_played));
 check("the stats table marks Stockfish's move", revealed.stats.rows.some((r) => r.is_engine_move));
 check('show answer creates no branches', revealed.branches_created === 0);
+check('show answer links the line to Lichess', /^https:\/\/lichess\.org\/analysis\/pgn\/.+\?color=white#\d+$/.test(revealed.lichess_url ?? ''), revealed.lichess_url);
 check('the card step is marked and the streak moves',
       revealed.session != null && revealed.streak?.current >= 1);
 check('the cards step stays current', revealed.session.current === 'cards');

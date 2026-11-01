@@ -160,6 +160,7 @@ async function testTheAnswerIsNotGivenAway(page, base) {
     'no stats table yet',
     (await page.locator('.stats-table').count()) === 0,
   );
+  check('no Lichess link yet', (await page.locator('a.lichess-link').count()) === 0);
 }
 
 // -- the table afterwards -------------------------------------------------
@@ -194,6 +195,11 @@ async function testTheTableMarksBothMoves(page, base) {
     'the question line is gone once the card is answered',
     !(await prompt(page)).includes('Heads-up'),
   );
+
+  const lichess = page.locator('a.lichess-link');
+  check('Analyse at Lichess appears once answered', (await lichess.count()) === 1 && (await lichess.innerText()).includes('Analyse at Lichess'));
+  check('it opens the line at the card position, White at the bottom', (await lichess.getAttribute('href')).endsWith('?color=white#1'));
+  check('in a new tab', (await lichess.getAttribute('target')) === '_blank');
 }
 
 const quote = (text) => JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 120));

@@ -415,6 +415,9 @@ class CardAttemptResponse(BaseModel):
     counts: QueueCountsOut | None = None
     session: SessionOut | None = None
     streak: StreakOut | None = None
+    #: Once finished: the line on Lichess's analysis board, opened at the
+    #: card's position with the answer one move on.
+    lichess_url: str | None = None
 
 
 class ShowCardAnswerResponse(BaseModel):
@@ -430,6 +433,9 @@ class ShowCardAnswerResponse(BaseModel):
     counts: QueueCountsOut
     session: SessionOut | None = None
     streak: StreakOut | None = None
+    #: Once finished: the line on Lichess's analysis board, opened at the
+    #: card's position with the answer one move on.
+    lichess_url: str | None = None
 
 
 # -- inaccuracy cards ----------------------------------------------------

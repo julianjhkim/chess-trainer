@@ -103,7 +103,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - **Hint** (`inaccuracies/hint.py`): only the from-square and piece type of the
   answer (yellow circle via `board.setHighlights` = chessground autoShapes,
   which clicks don't erase). Only while unsolved.
-- **Lichess link** (`inaccuracies/lichess_link.py`): URL form
+- **Lichess link** (`pgn/lichess_link.py`): URL form
   `https://lichess.org/analysis/pgn/<movetext>?color=<my colour>#<ply>`
   (verified against lichess.org); movetext is percent-escaped except dots (SAN
   has `#`, `+`, `=`), moves only — no player names. Non-standard start FEN or no
@@ -179,7 +179,11 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   429 waits 60 s and retries once.
 - Card flow: earlier moves auto-play → branch move shown as an arrow (only it is
   draggable) → opening name revealed → find the answer with no arrow → stats
-  table (answer, most played, Stockfish's choice marked).
+  table (answer, most played, Stockfish's choice marked) and **Analyse at
+  Lichess ↗** (`lichess_url` on the attempt/show-answer response, only once
+  finished): `/analysis/pgn/<line + answer>?color=white#<line length>`, i.e. the
+  card's position with the answer one move on (`pgn/lichess_link.py`, shared
+  with revision cards).
 - Frequency cards say, without naming moves, whether the most played move is
   the engine's best (`engine_agrees`); engine-mode cards say nothing. Resolved
   when the card is served, via the analysis cache.

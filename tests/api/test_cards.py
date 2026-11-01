@@ -148,6 +148,21 @@ def test_the_right_move_finishes_the_card(client):
     assert payload["answer_san"] == "c5"
 
 
+def test_a_finished_card_links_to_the_line_on_lichess(client):
+    start_cards(client)
+    wrong = client.post("/api/cards/attempt", json={"from": "a7", "to": "a6"}).json()
+    assert wrong["lichess_url"] is None  # not while the card is open
+    payload = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()
+    # 1.e4 is the card's line; the answer is one move on, opened before it.
+    assert payload["lichess_url"] == "https://lichess.org/analysis/pgn/1.e4%20c5?color=white#1"
+
+
+def test_a_revealed_card_links_to_lichess_too(client):
+    start_cards(client)
+    payload = client.post("/api/cards/show-answer").json()
+    assert payload["lichess_url"].endswith("/pgn/1.e4%20c5?color=white#1")
+
+
 def test_an_illegal_move_is_a_422(client):
     start_cards(client)
     response = client.post("/api/cards/attempt", json={"from": "a7", "to": "a4"})
