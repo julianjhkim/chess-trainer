@@ -269,10 +269,15 @@ class ReviewMoveOut(BaseModel):
 
 
 class InaccuracyCardAddedOut(BaseModel):
-    """The inaccuracy card a finished review made (or brought back)."""
+    """The inaccuracy card a finished review made (or brought back).
+
+    ``deleted`` means the position's card had been deleted, so none was added
+    and there is no due date.
+    """
 
     created: bool
-    due_on: str
+    due_on: str | None = None
+    deleted: bool = False
 
 
 class HintOut(BaseModel):
@@ -403,9 +408,11 @@ class ReviewStateOut(BaseModel):
                 finished=session.finished,
             )
         ]
-        if session.card_due_on is not None:
+        if session.card_due_on is not None or session.card_deleted:
             state.inaccuracy_card = InaccuracyCardAddedOut(
-                created=session.card_created, due_on=session.card_due_on.isoformat()
+                created=session.card_created,
+                due_on=session.card_due_on.isoformat() if session.card_due_on else None,
+                deleted=session.card_deleted,
             )
         if session.finished:
             state.lichess_url = analysis_url(

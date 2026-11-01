@@ -261,6 +261,7 @@ let inaccuracyServed = false;
 let inaccuracyAnswered = false;
 let inaccuracyHinted = false;
 let inaccuracyAttempts = 0;
+let inaccuracyDeleted = false;
 
 const INACCURACY_CARD = {
   id: 7,
@@ -280,8 +281,8 @@ const INACCURACY_CARD = {
 };
 
 function inaccuracyCounts() {
-  const total = inaccuracyScenario === 'empty' ? 0 : 3;
-  const due = inaccuracyScenario === 'one' && !inaccuracyAnswered ? 1 : 0;
+  const total = inaccuracyScenario === 'empty' ? 0 : inaccuracyDeleted ? 2 : 3;
+  const due = inaccuracyScenario === 'one' && !inaccuracyAnswered && !inaccuracyDeleted ? 1 : 0;
   return { due, relearning: 0, total, next_due_on: total ? '2026-11-03' : null };
 }
 
@@ -561,6 +562,10 @@ const routes = {
     return { square: 'f1', piece: 'bishop', text: 'Move your bishop on f1.' };
   },
   'POST /api/inaccuracy-cards/attempt': (body) => inaccuracyAttempt(body),
+  [`DELETE /api/inaccuracy-cards/${INACCURACY_CARD.id}`]: () => {
+    inaccuracyDeleted = true;
+    return inaccuracyCounts();
+  },
   'POST /api/session/jump/play': () => {
     currentStep = 'play';
     return session('play');
@@ -576,6 +581,7 @@ const routes = {
     inaccuracyAnswered = false;
     inaccuracyHinted = false;
     inaccuracyAttempts = 0;
+    inaccuracyDeleted = false;
     cleanOutcome = body.outcome ?? 'win';
     reviewAttempts = 0;
     reviewPolls = 0;

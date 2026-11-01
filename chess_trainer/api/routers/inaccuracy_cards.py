@@ -2,7 +2,8 @@
 
 The answer is the engine's move recorded when the game was reviewed (the
 same strict top-1 as the review). Grading and scheduling are the opening
-cards' modified SM-2; a hint caps the grade at q=3.
+cards' modified SM-2; a hint caps the grade at q=3. A card that looks wrong
+or useless can be deleted for good.
 """
 
 from __future__ import annotations
@@ -215,6 +216,22 @@ async def show_answer(
     )
     _finish(state, conn, config, card, response, revealed=True)
     return response
+
+
+@router.delete("/{card_id}", response_model=InaccuracyCountsOut)
+def delete_card(card_id: int, state: State, conn: Conn, config: Cfg) -> InaccuracyCountsOut:
+    """Delete a card for good: it is never due again, nor made again from a review.
+
+    Deleting the card on screen clears it, so the next step is to ask for the
+    next card. Answers already given stay in the log (and in the streak).
+    """
+    card = repo.get(conn, card_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="No such card.")
+    state.inaccuracy_deck.delete(conn, card_id)
+    if state.current_inaccuracy_id == card_id:
+        state.reset_inaccuracy()
+    return _counts(state, conn, config)
 
 
 async def _evaluate(state: State, conn: Conn, engine: Engine, fen: str, config: Config):

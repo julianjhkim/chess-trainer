@@ -4,7 +4,8 @@
  * Step 1 of the session: positions where your reviewed games first went
  * wrong, drilled again. Covers what it says with nothing to drill (before any
  * review, and when all caught up) and one card driven by real clicks: the
- * prompt, a hint, a wrong try, the right move and the result.
+ * prompt, a hint, a wrong try, the right move and the result; and deleting a
+ * card, which asks first.
  *
  *     npm install && npx playwright install chromium
  *     npm run inaccuracy
@@ -156,6 +157,34 @@ async function testOneCard(page, base) {
   check('Next card ends on the caught-up message', (await page.innerText('.side-panel')).includes('All caught up — no inaccuracy cards due.'));
 }
 
+// -- deleting --------------------------------------------------------------------
+
+async function testDelete(page, base) {
+  console.log('\nDeleting a card');
+  await open(page, base, 'one');
+  await waitForText(page, 'Find the engine');
+  check('Delete card is offered while solving', await page.isVisible('button:text-is("Delete card")'));
+
+  await page.click('button:text-is("Delete card")');
+  await waitForText(page, 'Delete this card for good?');
+  check('it asks before deleting', await page.isVisible('button:text-is("Keep")'));
+  check('the solving buttons step aside meanwhile', !(await page.isVisible('button:text-is("Hint")')));
+
+  await page.click('button:text-is("Keep")');
+  await waitFor(page, 'the solving buttons', () =>
+    [...document.querySelectorAll('button')].some((b) => b.textContent === 'Hint'));
+  check('Keep goes back to the card', (await page.innerText('.side-panel')).includes('You played 2.Nf3 here'));
+
+  await page.click('button:text-is("Delete card")');
+  await page.click('button:text-is("Delete")');
+  await waitForText(page, 'All caught up');
+  const panel = await page.innerText('.side-panel');
+  check('Delete serves the next card (here: none left)', panel.includes('All caught up — no inaccuracy cards due.'));
+  check('the deck shrinks', /In the deck\s*2/.test(panel), panel.split('\n').slice(0, 6).join(' | '));
+  check('deleting does not count the step', await page.evaluate(() =>
+    window.chessTrainer.state().session?.steps.find((s) => s.step === 'inaccuracy_cards')?.completed !== true));
+}
+
 // -- run ------------------------------------------------------------------------
 
 const stub = await startStubServer();
@@ -174,6 +203,7 @@ for (const [name, run] of [
   ['empty deck', testEmptyDeck],
   ['caught up', testCaughtUp],
   ['one card', testOneCard],
+  ['delete', testDelete],
 ]) {
   try {
     await run(page, stub.url);

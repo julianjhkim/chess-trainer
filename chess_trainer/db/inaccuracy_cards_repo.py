@@ -6,7 +6,9 @@ first inaccuracy in a reviewed game -- with the engine's move as the answer.
 opening cards use), and ``inaccuracy_reviews`` one row per answer.
 
 Every card is scheduled from the moment it is created, so unlike the opening
-cards there is no "new" card here: a card is either due or waiting.
+cards there is no "new" card here: a card is either due or waiting. A deleted
+card keeps its row (marked ``deleted_at``) but loses its schedule, so it is
+never due again and the same position is not made into a card again.
 """
 
 from __future__ import annotations
@@ -37,6 +39,11 @@ class InaccuracyCard:
     win_percent_drop: float | None = None
     id: int | None = None
     created_at: str | None = None
+    deleted_at: str | None = None
+
+    @property
+    def deleted(self) -> bool:
+        return self.deleted_at is not None
 
     @property
     def move_label(self) -> str:
@@ -81,6 +88,7 @@ def _card(row: sqlite3.Row) -> InaccuracyCard:
         win_percent_drop=row["win_percent_drop"],
         depth=row["depth"],
         created_at=row["created_at"],
+        deleted_at=row["deleted_at"],
     )
 
 
@@ -145,7 +153,30 @@ def insert(conn: sqlite3.Connection, card: InaccuracyCard) -> InaccuracyCard:
 
 
 def count(conn: sqlite3.Connection) -> int:
-    return int(query_value(conn, "SELECT COUNT(*) FROM inaccuracy_cards", default=0))
+    """Cards in the deck, not counting deleted ones."""
+    return int(
+        query_value(
+            conn,
+            "SELECT COUNT(*) FROM inaccuracy_cards WHERE deleted_at IS NULL",
+            default=0,
+        )
+    )
+
+
+def delete(conn: sqlite3.Connection, card_id: int) -> bool:
+    """Take a card out of the deck for good. False if there was no such card.
+
+    The card row stays, marked, so the position is remembered as deleted; its
+    schedule goes, which is what keeps it from ever being due again. Its past
+    answers stay in the review log.
+    """
+    with transaction(conn):
+        cursor = conn.execute(
+            "UPDATE inaccuracy_cards SET deleted_at = COALESCE(deleted_at, ?) WHERE id = ?",
+            (_now(), card_id),
+        )
+        conn.execute("DELETE FROM inaccuracy_schedule WHERE card_id = ?", (card_id,))
+    return cursor.rowcount > 0
 
 
 # -- schedule ----------------------------------------------------------------

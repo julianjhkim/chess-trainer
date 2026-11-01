@@ -8,7 +8,7 @@ from chess_trainer.db import inaccuracy_cards_repo as repo
 from chess_trainer.db.connection import connect
 from chess_trainer.db.schedule_repo import ScheduleRow
 from chess_trainer.streak import seoul_day
-from tests.api.test_review import STEP, make_blunder, start_review
+from tests.api.test_review import STEP, make_blunder, start_review, wait_until_ready
 
 
 def finish_a_review(client, fake_engine) -> None:
@@ -140,3 +140,37 @@ def test_no_card_on_screen_is_a_409(client):
 def test_an_illegal_move_is_a_422(client, fake_engine_for_api):
     serve(client, fake_engine_for_api)
     assert client.post("/api/inaccuracy-cards/attempt", json={"from": "a2", "to": "a6"}).status_code == 422
+
+
+# -- deleting ----------------------------------------------------------------
+def test_deleting_the_card_on_screen_clears_it(client, fake_engine_for_api):
+    card = serve(client, fake_engine_for_api)["card"]
+    counts = client.delete(f"/api/inaccuracy-cards/{card['id']}").json()
+    assert counts == {"due": 0, "relearning": 0, "total": 0, "next_due_on": None}
+    assert client.get("/api/inaccuracy-cards/state").json()["card"] is None
+    assert client.post("/api/inaccuracy-cards/hint").status_code == 409
+    assert client.post("/api/inaccuracy-cards/next").json()["exhausted"] is True
+
+
+def test_deleting_does_not_count_the_step(client, fake_engine_for_api):
+    card = serve(client, fake_engine_for_api)["card"]
+    client.delete(f"/api/inaccuracy-cards/{card['id']}")
+    session = client.get("/api/session").json()
+    step = next(s for s in session["steps"] if s["step"] == "inaccuracy_cards")
+    assert step["completed"] is False
+
+
+def test_deleting_an_unknown_card_is_a_404(client):
+    assert client.delete("/api/inaccuracy-cards/999").status_code == 404
+
+
+def test_a_review_of_a_deleted_position_says_so(client, fake_engine_for_api):
+    card = serve(client, fake_engine_for_api)["card"]
+    client.delete(f"/api/inaccuracy-cards/{card['id']}")
+    # Review the same game again from scratch: it slips into the same position.
+    client.post("/api/review/start", json={"step": STEP, "restart": True})
+    wait_until_ready(client, STEP)
+    client.post("/api/review/show-answer", json={"step": STEP})
+    added = client.get(f"/api/review/{STEP}").json()["inaccuracy_card"]
+    assert added == {"created": False, "due_on": None, "deleted": True}
+    assert client.get("/api/inaccuracy-cards/state").json()["counts"]["total"] == 0

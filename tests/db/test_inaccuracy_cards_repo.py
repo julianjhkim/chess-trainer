@@ -57,3 +57,32 @@ def test_reviews_are_logged(conn):
     repo.record_review(conn, InaccuracyReview(card_id=card.id, reviewed_on=date(2026, 10, 31), quality=2, attempts=3))
     (row,) = repo.recent_reviews(conn)
     assert (row.quality, row.attempts, row.used_hint) == (2, 3, False)
+
+
+def test_deleting_marks_the_card_and_drops_its_schedule(conn):
+    stored = repo.insert(conn, a_card())
+    repo.upsert_schedule(
+        conn, ScheduleRow(card_id=stored.id, n=1, ef=2.5, interval_days=1, due_on=date(2026, 11, 1))
+    )
+    repo.record_review(
+        conn, InaccuracyReview(card_id=stored.id, reviewed_on=date(2026, 11, 1), quality=4, attempts=1)
+    )
+    assert repo.delete(conn, stored.id)
+    gone = repo.get(conn, stored.id)
+    assert gone.deleted and gone.deleted_at is not None
+    assert repo.get_schedule(conn, stored.id) is None
+    assert repo.count(conn) == 0
+    assert repo.count_due(conn, date(2026, 11, 1)) == 0
+    assert len(repo.recent_reviews(conn)) == 1  # the log is kept
+
+
+def test_deleting_twice_keeps_the_first_time(conn):
+    stored = repo.insert(conn, a_card())
+    repo.delete(conn, stored.id)
+    first = repo.get(conn, stored.id).deleted_at
+    assert repo.delete(conn, stored.id)
+    assert repo.get(conn, stored.id).deleted_at == first
+
+
+def test_deleting_an_unknown_card_is_false(conn):
+    assert not repo.delete(conn, 999)

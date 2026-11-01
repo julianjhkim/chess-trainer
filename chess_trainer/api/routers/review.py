@@ -367,6 +367,7 @@ def _finish(
         )
         session.card_due_on = added.due_on
         session.card_created = added.created
+        session.card_deleted = added.deleted
 
     state.flow.complete(step)
     streak = tracker.record_step(conn, tz_name=config.timezone)

@@ -78,6 +78,9 @@ game in red, with the grade and the next due date. Cards are graded and schedule
 exactly like the opening cards (see *The SM-2 variant*), except that a hint caps
 the grade at "right with a hint" (q=3, still a pass). One position is only ever
 one card: slipping there again in a later game brings the card back the next day.
+If a card looks wrong or not worth drilling, *Delete card* (it asks first) takes it
+out of the deck for good — it is never due again, and slipping into that position
+in a later game does not make it a card again. Its past answers stay in the log.
 With nothing due — including before your first review — the step says so and
 *Continue to Play a game* moves on without counting towards the streak.
 
@@ -461,6 +464,7 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/inaccuracy-cards/attempt` | try a move; correct only if it is the recorded engine move |
 | `POST /api/inaccuracy-cards/hint` | the square and piece the answer moves (caps the grade at q=3) |
 | `POST /api/inaccuracy-cards/show-answer` | reveal the answer, grading it as a failure |
+| `DELETE /api/inaccuracy-cards/{id}` | delete an inaccuracy card for good |
 
 ## Troubleshooting
 

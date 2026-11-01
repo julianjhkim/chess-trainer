@@ -173,6 +173,16 @@ button.primary {
   font-weight: 600;
 }
 button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #11131a;
+  font-weight: 600;
+}
+button.danger:hover:not(:disabled) { filter: brightness(1.08); }
+button.subtle-danger { color: var(--bad); }
+button.subtle-danger:hover:not(:disabled) { border-color: var(--bad); }
+.delete-question { flex-basis: 100%; color: var(--bad); }
 .button-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 /* ---------- board + eval bar ----------

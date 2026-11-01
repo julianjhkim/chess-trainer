@@ -252,7 +252,17 @@ _M005 = Migration(
     """,
 )
 
-MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003, _M004, _M005)
+#: Deleting an inaccuracy card: the card row stays, marked, so a later slip
+#: into the same position does not bring it back; its schedule row goes.
+_M006 = Migration(
+    version=6,
+    name="inaccuracy_card_deletion",
+    sql="""
+    ALTER TABLE inaccuracy_cards ADD COLUMN deleted_at TEXT;
+    """,
+)
+
+MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003, _M004, _M005, _M006)
 
 
 def current_version(conn: sqlite3.Connection) -> int:

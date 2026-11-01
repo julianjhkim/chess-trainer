@@ -6,7 +6,8 @@ session by the same rules (:mod:`srs.due`). What differs is where cards come
 from: one is added whenever a review finishes with an inaccuracy, already
 scheduled as if passed once -- due the next day, since it was just solved in
 the review. Slipping into a position that already has a card brings that card
-back to the next day instead of adding a second one.
+back to the next day instead of adding a second one -- unless that card was
+deleted, in which case nothing is added: a deleted card stays deleted.
 
 Holds the per-session queue state; the database work is in
 :mod:`db.inaccuracy_cards_repo`.
@@ -35,13 +36,18 @@ class AddResult:
     card: InaccuracyCard
     #: False when the position already had a card, which was brought forward.
     created: bool
-    due_on: date
+    #: None when the position's card was deleted, so nothing was scheduled.
+    due_on: date | None
+    #: True when the position's card had been deleted and was left that way.
+    deleted: bool = False
 
 
 def add_card(conn: sqlite3.Connection, card: InaccuracyCard, *, today: date) -> AddResult:
     """Add a card from a review, or bring an existing one for the position back."""
     tomorrow = today + timedelta(days=FIRST_INTERVAL_DAYS)
     existing = repo.get_by_epd(conn, card.epd)
+    if existing is not None and existing.deleted:
+        return AddResult(card=existing, created=False, due_on=None, deleted=True)
     if existing is not None and existing.id is not None:
         schedule = repo.get_schedule(conn, existing.id)
         if schedule is not None and schedule.due_on > tomorrow:
@@ -143,7 +149,7 @@ class InaccuracyDeck:
 
     def _relearn_item(self, conn: sqlite3.Connection, waiting: Requeued) -> DeckItem | None:
         card = repo.get(conn, waiting.card_id)
-        if card is None:  # pragma: no cover - deleted under us
+        if card is None or card.deleted:  # pragma: no cover - deleted under us
             self._drop_requeued(waiting.card_id)
             return None
         return DeckItem(
@@ -232,6 +238,11 @@ class InaccuracyDeck:
             used_hint=used_hint,
             result=result,
         )
+
+    def delete(self, conn: sqlite3.Connection, card_id: int) -> bool:
+        """Delete a card for good, and forget it if it was due again this session."""
+        self._drop_requeued(card_id)
+        return repo.delete(conn, card_id)
 
     def _drop_requeued(self, card_id: int) -> None:
         self._requeued = [r for r in self._requeued if r.card_id != card_id]

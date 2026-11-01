@@ -7,6 +7,8 @@
  * (which caps the grade at "right with a hint"); *Show answer* fails the card,
  * so it comes back later in the session. The result shows the answer (green)
  * and the move played in the game (red), with the grade and next due date.
+ * *Delete card* (after an inline confirm) takes a card that looks wrong or
+ * useless out of the deck for good and serves the next one.
  *
  * With nothing due -- including before any game has been reviewed -- it says
  * so and offers to go on to the next step.
@@ -37,6 +39,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
   let counts = null;
   let hint = null;
   let phase = 'loading'; // loading | solving | finished | empty
+  let confirmingDelete = false;
   const attemptLog = [];
 
   // -- layout ------------------------------------------------------------
@@ -72,6 +75,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     phase = 'loading';
     card = null;
     hint = null;
+    confirmingDelete = false;
     attemptLog.length = 0;
     renderAttempts();
     resultCard.root.hidden = true;
@@ -240,6 +244,29 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     buildControls();
   }
 
+  // -- deleting ----------------------------------------------------------
+  function askDelete() {
+    confirmingDelete = true;
+    buildControls();
+    panelChanged();
+  }
+
+  function keepCard() {
+    confirmingDelete = false;
+    buildControls();
+    panelChanged();
+  }
+
+  async function deleteCard() {
+    if (!card) return;
+    board?.setInteractive(false);
+    const label = card.move_label;
+    counts = await withStatus('Deleting…', () => api.deleteInaccuracyCard(card.id));
+    renderDeck();
+    await serveNext();
+    if (phase !== 'empty') setStatus(`Deleted the card for ${label}. Your move.`);
+  }
+
   // -- panels ------------------------------------------------------------
   function renderDeck() {
     const list = document.createElement('dl');
@@ -323,6 +350,13 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
 
   function buildControls() {
     controls.replaceChildren();
+    if (confirmingDelete && (phase === 'solving' || phase === 'finished')) {
+      const question = document.createElement('span');
+      question.className = 'delete-question';
+      question.textContent = 'Delete this card for good? It won’t come back, even if you slip here again.';
+      controls.append(question, button('Delete', deleteCard, 'danger'), button('Keep', keepCard));
+      return;
+    }
     if (phase === 'solving') {
       controls.append(button('Hint', showHint), button('Show answer', showAnswer));
     }
@@ -330,6 +364,9 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       controls.append(button('Next card', serveNext, 'primary'));
     }
     controls.append(button('Flip board', () => board?.flip()));
+    if (phase === 'solving' || phase === 'finished') {
+      controls.append(button('Delete card', askDelete, 'subtle-danger'));
+    }
   }
 
   /**

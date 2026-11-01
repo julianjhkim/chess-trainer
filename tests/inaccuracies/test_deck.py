@@ -153,3 +153,44 @@ def test_counts_report_due_total_and_the_next_date(conn):
     counts = InaccuracyDeck().counts(conn, TODAY)
     assert (counts.due, counts.total) == (1, 2)
     assert counts.next_due_on == TOMORROW
+
+
+# -- deleting ----------------------------------------------------------------
+def test_a_deleted_card_is_never_served(conn):
+    deck = InaccuracyDeck()
+    c = add_card(conn, card(), today=TODAY).card
+    make_due(conn, c.id)
+    assert deck.delete(conn, c.id)
+    assert deck.next_item(conn, TODAY) is None
+    counts = deck.counts(conn, TODAY)
+    assert (counts.due, counts.total, counts.next_due_on) == (0, 0, None)
+
+
+def test_deleting_a_failed_card_drops_it_from_this_session(conn):
+    deck = InaccuracyDeck(gap=0)
+    c = add_card(conn, card(), today=TODAY).card
+    make_due(conn, c.id)
+    deck.mark_served()
+    deck.record_answer(conn, c, attempts=1, used_show_answer=True, used_hint=False, today=TODAY)
+    deck.delete(conn, c.id)
+    assert deck.next_item(conn, TODAY) is None
+    assert deck.counts(conn, TODAY).relearning == 0
+
+
+def test_slipping_into_a_deleted_position_does_not_bring_it_back(conn):
+    first = add_card(conn, card(), today=TODAY).card
+    InaccuracyDeck().delete(conn, first.id)
+    again = add_card(conn, card(), today=TODAY)
+    assert again.deleted and not again.created
+    assert again.due_on is None
+    assert repo.get_schedule(conn, first.id) is None
+    assert repo.count(conn) == 0
+
+
+def test_deleting_leaves_other_cards_alone(conn):
+    a = add_card(conn, card(2), today=TODAY).card
+    b = add_card(conn, card(4), today=TODAY).card
+    make_due(conn, b.id)
+    InaccuracyDeck().delete(conn, a.id)
+    assert InaccuracyDeck().next_item(conn, TODAY).card.id == b.id
+    assert repo.count(conn) == 1

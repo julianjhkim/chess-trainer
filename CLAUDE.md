@@ -167,6 +167,13 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   to `play` (an empty deck never counts towards the streak).
 - The review summary says "Added to your inaccuracy cards — first due …"
   (`ReviewStateOut.inaccuracy_card`).
+- **Delete card** (`DELETE /api/inaccuracy-cards/{id}`, migration 6): for a card
+  that looks wrong or useless, while solving or after answering, behind an
+  inline confirm. Soft delete: the card row stays with `deleted_at`, its
+  schedule row is removed (so it is never due, and not counted), its review log
+  stays. A later review slipping into a deleted position **does not** re-add it
+  (`AddResult.deleted`; the review says "You deleted the card for this position
+  earlier…"). Deleting doesn't grade the card or count the step.
 
 ### Opening-card tree (`openings/tree_rules.py`)
 - **Root exception**: the start position is not a card; *all* of White's first

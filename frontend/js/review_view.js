@@ -545,9 +545,11 @@ export function renderReviewView(container, { step, onCompleted }) {
     if (added) {
       body.append(
         paragraph(
-          added.created
-            ? `Added to your inaccuracy cards — first due ${added.due_on}.`
-            : `You already had a card for this position — it is now due ${added.due_on}.`,
+          added.deleted
+            ? 'You deleted the card for this position earlier, so it was not added again.'
+            : added.created
+              ? `Added to your inaccuracy cards — first due ${added.due_on}.`
+              : `You already had a card for this position — it is now due ${added.due_on}.`,
           'card-added',
         ),
       );
