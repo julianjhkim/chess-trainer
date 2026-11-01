@@ -8,6 +8,7 @@ import { boards } from './board.js';
 import { createRouter } from './router.js';
 import { get, set, setStatus, subscribe } from './state.js';
 import { createStepBar } from './stepbar.js';
+import { createMeView } from './me_view.js';
 import { createStreakView } from './streak_view.js';
 
 const view = document.getElementById('view');
@@ -15,6 +16,7 @@ const statusLine = document.getElementById('status');
 const engineInfo = document.getElementById('engine-info');
 
 const streakView = createStreakView(document.getElementById('streak'));
+createMeView(document.getElementById('me'));
 const stepBar = createStepBar(document.getElementById('stepbar'), {
   onJump: (session) => router.render(session),
 });
@@ -61,7 +63,6 @@ function renderEngineInfo(health) {
   const engine = health.engine ?? {};
   const parts = [`v${health.version}`];
   parts.push(engine.exists ? `Stockfish depth ${engine.depth}` : 'Stockfish NOT FOUND');
-  parts.push(health.chesscom_username ? `${health.chesscom_username}@chess.com` : 'chess.com name not set (optional)');
   parts.push(health.lichess_token_present ? 'Lichess token set' : 'No Lichess token');
   engineInfo.textContent = parts.join('  ·  ');
   engineInfo.title = `Engine: ${engine.path ?? 'unknown'}\nDatabase: ${health.database}\nStreak timezone: ${health.timezone}`;

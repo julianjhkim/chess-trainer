@@ -125,7 +125,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
     colourLabel.append('You played');
     const colour = document.createElement('select');
     colour.setAttribute('aria-label', 'Your colour');
-    for (const [value, text] of [['', 'Auto (from the PGN)'], ['white', 'White'], ['black', 'Black']]) {
+    for (const [value, text] of [['', 'Auto (from your names)'], ['white', 'White'], ['black', 'Black']]) {
       const option = document.createElement('option');
       option.value = value;
       option.textContent = text;

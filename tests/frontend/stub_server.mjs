@@ -184,6 +184,8 @@ let inaccuracyHinted = false;
 let inaccuracyAttempts = 0;
 let inaccuracyDeleted = false;
 let inaccuracyCreated = 0;
+/** The names I play under, as `/api/me` keeps them. */
+let myNames = ['test-player'];
 
 const INACCURACY_CARD = {
   id: 7,
@@ -315,6 +317,17 @@ const routes = {
     timezone: 'Asia/Seoul',
   }),
   'GET /api/session': () => session(currentStep),
+  'GET /api/me': () => ({ usernames: myNames }),
+  'PUT /api/me': (body) => {
+    const seen = new Set();
+    myNames = (body.usernames ?? []).map((n) => n.trim()).filter((n) => {
+      const key = n.toLowerCase();
+      if (!n || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return { usernames: myNames };
+  },
   'GET /api/streak': () => STREAK,
   'POST /api/engine/eval': (body) => ({
     fen: body.fen,
@@ -432,6 +445,7 @@ const routes = {
     inaccuracyAttempts = 0;
     inaccuracyDeleted = false;
     inaccuracyCreated = 0;
+    myNames = body.names ?? ['test-player'];
     return { step: currentStep, engineAgrees, inaccuracy: inaccuracyScenario };
   },
 };

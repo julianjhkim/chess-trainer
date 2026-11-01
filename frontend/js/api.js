@@ -56,6 +56,10 @@ export const boardState = (fen) => request('/api/board/state', { method: 'POST',
 export const playMove = (fen, from, to, promotion) =>
   request('/api/board/move', { method: 'POST', body: { fen, from, to, promotion } });
 
+// -- the names I play under ------------------------------------------------
+export const getMe = () => request('/api/me');
+export const putMe = (usernames) => request('/api/me', { method: 'PUT', body: { usernames } });
+
 // -- engine ---------------------------------------------------------------
 export const evaluate = (fen, depth) =>
   request('/api/engine/eval', { method: 'POST', body: { fen, depth: depth ?? null } });

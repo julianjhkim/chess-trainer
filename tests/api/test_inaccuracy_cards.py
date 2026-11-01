@@ -87,6 +87,13 @@ def test_preview_needs_a_colour_when_the_pgn_does_not_name_me(client):
     assert picked["move_label"] == "2...Nc6"
 
 
+def test_any_of_my_names_tells_my_side(client):
+    client.put("/api/me", json={"usernames": ["test-player", "second-account"]})
+    pgn = '[White "rival"]\n[Black "second-account"]' + NO_NAMES
+    payload = client.post("/api/inaccuracy-cards/preview", json={"pgn": pgn, "move_number": 2}).json()
+    assert payload["colour"] == "black"
+
+
 def test_preview_of_a_move_the_game_does_not_have(client):
     response = client.post(
         "/api/inaccuracy-cards/preview", json={"pgn": PGN, "move_number": 9}

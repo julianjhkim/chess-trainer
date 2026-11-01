@@ -34,7 +34,7 @@ from chess_trainer.api.schemas import (
     StreakOut,
 )
 from chess_trainer.config import Config
-from chess_trainer.db import games_repo, inaccuracy_cards_repo as repo
+from chess_trainer.db import games_repo, inaccuracy_cards_repo as repo, usernames_repo
 from chess_trainer.db.inaccuracy_cards_repo import InaccuracyCard
 from chess_trainer.engine import analysis
 from chess_trainer.engine.classify import classify
@@ -43,9 +43,9 @@ from chess_trainer.inaccuracies import deck as deck_module
 from chess_trainer.inaccuracies import slip as slip_module
 from chess_trainer.inaccuracies.deck import DeckAnswer, DeckItem
 from chess_trainer.inaccuracies.lichess_link import analysis_url
-from chess_trainer.pgn import parse
+from chess_trainer.pgn import my_side, parse
 from chess_trainer.pgn import positions as positions_module
-from chess_trainer.pgn.parse import ParsedGame, PgnParseError, PlayerNotInGame
+from chess_trainer.pgn.parse import ParsedGame, PgnParseError
 from chess_trainer.pgn.positions import PositionMove
 from chess_trainer.session.steps import Step
 from chess_trainer.srs.due import CardSource
@@ -275,26 +275,30 @@ def _parse(payload: NewCardRequest) -> ParsedGame:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _my_colour(parsed: ParsedGame, payload: NewCardRequest, config: Config) -> str:
-    """The side I had: as asked, else found by my chess.com name in the PGN."""
+def _my_colour(
+    conn: sqlite3.Connection, parsed: ParsedGame, payload: NewCardRequest, config: Config
+) -> str:
+    """The side I had: as asked, else found by my names (top bar) in the PGN."""
     if payload.colour is not None:
         return payload.colour
-    if config.has_chesscom_username:
-        try:
-            return parsed.colour_of(config.chesscom_username)
-        except PlayerNotInGame:
-            pass
+    names = usernames_repo.get(conn, seed=config.chesscom_username or None)
+    colour = my_side.side_of(parsed, names)
+    if colour is not None:
+        return colour
     raise HTTPException(
         status_code=422,
-        detail="Couldn't tell which side you played from this PGN. Pick White or Black.",
+        detail=(
+            "Couldn't tell which side you played: none of your names (top right) "
+            "is in this PGN. Pick White or Black, or add the name."
+        ),
     )
 
 
 def _slip(
-    payload: NewCardRequest, config: Config
+    conn: sqlite3.Connection, payload: NewCardRequest, config: Config
 ) -> tuple[ParsedGame, str, list[PositionMove], PositionMove]:
     parsed = _parse(payload)
-    colour = _my_colour(parsed, payload, config)
+    colour = _my_colour(conn, parsed, payload, config)
     positions = positions_module.from_parsed(parsed)
     try:
         slip = slip_module.find_slip(
@@ -312,7 +316,7 @@ def _opponent(parsed: ParsedGame, colour: str) -> str | None:
 @router.post("/preview", response_model=NewCardPreviewOut)
 def preview(payload: NewCardRequest, conn: Conn, config: Cfg) -> NewCardPreviewOut:
     """The position a card would drill: the moves up to my slip, and the slip."""
-    parsed, colour, positions, slip = _slip(payload, config)
+    parsed, colour, positions, slip = _slip(conn, payload, config)
     existing = repo.get_by_epd(conn, slip_module.epd_of(slip.fen_before))
     before = slip_module.moves_before(positions, slip)
     return NewCardPreviewOut(
@@ -339,7 +343,7 @@ async def create(
     Refused when the engine's top move is the move I played: there would be
     nothing to find.
     """
-    parsed, colour, positions, slip = _slip(payload, config)
+    parsed, colour, positions, slip = _slip(conn, payload, config)
     depth = config.engine_depth
 
     def run():

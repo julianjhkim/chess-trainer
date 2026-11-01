@@ -25,12 +25,16 @@ no Node at runtime.
   (or the env's python directly). Never use the system `python3` for the app.
 - **Stockfish**: `/opt/homebrew/bin/stockfish` (the default
   `CHESS_TRAINER_STOCKFISH_PATH`).
-- **chess.com user**: optional, `.env` `CHESS_TRAINER_CHESSCOM_USERNAME`. Only
-  used to tell my side in a pasted PGN when making a revision card; without it
-  (or when the PGN doesn't name me) the card form asks for a colour. There is
-  **no default in code** (the repo is public and meant for anyone to run).
-  Tests use the placeholder `test-player` (opponent `test-opponent`). Never write
-  the owner's real username into the repo.
+- **My names**: the names I play under (any site), a list edited from the top
+  bar's right end (👤 button, `me_view.js`, `GET/PUT /api/me`), stored in the
+  local DB (`app_state` key `my_usernames`, `db/usernames_repo.py`). A pasted
+  game is mine if exactly one player has one of them (`pgn/my_side.py`,
+  case-insensitive); otherwise the card form asks for a colour. The optional
+  `.env` `CHESS_TRAINER_CHESSCOM_USERNAME` only seeds the list on first read.
+  There is **no default in code** (the repo is public and meant for anyone to
+  run). Tests use the placeholder `test-player` (opponent `test-opponent`, a
+  second name `second-account`). Never write the owner's real usernames into
+  the repo — they live only in the local DB.
 - **Lichess token**: `LICHESS_TOKEN` in `.env` (gitignored; template in
   `.env.example`). Needed for the opening explorer (401 without it). **Never
   commit, print, log or echo it** — don't `cat .env`.
@@ -65,8 +69,9 @@ npm run smoke    # jsdom run of the real ES modules — needs a live server on :
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
 npm run inaccuracy  # Chromium: revision cards (empty, caught up, making one, one card, delete)
+npm run me       # Chromium: the names editor in the top bar
 ```
-`clicks`, `cards` and `inaccuracy` use `tests/frontend/stub_server.mjs` (real frontend, canned
+`clicks`, `cards`, `inaccuracy` and `me` use `tests/frontend/stub_server.mjs` (real frontend, canned
 payloads) — no server, engine, DB or network. After changing the lines the stub
 plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/generate.py`.
 `npm run vendor` re-bundles chessground after bumping its pinned version.
@@ -118,7 +123,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   without the others.
 - **Made by hand only**, in step 1: paste PGN + type **my move number**
   ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:
-  the request's `colour`, else my chess.com name in the PGN, else 422 asking to
+  the request's `colour`, else my names (top bar) in the PGN, else 422 asking to
   pick. `POST /preview` (no engine) returns the position before the move, my move
   (red arrow), the moves before it (browsable) and whether the position already
   has a card (`existing`: none/active/deleted). `POST /api/inaccuracy-cards`

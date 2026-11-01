@@ -32,12 +32,14 @@ The opening cards need a Lichess token (the explorer returns 401 without one):
 cp .env.example .env
 # then edit .env and set:
 #   LICHESS_TOKEN=lip_...
-#   CHESS_TRAINER_CHESSCOM_USERNAME=<your chess.com username>   (optional)
 ```
 
-The chess.com username is optional and has no default. It only lets a pasted PGN
-tell which side you played when you make a revision card; without it, you pick
-White or Black.
+Then, in the app, click **👤 Add your name** at the right of the top bar and add
+the names you play under — your chess.com name, your Lichess name, a new account
+later. They stay in your local database, never in the repo. A pasted game is
+yours if either player has one of them, which is how a new revision card knows
+which side you played; otherwise you pick White or Black. (An optional
+`CHESS_TRAINER_CHESSCOM_USERNAME` in `.env` pre-fills the list the first time.)
 
 Create the token at <https://lichess.org/account/oauth/token/create>. **Leave every
 scope unchecked** — the explorer only needs an authenticated identity, not
@@ -71,8 +73,8 @@ anywhere at any time.
 
 **Step 1 — Make a revision card.** Pick the slips worth drilling from your own
 games: paste a game's PGN and type the number of the move you got wrong — "9" for your
-ninth move, whether you were White or Black. Your side is read from your chess.com
-name in the PGN; if it isn't there, pick White or Black. *Show position* puts the
+ninth move, whether you were White or Black. Your side is read from your names
+(top right) in the PGN; if neither player has one, pick White or Black. *Show position* puts the
 board on the position before that move, with the move you played as a red arrow,
 and ← / → (or the buttons and the move list) step through the moves leading there.
 *Save card* asks Stockfish (at the analysis depth) for its top move there, which
@@ -151,6 +153,8 @@ Other things worth poking at:
 
 - **Step bar** — all three steps always visible; click any one to jump there at
   any time.
+- **Your names** — the 👤 button at the right of the top bar lists the names you
+  play under; click it to add or remove one (saved straight away).
 - **Board orientation** — a revision card puts your colour at the bottom; opening
   cards keep White there. *Flip board* turns it round.
 - **Eval bar** — always visible, always from White's perspective
@@ -165,7 +169,7 @@ Other things worth poking at:
   due reviews come first, oldest first, then new cards one at a time, until you
   stop. Getting a card wrong brings it back later in the same session.
 - **Status bar** — bottom left reports what just happened (or what failed); bottom
-  right shows the version, engine depth, chess.com username (if set) and whether a Lichess
+  right shows the version, engine depth and whether a Lichess
   token is present.
 
 ## Configuration
@@ -176,7 +180,7 @@ Command line flags override both.
 | Variable | Default | Meaning |
 |---|---|---|
 | `LICHESS_TOKEN` | — | Lichess API token, needed for the opening explorer |
-| `CHESS_TRAINER_CHESSCOM_USERNAME` | — | optional: your chess.com username, to tell your side in a pasted PGN (no default) |
+| `CHESS_TRAINER_CHESSCOM_USERNAME` | — | optional: pre-fills your names (top right) the first time (no default) |
 | `CHESS_TRAINER_STOCKFISH_PATH` | `/opt/homebrew/bin/stockfish` | engine binary |
 | `CHESS_TRAINER_ENGINE_DEPTH` | `20` | fixed search depth |
 | `CHESS_TRAINER_DB` | `~/.local/share/chess-trainer/chess_trainer.db` | database |
@@ -388,6 +392,7 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/inaccuracy-cards/preview` | the position a new revision card would drill (PGN + my move number) |
 | `POST /api/inaccuracy-cards` | make a revision card; the engine finds the answer |
 | `DELETE /api/inaccuracy-cards/{id}` | delete a revision card |
+| `GET /api/me` / `PUT /api/me` | the names I play under (read / replace the list) |
 
 ## Troubleshooting
 

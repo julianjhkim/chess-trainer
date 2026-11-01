@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +10,7 @@ from chess_trainer.db.cards_repo import CardRow
 from chess_trainer.db.schedule_repo import ScheduleRow
 from chess_trainer.engine.eval_format import bar_fraction, format_eval
 from chess_trainer.engine.eval_types import Eval
+from chess_trainer.pgn.my_side import MAX_NAME_LENGTH, MAX_NAMES
 from chess_trainer.pgn.positions import PositionMove
 from chess_trainer.pgn import my_moves
 from chess_trainer.inaccuracies.hint import hint_for
@@ -560,3 +561,15 @@ class NewCardOut(BaseModel):
     #: Set on the first card made in a session, which completes the step.
     session: SessionOut | None = None
     streak: StreakOut | None = None
+
+
+class MeRequest(BaseModel):
+    """The names I play under, replacing the stored list."""
+
+    usernames: list[Annotated[str, Field(max_length=MAX_NAME_LENGTH)]] = Field(
+        max_length=MAX_NAMES
+    )
+
+
+class MeOut(BaseModel):
+    usernames: list[str]
