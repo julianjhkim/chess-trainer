@@ -155,3 +155,11 @@ def recent(conn: sqlite3.Connection, limit: int = 10) -> list[StoredGame]:
 
 def count(conn: sqlite3.Connection) -> int:
     return int(query_value(conn, "SELECT COUNT(*) FROM games", default=0))
+
+
+def paste_id(pgn: str) -> str:
+    """A stable id for a pasted game: the same PGN is the same game."""
+    import hashlib
+
+    digest = hashlib.sha256(pgn.strip().encode("utf-8")).hexdigest()[:24]
+    return f"paste-{digest}"

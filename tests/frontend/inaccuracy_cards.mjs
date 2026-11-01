@@ -1,11 +1,11 @@
 /**
- * The inaccuracy-card drill, in a real browser.
+ * The revision-card drill (internally "inaccuracy cards"), in a real browser.
  *
- * Step 1 of the session: positions where your reviewed games first went
- * wrong, drilled again. Covers what it says with nothing to drill (before any
- * review, and when all caught up) and one card driven by real clicks: the
- * prompt, a hint, a wrong try, the right move and the result; and deleting a
- * card, which asks first.
+ * Step 1 of the session: slips you picked from your own games, drilled again.
+ * Covers what it says with nothing to drill (no cards yet, and all caught up);
+ * making a card from a PGN and a move number; one card driven by real clicks
+ * (the prompt, stepping back through the moves, a hint, a wrong try, the
+ * right move, the result and the whole game); and deleting a card.
  *
  *     npm install && npx playwright install chromium
  *     npm run inaccuracy
@@ -85,12 +85,12 @@ async function open(page, base, inaccuracy) {
 // -- nothing to drill ---------------------------------------------------------
 
 async function testEmptyDeck(page, base) {
-  console.log('\nBefore any review has made a card');
+  console.log('\nBefore any card has been made');
   await open(page, base, 'empty');
-  await waitForText(page, 'No inaccuracy cards yet.');
+  await waitForText(page, 'No revision cards yet.');
   const text = await page.innerText('.side-panel');
-  check('it says how cards are made', text.includes('the first slip in each reviewed game becomes a card'));
-  check('the step is first on the bar', (await page.innerText('.step.current')).includes('Inaccuracy cards'));
+  check('it says how cards are made', text.includes('paste its PGN and give the number of the move you got wrong'));
+  check('the step is first on the bar', (await page.innerText('.step.current')).includes('Revision cards'));
   await page.click('button:text-is("Continue to Play a game")');
   await waitFor(page, 'the play step', () => document.querySelector('.step.current')?.textContent.includes('Play a game'));
   check('Continue moves on to Play a game', (await page.innerText('.step.current')).includes('Play a game'));
@@ -124,6 +124,20 @@ async function testOneCard(page, base) {
   check('from my side', state.orientation === 'white');
   check('with the move that led there highlighted', JSON.stringify(state.lastMove) === '["e7","e5"]', JSON.stringify(state.lastMove));
 
+  check('the moves before the slip are listed', (await page.innerText('.move-list')).replace(/\s+/g, ' ').includes('1. e4 e5'));
+  await page.keyboard.press('ArrowLeft');
+  await waitFor(page, 'one move back', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, AFTER_E4);
+  state = await board(page);
+  check('← steps back a move', state.fen === AFTER_E4);
+  check('and the board takes no move there', state.movable !== 'white', String(state.movable));
+  check('the red arrow is only on the slip position', state.highlights.length === 0, state.highlights.join());
+  await page.keyboard.press('End');
+  await waitFor(page, 'the slip position again', (fen) => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && b.getFen() === fen && b.ground.state.movable.color === 'white';
+  }, POSITION);
+  check('End comes back to the position, with the arrow', (await board(page)).highlights.join() === 'red:g1f3');
+
   await page.click('button:text-is("Hint")');
   await waitForText(page, 'Hint: Move your bishop on f1.');
   check('Hint circles the piece', (await board(page)).highlights.join() === 'red:g1f3,yellow:f1');
@@ -145,16 +159,67 @@ async function testOneCard(page, base) {
   check('the result recalls the game move', result.includes('2.Nf3 (a mistake, −21.4%)'));
   check('and the grade', result.includes('right with a hint (q=3)'));
   check('and the next due date', result.includes('2026-11-06 (6 days)'));
+  await waitFor(page, 'the answer on the board', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, ANSWERED);
   state = await board(page);
   check('the board shows the answer played', state.fen === ANSWERED);
-  check('answer in green, game move in red', state.shapes.join() === 'green:f1c4,red:g1f3', state.shapes.join());
   check('the solving marks are gone', state.highlights.length === 0);
+  check('the whole game is listed now', (await page.innerText('.move-list')).includes('Bb5'));
+  await page.keyboard.press('ArrowLeft');
+  await waitFor(page, 'the slip position with arrows', (fen) => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && b.getFen() === fen && b.ground.state.drawable.shapes.length > 0;
+  }, POSITION);
+  state = await board(page);
+  check('← from the answer: the slip, answer in green and game move in red', state.shapes.join() === 'green:f1c4,red:g1f3', state.shapes.join());
   check('the step counts once a card is answered', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'inaccuracy_cards')?.completed === true));
 
   await page.click('button:text-is("Next card")');
   await waitForText(page, 'All caught up');
-  check('Next card ends on the caught-up message', (await page.innerText('.side-panel')).includes('All caught up — no inaccuracy cards due.'));
+  check('Next card ends on the caught-up message', (await page.innerText('.side-panel')).includes('All caught up — no revision cards due.'));
+}
+
+// -- making a card ----------------------------------------------------------------
+
+const PGN = '[White "test-player"]\n[Black "test-opponent"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *';
+
+async function testMakeCard(page, base) {
+  console.log('\nMaking a card');
+  await open(page, base, 'empty');
+  await waitForText(page, 'No revision cards yet.');
+  await page.click('button:text-is("Make a card")');
+  await waitForText(page, 'type the number of the move you got wrong');
+
+  await page.fill('textarea[aria-label="PGN"]', PGN);
+  await page.fill('input[aria-label="Move number"]', '9');
+  await page.click('button:text-is("Show position")');
+  await waitForText(page, 'White has no move 9 in this game');
+  check('a move the game lacks is explained', true);
+  check('nothing to save yet', !(await page.isVisible('button:text-is("Save card")')));
+
+  await page.fill('input[aria-label="Move number"]', '2');
+  await page.keyboard.press('Enter');
+  await waitForText(page, 'You played 2.Nf3 here.');
+  await waitFor(page, 'the slip position', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, POSITION);
+  let state = await board(page);
+  check('the board shows the position before the move', state.fen === POSITION);
+  check('with the move I played as a red arrow', state.highlights.join() === 'red:g1f3', state.highlights.join());
+  check('and the moves before it listed', (await page.innerText('.move-list')).replace(/\s+/g, ' ').includes('1. e4 e5'));
+  await page.keyboard.press('Home');
+  await waitFor(page, 'the start', () => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen().startsWith('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP'));
+  check('Home goes to the start of the game', (await board(page)).highlights.length === 0);
+  await page.keyboard.press('End');
+  await waitFor(page, 'the slip position', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, POSITION);
+
+  await page.click('button:text-is("Save card")');
+  await waitForText(page, 'Card saved for 2.Nf3 — first due 2026-11-03.');
+  check('saving says when it is due', true);
+  check('the deck grows', /In the deck\s*1/.test(await page.innerText('.side-panel')));
+  check('the answer is never shown', !(await page.innerText('body')).includes('Bc4'));
+
+  await page.click('button:text-is("Back to cards")');
+  await waitForText(page, 'All caught up — no revision cards due.');
+  check('Back to cards goes back to the deck', true);
 }
 
 // -- deleting --------------------------------------------------------------------
@@ -166,7 +231,7 @@ async function testDelete(page, base) {
   check('Delete card is offered while solving', await page.isVisible('button:text-is("Delete card")'));
 
   await page.click('button:text-is("Delete card")');
-  await waitForText(page, 'Delete this card for good?');
+  await waitForText(page, 'Delete this card?');
   check('it asks before deleting', await page.isVisible('button:text-is("Keep")'));
   check('the solving buttons step aside meanwhile', !(await page.isVisible('button:text-is("Hint")')));
 
@@ -179,7 +244,7 @@ async function testDelete(page, base) {
   await page.click('button:text-is("Delete")');
   await waitForText(page, 'All caught up');
   const panel = await page.innerText('.side-panel');
-  check('Delete serves the next card (here: none left)', panel.includes('All caught up — no inaccuracy cards due.'));
+  check('Delete serves the next card (here: none left)', panel.includes('All caught up — no revision cards due.'));
   check('the deck shrinks', /In the deck\s*2/.test(panel), panel.split('\n').slice(0, 6).join(' | '));
   check('deleting does not count the step', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'inaccuracy_cards')?.completed !== true));
@@ -202,6 +267,7 @@ page.on('console', (message) => {
 for (const [name, run] of [
   ['empty deck', testEmptyDeck],
   ['caught up', testCaughtUp],
+  ['make a card', testMakeCard],
   ['one card', testOneCard],
   ['delete', testDelete],
 ]) {

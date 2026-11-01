@@ -3,11 +3,10 @@
 Scheduling is the same modified SM-2 as the opening cards (:mod:`srs.sm2`,
 graded by :mod:`srs.grading`), and a failed card comes back later in the same
 session by the same rules (:mod:`srs.due`). What differs is where cards come
-from: one is added whenever a review finishes with an inaccuracy, already
-scheduled as if passed once -- due the next day, since it was just solved in
-the review. Slipping into a position that already has a card brings that card
-back to the next day instead of adding a second one -- unless that card was
-deleted, in which case nothing is added: a deleted card stays deleted.
+from: I make each one from a game, naming the move I slipped on, and it is
+scheduled as if passed once -- due the next day. Making a card for a position
+that already has one brings that card back to the next day instead of adding
+a second one; if that card was deleted, it is restored.
 
 Holds the per-session queue state; the database work is in
 :mod:`db.inaccuracy_cards_repo`.
@@ -36,18 +35,21 @@ class AddResult:
     card: InaccuracyCard
     #: False when the position already had a card, which was brought forward.
     created: bool
-    #: None when the position's card was deleted, so nothing was scheduled.
-    due_on: date | None
-    #: True when the position's card had been deleted and was left that way.
-    deleted: bool = False
+    due_on: date
+    #: True when the position's card had been deleted and is now back.
+    restored: bool = False
 
 
 def add_card(conn: sqlite3.Connection, card: InaccuracyCard, *, today: date) -> AddResult:
-    """Add a card from a review, or bring an existing one for the position back."""
+    """Add a card, or bring back the one the position already has."""
     tomorrow = today + timedelta(days=FIRST_INTERVAL_DAYS)
     existing = repo.get_by_epd(conn, card.epd)
-    if existing is not None and existing.deleted:
-        return AddResult(card=existing, created=False, due_on=None, deleted=True)
+    if existing is not None and existing.id is not None and existing.deleted:
+        repo.restore(conn, existing.id)
+        _schedule_new(conn, existing.id, tomorrow)
+        restored = repo.get(conn, existing.id)
+        assert restored is not None
+        return AddResult(card=restored, created=False, due_on=tomorrow, restored=True)
     if existing is not None and existing.id is not None:
         schedule = repo.get_schedule(conn, existing.id)
         if schedule is not None and schedule.due_on > tomorrow:
@@ -72,18 +74,22 @@ def add_card(conn: sqlite3.Connection, card: InaccuracyCard, *, today: date) -> 
 
     stored = repo.insert(conn, card)
     assert stored.id is not None
+    _schedule_new(conn, stored.id, tomorrow)
+    return AddResult(card=stored, created=True, due_on=tomorrow)
+
+
+def _schedule_new(conn: sqlite3.Connection, card_id: int, due_on: date) -> None:
     repo.upsert_schedule(
         conn,
         ScheduleRow(
-            card_id=stored.id,
+            card_id=card_id,
             # As if passed once: the next pass goes to the 6-day step.
             n=1,
             ef=sm2.INITIAL_EF,
             interval_days=FIRST_INTERVAL_DAYS,
-            due_on=tomorrow,
+            due_on=due_on,
         ),
     )
-    return AddResult(card=stored, created=True, due_on=tomorrow)
 
 
 @dataclass(frozen=True, slots=True)

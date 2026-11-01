@@ -1,7 +1,9 @@
-"""Inaccuracy cards: drilling the first slip of each reviewed game again.
+"""Revision cards (internally "inaccuracy cards"): slips I pick, drilled again.
 
-The answer is the engine's move recorded when the game was reviewed (the
-same strict top-1 as the review). Grading and scheduling are the opening
+I make a card by pasting a game and naming the number of my move that went
+wrong; the card is the position before it. The answer is the engine's top
+move there at the analysis depth, found when the card is made (the same strict
+top-1 as the review). Grading and scheduling are the opening
 cards' modified SM-2; a hint caps the grade at q=3. A card that looks wrong
 or useless can be deleted for good.
 """
@@ -24,6 +26,10 @@ from chess_trainer.api.schemas import (
     InaccuracyGradeOut,
     InaccuracyResultOut,
     InaccuracyStateOut,
+    NewCardOut,
+    NewCardPreviewOut,
+    NewCardRequest,
+    ReviewMoveOut,
     SessionOut,
     StreakOut,
 )
@@ -31,7 +37,15 @@ from chess_trainer.config import Config
 from chess_trainer.db import games_repo, inaccuracy_cards_repo as repo
 from chess_trainer.db.inaccuracy_cards_repo import InaccuracyCard
 from chess_trainer.engine import analysis
+from chess_trainer.engine.classify import classify
+from chess_trainer.engine.winpct import win_percent_drop
+from chess_trainer.inaccuracies import deck as deck_module
+from chess_trainer.inaccuracies import slip as slip_module
 from chess_trainer.inaccuracies.deck import DeckAnswer, DeckItem
+from chess_trainer.pgn import parse
+from chess_trainer.pgn import positions as positions_module
+from chess_trainer.pgn.parse import ParsedGame, PgnParseError, PlayerNotInGame
+from chess_trainer.pgn.positions import PositionMove
 from chess_trainer.session.steps import Step
 from chess_trainer.srs.due import CardSource
 from chess_trainer.streak import seoul_day, tracker
@@ -53,8 +67,30 @@ def _counts(state: State, conn: sqlite3.Connection, config: Config) -> Inaccurac
     )
 
 
+def _game_moves(conn: sqlite3.Connection, card: InaccuracyCard) -> list[PositionMove]:
+    """The card's game, move by move -- or nothing if it is not stored (or no
+    longer matches the card's position)."""
+    game = games_repo.get(conn, card.game_id) if card.game_id else None
+    if game is None:
+        return []
+    try:
+        positions = positions_module.from_parsed(parse.parse_pgn(game.pgn))
+    except (PgnParseError, ValueError):
+        return []
+    if card.ply >= len(positions):
+        return []
+    if slip_module.epd_of(positions[card.ply].fen_before) != card.epd:
+        return []
+    return positions
+
+
+def _moves_out(positions: list[PositionMove], colour: str) -> list[ReviewMoveOut]:
+    return [ReviewMoveOut.of(p, colour) for p in positions]
+
+
 def _card_out(conn: sqlite3.Connection, card: InaccuracyCard, source: CardSource) -> InaccuracyCardOut:
     game = games_repo.get(conn, card.game_id) if card.game_id else None
+    positions = _game_moves(conn, card)
     schedule = repo.get_schedule(conn, card.id or 0)
     return InaccuracyCardOut(
         id=card.id or 0,
@@ -71,6 +107,7 @@ def _card_out(conn: sqlite3.Connection, card: InaccuracyCard, source: CardSource
         played_on=game.end_time if game else None,
         interval_days=schedule.interval_days if schedule else None,
         reps=schedule.reps if schedule else 0,
+        moves=_moves_out(positions[: card.ply], card.my_colour),
     )
 
 
@@ -97,7 +134,9 @@ def _require_open(state: State) -> None:
         )
 
 
-def _result_out(card: InaccuracyCard, answer: DeckAnswer, *, revealed: bool) -> InaccuracyResultOut:
+def _result_out(
+    conn: sqlite3.Connection, card: InaccuracyCard, answer: DeckAnswer, *, revealed: bool
+) -> InaccuracyResultOut:
     result = answer.result
     return InaccuracyResultOut(
         answer_uci=card.best_move_uci,
@@ -117,6 +156,8 @@ def _result_out(card: InaccuracyCard, answer: DeckAnswer, *, revealed: bool) -> 
             due_on=result.due_on.isoformat() if result else None,
             ef=result.state.ef if result else None,
         ),
+        moves=_moves_out(_game_moves(conn, card), card.my_colour),
+        ply=card.ply,
     )
 
 
@@ -218,6 +259,137 @@ async def show_answer(
     return response
 
 
+# -- making cards --------------------------------------------------------------
+def _parse(payload: NewCardRequest) -> ParsedGame:
+    try:
+        return parse.parse_pgn(payload.pgn)
+    except PgnParseError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _my_colour(parsed: ParsedGame, payload: NewCardRequest, config: Config) -> str:
+    """The side I had: as asked, else found by my chess.com name in the PGN."""
+    if payload.colour is not None:
+        return payload.colour
+    if config.has_chesscom_username:
+        try:
+            return parsed.colour_of(config.chesscom_username)
+        except PlayerNotInGame:
+            pass
+    raise HTTPException(
+        status_code=422,
+        detail="Couldn't tell which side you played from this PGN. Pick White or Black.",
+    )
+
+
+def _slip(
+    payload: NewCardRequest, config: Config
+) -> tuple[ParsedGame, str, list[PositionMove], PositionMove]:
+    parsed = _parse(payload)
+    colour = _my_colour(parsed, payload, config)
+    positions = positions_module.from_parsed(parsed)
+    try:
+        slip = slip_module.find_slip(
+            positions, move_number=payload.move_number, my_colour=colour
+        )
+    except slip_module.SlipNotFound as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return parsed, colour, positions, slip
+
+
+def _opponent(parsed: ParsedGame, colour: str) -> str | None:
+    return parsed.black if colour == "white" else parsed.white
+
+
+@router.post("/preview", response_model=NewCardPreviewOut)
+def preview(payload: NewCardRequest, conn: Conn, config: Cfg) -> NewCardPreviewOut:
+    """The position a card would drill: the moves up to my slip, and the slip."""
+    parsed, colour, positions, slip = _slip(payload, config)
+    existing = repo.get_by_epd(conn, slip_module.epd_of(slip.fen_before))
+    before = slip_module.moves_before(positions, slip)
+    return NewCardPreviewOut(
+        colour=colour,
+        move_number=slip.move_number,
+        ply=slip.ply,
+        move_label=slip.move_label,
+        my_move_uci=slip.uci,
+        my_move_san=slip.san,
+        fen=slip.fen_before,
+        last_move_uci=before[-1].uci if before else None,
+        opponent=_opponent(parsed, colour),
+        moves=_moves_out(before, colour),
+        existing="none" if existing is None else "deleted" if existing.deleted else "active",
+    )
+
+
+@router.post("", response_model=NewCardOut)
+async def create(
+    payload: NewCardRequest, state: State, conn: Conn, engine: Engine, config: Cfg
+) -> NewCardOut:
+    """Make a card from my slip. The engine names the answer; it is not shown.
+
+    Refused when the engine's top move is the move I played: there would be
+    nothing to find.
+    """
+    parsed, colour, positions, slip = _slip(payload, config)
+    depth = config.engine_depth
+
+    def run():
+        before = analysis.analyse(conn, engine, slip.fen_before, depth)
+        after = analysis.analyse(conn, engine, slip.fen_after, depth)
+        return before, after
+
+    before, after = await state.in_thread(run)
+    if before.best_move is None:
+        raise HTTPException(status_code=422, detail="The engine has no move in that position.")
+    if before.best_move == slip.uci:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Stockfish's top move here is the one you played ({slip.move_label}), "
+                "so there is nothing to find. Check the move number."
+            ),
+        )
+
+    drop = win_percent_drop(
+        before.evaluation, after.evaluation, mover_is_white=slip.mover_is_white
+    )
+    game = games_repo.upsert(
+        conn,
+        games_repo.StoredGame(
+            id=games_repo.paste_id(payload.pgn),
+            pgn=payload.pgn,
+            my_color=colour,
+            url=parsed.headers.get("Link"),
+            white_username=parsed.white,
+            black_username=parsed.black,
+            time_class=parsed.headers.get("TimeControl"),
+            rules="chess",
+            end_time=parse.end_time_of(parsed),
+            source=games_repo.SOURCE_PASTE,
+        ),
+    )
+    earlier = slip_module.moves_before(positions, slip)
+    card = slip_module.card_for(
+        slip,
+        game_id=game.id,
+        my_colour=colour,
+        best_move_uci=before.best_move,
+        classification=classify(drop).value,
+        win_percent_drop=drop,
+        depth=depth,
+        previous=earlier[-1] if earlier else None,
+    )
+    added = deck_module.add_card(conn, card, today=_today(config))
+    return NewCardOut(
+        move_label=added.card.move_label,
+        due_on=added.due_on.isoformat(),
+        created=added.created,
+        restored=added.restored,
+        counts=_counts(state, conn, config),
+    )
+
+
 @router.delete("/{card_id}", response_model=InaccuracyCountsOut)
 def delete_card(card_id: int, state: State, conn: Conn, config: Cfg) -> InaccuracyCountsOut:
     """Delete a card for good: it is never due again, nor made again from a review.
@@ -260,7 +432,7 @@ def _finish(
         used_hint=state.inaccuracy_hinted,
         today=_today(config),
     )
-    response.result = _result_out(card, answer, revealed=revealed)
+    response.result = _result_out(conn, card, answer, revealed=revealed)
     response.counts = _counts(state, conn, config)
 
     # Like the opening cards: the first answer counts the step for the streak,

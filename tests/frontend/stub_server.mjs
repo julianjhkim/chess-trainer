@@ -42,7 +42,7 @@ const MIME = {
 };
 
 const STEPS = [
-  ['inaccuracy_cards', 'Inaccuracy cards'],
+  ['inaccuracy_cards', 'Revision cards'],
   ['play', 'Play a game'],
   ['review_new_game', 'Review that game'],
   ['cards', 'Opening cards'],
@@ -262,6 +262,7 @@ let inaccuracyAnswered = false;
 let inaccuracyHinted = false;
 let inaccuracyAttempts = 0;
 let inaccuracyDeleted = false;
+let inaccuracyCreated = 0;
 
 const INACCURACY_CARD = {
   id: 7,
@@ -278,10 +279,26 @@ const INACCURACY_CARD = {
   played_on: 1736942614,
   interval_days: 1,
   reps: 0,
+  moves: BROWSE_MOVES.slice(0, BROWSE_TARGET_PLY),
+};
+
+/** What "Show position" finds for move 2 of the stubbed game. */
+const INACCURACY_PREVIEW = {
+  colour: 'white',
+  move_number: 2,
+  ply: BROWSE_TARGET_PLY,
+  move_label: '2.Nf3',
+  my_move_uci: 'g1f3',
+  my_move_san: 'Nf3',
+  fen: BROWSE_TARGET.fen_before,
+  last_move_uci: 'e7e5',
+  opponent: 'test-opponent',
+  moves: BROWSE_MOVES.slice(0, BROWSE_TARGET_PLY),
+  existing: 'none',
 };
 
 function inaccuracyCounts() {
-  const total = inaccuracyScenario === 'empty' ? 0 : inaccuracyDeleted ? 2 : 3;
+  const total = (inaccuracyScenario === 'empty' ? 0 : inaccuracyDeleted ? 2 : 3) + inaccuracyCreated;
   const due = inaccuracyScenario === 'one' && !inaccuracyAnswered && !inaccuracyDeleted ? 1 : 0;
   return { due, relearning: 0, total, next_due_on: total ? '2026-11-03' : null };
 }
@@ -322,6 +339,8 @@ function inaccuracyAttempt(body) {
         due_on: '2026-11-06',
         ef: 2.36,
       },
+      moves: BROWSE_MOVES,
+      ply: BROWSE_TARGET_PLY,
     },
     counts: inaccuracyCounts(),
     session: { ...session(currentStep), steps: session(currentStep).steps.map((st) => st.step === 'inaccuracy_cards' ? { ...st, completed: true } : st) },
@@ -562,6 +581,16 @@ const routes = {
     return { square: 'f1', piece: 'bishop', text: 'Move your bishop on f1.' };
   },
   'POST /api/inaccuracy-cards/attempt': (body) => inaccuracyAttempt(body),
+  'POST /api/inaccuracy-cards/preview': (body) => {
+    if (!String(body.pgn ?? '').includes('1.')) return { error: 'That does not look like a PGN.' };
+    if (body.move_number !== 2) return { error: `White has no move ${body.move_number} in this game: your moves run from 1 to 3.` };
+    return INACCURACY_PREVIEW;
+  },
+  'POST /api/inaccuracy-cards': (body) => {
+    if (body.move_number !== 2) return { error: 'no such move' };
+    inaccuracyCreated += 1;
+    return { move_label: '2.Nf3', due_on: '2026-11-03', created: true, restored: false, counts: inaccuracyCounts() };
+  },
   [`DELETE /api/inaccuracy-cards/${INACCURACY_CARD.id}`]: () => {
     inaccuracyDeleted = true;
     return inaccuracyCounts();
@@ -582,6 +611,7 @@ const routes = {
     inaccuracyHinted = false;
     inaccuracyAttempts = 0;
     inaccuracyDeleted = false;
+    inaccuracyCreated = 0;
     cleanOutcome = body.outcome ?? 'win';
     reviewAttempts = 0;
     reviewPolls = 0;

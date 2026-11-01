@@ -9,8 +9,8 @@ convention changes, update the matching section here in the same commit.
 
 ## What this is
 
-A local-only web app for a daily chess routine: drill the slips from past reviews
-(inaccuracy cards), play a game, review it, then drill openings as
+A local-only web app for a daily chess routine: drill slips I picked from my
+games (revision cards), play a game, review it, then drill openings as
 spaced-repetition cards.
 FastAPI + python-chess (Stockfish over UCI) + SQLite on the backend; plain HTML
 and vanilla JS ES modules with a vendored chessground on the frontend. No CDN,
@@ -62,7 +62,7 @@ npm run smoke    # jsdom run of the real ES modules — needs a live server on :
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
 npm run review   # Chromium: review move browsing, Hint, Why, Lichess link, single chess.com link
-npm run inaccuracy  # Chromium: inaccuracy-card drill (empty deck, caught up, one card)
+npm run inaccuracy  # Chromium: revision cards (empty, caught up, making one, one card, delete)
 ```
 `clicks` and `cards` use `tests/frontend/stub_server.mjs` (real frontend, canned
 payloads) — no server, engine, DB or network. After changing the lines the stub
@@ -73,7 +73,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 
 ### Session flow
 - Four steps, in order: `inaccuracy_cards` → `play` → `review_new_game` → `cards`
-  (titles: Inaccuracy cards, Play a game, Review that game, Opening cards;
+  (titles: Revision cards, Play a game, Review that game, Opening cards;
   `session/steps.py`, `session/flow.py`). There is no "review last game" step any
   more: `review_new_game` is the only review step (it falls back to the latest
   stored/fetched game if step 2 was skipped). Finishing the review advances to
@@ -132,7 +132,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   ← / → step, Home/↑ and End/↓ jump, the move list is clickable. While the drill
   is open the move list holds only the moves *before* the slip (nothing after
   it) and the board accepts a move only at the live position.
-- **My game move is shown while solving** (review and inaccuracy cards): the
+- **My game move is shown while solving** (review and revision cards): the
   prompt says "You played 2.Nf3 here — a mistake." and the live position draws
   it as a red arrow (a highlight/autoShape, with the hint circle, so clicks
   don't erase it). `ReviewTargetOut` and `InaccuracyCardOut` carry
@@ -145,35 +145,47 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - Analysis runs in a background job with progress polling; cached by `(fen, depth)`.
   `AppState.shutdown` must cancel/join the job before closing the DB.
 
-### Inaccuracy cards (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
-- Step 1. A card = the position before my first inaccuracy in a reviewed game
-  (oriented to my colour, opponent's last move highlighted); answer = the engine
-  top-1 recorded by the review (strict match, same as the review). Created in
-  the review's `_finish` whenever the review had a target (solved or revealed);
-  clean games make none. **No backfill** of reviews from before this feature.
+### Revision cards (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
+- Step 1, titled **"Revision cards"** in the UI. Internally everything keeps the
+  old name — step `inaccuracy_cards`, `/api/inaccuracy-cards`, tables
+  `inaccuracy_*`, `InaccuracyCard`, `inaccuracy_cards_view.js`. Don't rename one
+  without the others.
+- **Made by hand only** (reviews no longer add cards; there is no card notice in
+  the review). "New card"/"Make a card": paste PGN + type **my move number**
+  ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:
+  the request's `colour`, else my chess.com name in the PGN, else 422 asking to
+  pick. `POST /preview` (no engine) returns the position before the move, my move
+  (red arrow), the moves before it (browsable) and whether the position already
+  has a card (`existing`: none/active/deleted). `POST /api/inaccuracy-cards`
+  analyses before/after at the analysis depth: answer = engine top-1 (strict, as
+  in the review), classification/win% drop from the two evals (may be `good`;
+  then the prompt just says "You played X here."). **Refused (422) if the top
+  move is the move I played.** The game is stored in `games` (`paste_id`) so the
+  card can show its moves. The answer is never sent before the card is answered.
 - One card per position (unique EPD). A new card is scheduled as if passed once:
-  `n=1, I=1, EF=2.5`, **due the next day**. Slipping into an existing card's
-  position again brings its due date forward to tomorrow (never later).
-- Tables (migration 5): `inaccuracy_cards`, `inaccuracy_schedule` (same
-  `ScheduleRow` shape as `card_schedule`), `inaccuracy_reviews`.
-- Drill: unlimited retries with eval; Hint (from-square + piece) **caps the grade
-  at q=3** ("right with a hint", still a pass); Show answer q=1. Otherwise the
-  same attempt-based grading and SM-2 as opening cards; a failed card is
-  requeued later in the session; the first answer in a session decides the
-  schedule. Result shows answer (green arrow) and my game move (red).
+  `n=1, I=1, EF=2.5`, **due the next day**. Making an existing card again brings
+  its due date forward to tomorrow (never later); making a deleted one restores it.
+- Tables: `inaccuracy_cards` (migration 5; `deleted_at` migration 6),
+  `inaccuracy_schedule` (same `ScheduleRow` shape as `card_schedule`),
+  `inaccuracy_reviews`.
+- Drill: card position (my colour at the bottom, opponent's last move
+  highlighted), my game move as a red arrow. ← / → / Home / End and the move list
+  step through the moves *before* the slip (`InaccuracyCardOut.moves`, read from
+  the stored game; empty if it is missing); only the live position takes a move.
+  Unlimited retries with eval; Hint (from-square + piece) **caps the grade at
+  q=3** ("right with a hint", still a pass); Show answer q=1. Otherwise the same
+  attempt-based grading and SM-2 as opening cards; a failed card is requeued
+  later in the session; the first answer in a session decides the schedule.
+  Once answered the whole game is browsable (`InaccuracyResultOut.moves/ply`):
+  the board sits on the answer as a nav "aside"; ← from it = slip position with
+  green answer + red mine arrows.
+- **Delete card** (`DELETE /api/inaccuracy-cards/{id}`), while solving or after
+  answering, behind an inline confirm: soft delete (`deleted_at` set, schedule
+  row removed, review log kept). Doesn't grade or count the step.
 - First answer marks the step completed (streak) but the step stays until the
-  deck is empty. With nothing due (or no cards yet) it says so; "Continue to
-  Play a game" completes the step if a card was answered, otherwise just jumps
-  to `play` (an empty deck never counts towards the streak).
-- The review summary says "Added to your inaccuracy cards — first due …"
-  (`ReviewStateOut.inaccuracy_card`).
-- **Delete card** (`DELETE /api/inaccuracy-cards/{id}`, migration 6): for a card
-  that looks wrong or useless, while solving or after answering, behind an
-  inline confirm. Soft delete: the card row stays with `deleted_at`, its
-  schedule row is removed (so it is never due, and not counted), its review log
-  stays. A later review slipping into a deleted position **does not** re-add it
-  (`AddResult.deleted`; the review says "You deleted the card for this position
-  earlier…"). Deleting doesn't grade the card or count the step.
+  deck is empty. With nothing due (or no cards yet) it says so, offers "Make a
+  card", and "Continue to Play a game" completes the step if a card was
+  answered, otherwise just jumps to `play` (an empty deck never counts).
 
 ### Opening-card tree (`openings/tree_rules.py`)
 - **Root exception**: the start position is not a card; *all* of White's first

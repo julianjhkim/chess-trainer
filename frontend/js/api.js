@@ -85,7 +85,7 @@ export const reviewAttempt = (step, from, to, promotion) =>
   });
 export const reviewShowAnswer = (step) =>
   request('/api/review/show-answer', { method: 'POST', body: { step } });
-// -- inaccuracy cards -----------------------------------------------------
+// -- revision cards (internally inaccuracy cards) --------------------------
 export const inaccuracyState = () => request('/api/inaccuracy-cards/state');
 export const nextInaccuracyCard = () =>
   request('/api/inaccuracy-cards/next', { method: 'POST' });
@@ -97,6 +97,10 @@ export const inaccuracyAttempt = (from, to, promotion) =>
 export const inaccuracyHint = () => request('/api/inaccuracy-cards/hint', { method: 'POST' });
 export const inaccuracyShowAnswer = () =>
   request('/api/inaccuracy-cards/show-answer', { method: 'POST' });
+export const previewInaccuracyCard = (payload) =>
+  request('/api/inaccuracy-cards/preview', { method: 'POST', body: payload });
+export const createInaccuracyCard = (payload) =>
+  request('/api/inaccuracy-cards', { method: 'POST', body: payload });
 export const deleteInaccuracyCard = (id) =>
   request(`/api/inaccuracy-cards/${id}`, { method: 'DELETE' });
 

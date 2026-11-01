@@ -1,1 +1,1 @@
-"""Inaccuracy cards: the first slip of each reviewed game, drilled again."""
+"""Revision cards (internally "inaccuracy cards"): slips I pick from my games, drilled again."""

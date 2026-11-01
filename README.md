@@ -7,7 +7,7 @@ Runs entirely on `localhost`. Stockfish does the analysis, the Lichess masters
 database supplies the opening lines, and all frontend libraries are vendored into
 the repo so the app works offline.
 
-**Status: complete** — all four steps work: inaccuracy cards, playing a game,
+**Status: complete** — all four steps work: revision cards, playing a game,
 reviewing it, and opening cards.
 
 ---
@@ -66,22 +66,31 @@ The start screen has one button per step: click the one you want and the session
 starts there. When a step is done the next one follows, and the step bar jumps
 anywhere at any time.
 
-**Step 1 — Inaccuracy cards.** A warm-up on your own past slips before you play.
-Every review that finds an inaccuracy turns that position into a card — the
-position before your slip, from your side of the board, with the move that led
-there highlighted — first due the day after the review. The move you played in
-the game is named and drawn as a red arrow, so you know what not to play. Find the engine's move:
-only its top choice counts (the one the review recorded), retries are unlimited
-and the eval bar updates on each. *Hint* circles the piece to move; *Show answer*
-gives up. The result shows the answer in green and the move you played in the
-game in red, with the grade and the next due date. Cards are graded and scheduled
-exactly like the opening cards (see *The SM-2 variant*), except that a hint caps
-the grade at "right with a hint" (q=3, still a pass). One position is only ever
-one card: slipping there again in a later game brings the card back the next day.
-If a card looks wrong or not worth drilling, *Delete card* (it asks first) takes it
-out of the deck for good — it is never due again, and slipping into that position
-in a later game does not make it a card again. Its past answers stay in the log.
-With nothing due — including before your first review — the step says so and
+**Step 1 — Revision cards.** A warm-up on slips from your own games before you
+play. You make the cards yourself: *New card* (or *Make a card* on an empty deck),
+paste a game's PGN and type the number of the move you got wrong — "9" for your
+ninth move, whether you were White or Black. Your side is read from your chess.com
+name in the PGN; if it isn't there, pick White or Black. *Show position* puts the
+board on the position before that move, with the move you played as a red arrow,
+and ← / → (or the buttons and the move list) step through the moves leading there.
+*Save card* asks Stockfish (at the analysis depth) for its top move there, which
+becomes the answer — it is never shown while you make the card. If the engine's
+top move *is* the move you played, the card is refused (check the move number).
+A new card is first due the next day.
+
+Drilling a card: the position before your slip, from your side of the board, with
+the move you played named and drawn as a red arrow, so you know what not to play.
+← / → step back through the moves that led there (only the position itself takes
+a move; End comes back). Find the engine's move: only its top choice counts,
+retries are unlimited and the eval bar updates on each. *Hint* circles the piece
+to move; *Show answer* gives up. The result shows the grade and the next due date,
+and the whole game opens up: the board shows the answer played, and ← from it
+shows the position with the answer in green and your move in red, like the
+review. Cards are graded and scheduled exactly like the opening cards (see *The
+SM-2 variant*), except that a hint caps the grade at "right with a hint" (q=3,
+still a pass). One position is only ever one card: making it again brings the
+card back to the next day. *Delete card* (it asks first) takes a card out of the
+deck; making that card again restores it. With nothing due the step says so and
 *Continue to Play a game* moves on without counting towards the streak.
 
 **Step 2 — Play a game.** *Open chess.com* opens a tab; play your game and come
@@ -103,8 +112,9 @@ the eval bar so you can see what it would have cost. *Hint* circles the piece th
 answer moves (and says which, e.g. "Move your bishop on f1") without saying where
 it goes; the summary and the review history note that a hint was used. *Show
 answer* gives up. When you find it, the review ends with a summary: the move you played and its
-classification, the engine's move, the evals either side and the win% you dropped
-— and that the slip is now an inaccuracy card, first due the next day (step 1).
+classification, the engine's move, the evals either side and the win% you dropped.
+A review does not make a revision card by itself: you choose which slips become
+cards (step 1).
 If the game had no inaccuracy, it says so — and if you also won or drew it, it
 congratulates you on a perfect game.
 
@@ -459,12 +469,14 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/cards/next` | serve the next card (due first, then new) |
 | `POST /api/cards/attempt` | try a move on the current card |
 | `POST /api/cards/show-answer` | reveal the answer, grading it as a failure |
-| `GET /api/inaccuracy-cards/state` | the inaccuracy card on screen and the deck's counts |
-| `POST /api/inaccuracy-cards/next` | serve the next due inaccuracy card (or say the deck is done) |
+| `GET /api/inaccuracy-cards/state` | the revision card on screen and the deck's counts |
+| `POST /api/inaccuracy-cards/next` | serve the next due revision card (or say the deck is done) |
 | `POST /api/inaccuracy-cards/attempt` | try a move; correct only if it is the recorded engine move |
 | `POST /api/inaccuracy-cards/hint` | the square and piece the answer moves (caps the grade at q=3) |
 | `POST /api/inaccuracy-cards/show-answer` | reveal the answer, grading it as a failure |
-| `DELETE /api/inaccuracy-cards/{id}` | delete an inaccuracy card for good |
+| `POST /api/inaccuracy-cards/preview` | the position a new revision card would drill (PGN + my move number) |
+| `POST /api/inaccuracy-cards` | make a revision card; the engine finds the answer |
+| `DELETE /api/inaccuracy-cards/{id}` | delete a revision card |
 
 ## Troubleshooting
 

@@ -177,14 +177,16 @@ def test_deleting_a_failed_card_drops_it_from_this_session(conn):
     assert deck.counts(conn, TODAY).relearning == 0
 
 
-def test_slipping_into_a_deleted_position_does_not_bring_it_back(conn):
+def test_making_a_deleted_card_again_restores_it(conn):
     first = add_card(conn, card(), today=TODAY).card
     InaccuracyDeck().delete(conn, first.id)
     again = add_card(conn, card(), today=TODAY)
-    assert again.deleted and not again.created
-    assert again.due_on is None
-    assert repo.get_schedule(conn, first.id) is None
-    assert repo.count(conn) == 0
+    assert again.restored and not again.created
+    assert again.card.id == first.id
+    assert not again.card.deleted
+    assert again.due_on == TOMORROW
+    assert repo.get_schedule(conn, first.id).due_on == TOMORROW
+    assert repo.count(conn) == 1
 
 
 def test_deleting_leaves_other_cards_alone(conn):

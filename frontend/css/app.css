@@ -341,6 +341,34 @@ button.subtle-danger:hover:not(:disabled) { border-color: var(--bad); }
 }
 .paste-error { color: var(--bad); font-size: 13px; }
 
+/* ---------- new revision card ---------- */
+.new-card textarea {
+  width: 100%;
+  font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+.new-card textarea:focus, .new-card input:focus, .new-card select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.new-card-fields { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.new-card-fields label { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.new-card input, .new-card select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.new-card input[type="number"] { width: 70px; }
+
 /* ---------- attempt list ---------- */
 .attempt-list {
   margin: 0;

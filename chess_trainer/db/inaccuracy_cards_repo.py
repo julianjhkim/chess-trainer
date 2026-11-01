@@ -8,7 +8,7 @@ opening cards use), and ``inaccuracy_reviews`` one row per answer.
 Every card is scheduled from the moment it is created, so unlike the opening
 cards there is no "new" card here: a card is either due or waiting. A deleted
 card keeps its row (marked ``deleted_at``) but loses its schedule, so it is
-never due again and the same position is not made into a card again.
+never due again; making a card for that position again restores the row.
 """
 
 from __future__ import annotations
@@ -177,6 +177,14 @@ def delete(conn: sqlite3.Connection, card_id: int) -> bool:
         )
         conn.execute("DELETE FROM inaccuracy_schedule WHERE card_id = ?", (card_id,))
     return cursor.rowcount > 0
+
+
+def restore(conn: sqlite3.Connection, card_id: int) -> None:
+    """Undo a deletion. The caller schedules the card again."""
+    with transaction(conn):
+        conn.execute(
+            "UPDATE inaccuracy_cards SET deleted_at = NULL WHERE id = ?", (card_id,)
+        )
 
 
 # -- schedule ----------------------------------------------------------------

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from chess_trainer.db.cards_repo import CardRow
@@ -268,18 +270,6 @@ class ReviewMoveOut(BaseModel):
         )
 
 
-class InaccuracyCardAddedOut(BaseModel):
-    """The inaccuracy card a finished review made (or brought back).
-
-    ``deleted`` means the position's card had been deleted, so none was added
-    and there is no due date.
-    """
-
-    created: bool
-    due_on: str | None = None
-    deleted: bool = False
-
-
 class HintOut(BaseModel):
     """Which piece the answer moves -- its square and kind, never its destination."""
 
@@ -361,8 +351,6 @@ class ReviewStateOut(BaseModel):
     #: Once the review is over: the game on Lichess's analysis board, opened
     #: at the position before my first inaccuracy, to try moves there.
     lichess_url: str | None = None
-    #: Once the review is over: the inaccuracy card made from the slip.
-    inaccuracy_card: InaccuracyCardAddedOut | None = None
 
     @classmethod
     def of(cls, step: Step, job: ReviewJob) -> "ReviewStateOut":
@@ -408,12 +396,6 @@ class ReviewStateOut(BaseModel):
                 finished=session.finished,
             )
         ]
-        if session.card_due_on is not None or session.card_deleted:
-            state.inaccuracy_card = InaccuracyCardAddedOut(
-                created=session.card_created,
-                due_on=session.card_due_on.isoformat() if session.card_due_on else None,
-                deleted=session.card_deleted,
-            )
         if session.finished:
             state.lichess_url = analysis_url(
                 positions,
@@ -820,6 +802,9 @@ class InaccuracyCardOut(BaseModel):
     played_on: int | None = None
     interval_days: int | None = None
     reps: int = 0
+    #: The game's moves before the slip, to step through while solving. Empty
+    #: when the game is not stored.
+    moves: list[ReviewMoveOut] = Field(default_factory=list)
 
 
 class InaccuracyGradeOut(BaseModel):
@@ -844,6 +829,10 @@ class InaccuracyResultOut(BaseModel):
     win_percent_drop: float | None = None
     revealed: bool = False
     grade: InaccuracyGradeOut
+    #: The whole game, to step through once the card is answered; the slip is
+    #: move ``ply`` (0-based), so position ``ply`` is the card's position.
+    moves: list[ReviewMoveOut] = Field(default_factory=list)
+    ply: int = 0
 
 
 class InaccuracyStateOut(BaseModel):
@@ -869,3 +858,40 @@ class InaccuracyAttemptResponse(BaseModel):
     counts: InaccuracyCountsOut | None = None
     session: SessionOut | None = None
     streak: StreakOut | None = None
+
+
+class NewCardRequest(BaseModel):
+    """A card to make: a game, and the number of my move that went wrong."""
+
+    pgn: str = Field(min_length=1, description="Full PGN text of the game")
+    move_number: int = Field(ge=1, description="My move's number in the game score")
+    #: Which side I had; None reads it from the PGN's player names.
+    colour: Literal["white", "black"] | None = None
+
+
+class NewCardPreviewOut(BaseModel):
+    """The position a card would drill, before anything is saved."""
+
+    colour: str
+    move_number: int
+    ply: int
+    move_label: str
+    my_move_uci: str
+    my_move_san: str
+    fen: str
+    last_move_uci: str | None = None
+    opponent: str | None = None
+    #: The moves before the slip, to step through.
+    moves: list[ReviewMoveOut] = Field(default_factory=list)
+    #: "none", "active" (the position already has a card) or "deleted".
+    existing: str = "none"
+
+
+class NewCardOut(BaseModel):
+    """A card made: never the answer, only when it is due."""
+
+    move_label: str
+    due_on: str
+    created: bool
+    restored: bool = False
+    counts: InaccuracyCountsOut

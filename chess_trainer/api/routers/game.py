@@ -179,7 +179,7 @@ def paste_pgn(payload: PastePgnRequest, conn: Conn, config: Cfg) -> GameResponse
     stored = games_repo.upsert(
         conn,
         games_repo.StoredGame(
-            id=_paste_id(payload.pgn),
+            id=games_repo.paste_id(payload.pgn),
             pgn=payload.pgn,
             my_color=colour,
             url=parsed.headers.get("Link"),
@@ -211,8 +211,3 @@ def _colour_from_pgn(parsed: parse.ParsedGame, config: Config) -> str:
         return "white"
 
 
-def _paste_id(pgn: str) -> str:
-    import hashlib
-
-    digest = hashlib.sha256(pgn.strip().encode("utf-8")).hexdigest()[:24]
-    return f"paste-{digest}"

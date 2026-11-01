@@ -141,7 +141,7 @@ document.body.append(barHost);
 createStepBar(barHost).render(started);
 check('step bar renders all four steps', barHost.querySelectorAll('.step').length === 4,
       `${barHost.querySelectorAll('.step').length} rendered`);
-check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Inaccuracy cards'));
+check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Revision cards'));
 check('step bar dims unselected steps', barHost.querySelectorAll('.step.disabled').length === 2);
 
 const done = await api.completeStep('inaccuracy_cards');
@@ -297,8 +297,13 @@ check('the summary names my move and the best move',
 check('solving completes the step', solved.session?.steps.find((s) => s.step === 'review_new_game')?.completed === true);
 check('solving advances to the opening cards', solved.session?.current === 'cards');
 check('the summary notes the hint', solved.review.summary.used_hint === true);
-check('the review adds its slip as an inaccuracy card', solved.review.inaccuracy_card?.created === true,
-      JSON.stringify(solved.review.inaccuracy_card));
+check('the review no longer makes a card by itself', !('inaccuracy_card' in solved.review));
+const previewed = await api.previewInaccuracyCard({ pgn: BLUNDER_PGN, move_number: 2 });
+check('a card preview finds my move 2', previewed.move_label === '2.g4' && previewed.moves.length === 2,
+      `${previewed.move_label} after ${previewed.moves.length} moves`);
+const made = await api.createInaccuracyCard({ pgn: BLUNDER_PGN, move_number: 2 });
+check('making the card schedules it', !!made.due_on && made.counts.total >= 1, JSON.stringify(made));
+check('making the card does not give the answer away', !JSON.stringify(made).includes(best));
 const deckAfter = await api.nextInaccuracyCard();
 check('the new card is not due until tomorrow', deckAfter.exhausted === true && deckAfter.counts.total >= 1,
       JSON.stringify(deckAfter.counts));
