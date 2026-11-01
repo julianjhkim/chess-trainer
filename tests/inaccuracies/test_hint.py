@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from chess_trainer.review.hint import hint_for
+from chess_trainer.inaccuracies.hint import hint_for
 
 START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 

@@ -15,10 +15,8 @@ from chess_trainer.api.routers import (
     board,
     cards,
     engine,
-    game,
     health,
     inaccuracy_cards,
-    review,
     session,
     streak,
 )
@@ -31,8 +29,6 @@ ROUTERS = (
     streak.router,
     engine.router,
     board.router,
-    game.router,
-    review.router,
     cards.router,
     inaccuracy_cards.router,
 )

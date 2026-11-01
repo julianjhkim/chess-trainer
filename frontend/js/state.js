@@ -7,14 +7,12 @@
 
 const listeners = new Set();
 
-/** @type {{session: object|null, streak: object|null, health: object|null, status: {text: string, kind: string}, pendingGameId: string|null}} */
+/** @type {{session: object|null, streak: object|null, health: object|null, status: {text: string, kind: string}}} */
 const state = {
   session: null,
   streak: null,
   health: null,
   status: { text: '', kind: '' },
-  /** Game the play step handed to the review step, reviewed by id. */
-  pendingGameId: null,
 };
 
 export function get() {

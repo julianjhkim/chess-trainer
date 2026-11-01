@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from chess_trainer.pgn.positions import walk
-from chess_trainer.review.my_moves import is_mine, mine, opponents
+from chess_trainer.pgn.my_moves import is_mine, mine, opponents
 
 LINE = ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5"]
 

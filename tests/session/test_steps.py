@@ -14,22 +14,17 @@ from chess_trainer.session.steps import (
 )
 
 
-def test_there_are_four_steps_in_spec_order():
-    assert ORDER == (
-        Step.INACCURACY_CARDS,
-        Step.PLAY,
-        Step.REVIEW_NEW_GAME,
-        Step.CARDS,
-    )
+def test_there_are_two_steps_in_spec_order():
+    assert ORDER == (Step.INACCURACY_CARDS, Step.CARDS)
 
 
 def test_positions_are_one_based():
-    assert [s.position for s in ORDER] == [1, 2, 3, 4]
+    assert [s.position for s in ORDER] == [1, 2]
 
 
 def test_every_step_has_a_title():
     assert all(s.title for s in ORDER)
-    assert Step.PLAY.title == "Play a game"
+    assert Step.INACCURACY_CARDS.title == "Revision cards"
 
 
 def test_all_steps_are_enabled_by_default():
@@ -69,11 +64,11 @@ def test_next_after_the_last_step_is_none():
 
 
 def test_next_after_with_nothing_left_is_none():
-    assert next_after(Step.PLAY, {Step.INACCURACY_CARDS}) is None
+    assert next_after(Step.INACCURACY_CARDS, {Step.INACCURACY_CARDS}) is None
 
 
 def test_first_enabled_follows_canonical_order():
-    assert first_enabled({Step.CARDS, Step.PLAY}) is Step.PLAY
+    assert first_enabled({Step.CARDS, Step.INACCURACY_CARDS}) is Step.INACCURACY_CARDS
 
 
 def test_first_enabled_of_nothing_is_none():

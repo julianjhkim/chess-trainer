@@ -1,13 +1,12 @@
-"""A link that opens a reviewed game on Lichess's analysis board.
+"""A link that opens a revision card's game on Lichess's analysis board.
 
-The review shows the engine's lines but is no place to try moves of your own;
-Lichess's analysis board is. Its URL can carry a whole game, so the link is
+The app has no board for trying moves of your own -- on purpose, to stay
+light; Lichess's analysis board is the place for it. Its URL can carry a whole game, so the link is
 built here and nothing is sent anywhere until it is clicked:
 
     https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3?color=black#2
 
-``#n`` opens the game after ``n`` plies -- the position before my first
-inaccuracy -- and ``color`` puts my side at the bottom. Only the moves go in
+``#n`` opens the game after ``n`` plies -- the position before my slip -- and ``color`` puts my side at the bottom. Only the moves go in
 the URL, no names or other headers.
 
 A game that did not start from the usual position cannot be passed as moves,

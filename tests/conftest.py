@@ -134,14 +134,6 @@ def chesscom_pgn() -> str:
     return (DATA_DIR / "chesscom_game.pgn").read_text()
 
 
-@pytest.fixture
-def chesscom_payload() -> dict:
-    """The matching raw archive entry for that game."""
-    import json
-
-    return json.loads((DATA_DIR / "chesscom_game.json").read_text())
-
-
 EXPLORER_DIR = DATA_DIR / "explorer"
 
 

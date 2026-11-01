@@ -25,6 +25,8 @@ const MAX_DRIFT_PX = 0.75;
 
 const WHITE_SQUARES = squares(['1', '2']);
 const BLACK_SQUARES = squares(['7', '8']);
+/** White's pieces after 1.e4 e5, the revision card's position. */
+const CARD_SQUARES = [...WHITE_SQUARES.filter((sq) => sq !== 'e2'), 'e4'];
 
 function squares(ranks) {
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -212,25 +214,25 @@ async function testCardsView(page, base) {
   await checkClicks(page, 'cards/next-card', WHITE_SQUARES);
 }
 
-async function testReviewView(page, base) {
-  console.log('\nGame review view');
-  await page.request.post(`${base}/__scenario`, { data: { step: 'review_new_game' } });
+async function testRevisionCardView(page, base) {
+  console.log('\nRevision card view');
+  await page.request.post(`${base}/__scenario`, { data: { step: 'inaccuracy_cards', inaccuracy: 'one' } });
   await page.goto(base, { waitUntil: 'load' });
 
-  // 1. The target is ready: game card, prompt and PGN paste all just rendered.
-  await waitForText(page, 'where your game first went wrong');
+  // 1. The card is up: deck, prompt and move list all just rendered.
+  await waitForText(page, 'Find the engine');
   await waitForInteractive(page);
-  await checkBounds(page, 'review/target');
-  await checkClicks(page, 'review/target', WHITE_SQUARES);
+  await checkBounds(page, 'revision/card');
+  await checkClicks(page, 'revision/card', CARD_SQUARES);
   const placed = await boardRect(page);
 
-  // 2. A wrong attempt adds the attempts card, growing the panel.
-  await clickMove(page, 'e2', 'e4');
+  // 2. A wrong attempt (the game move itself) adds the attempts card under the board.
+  await clickMove(page, 'g1', 'f3');
   await page.waitForSelector('.attempt-list', { timeout: 15000 });
   await waitForInteractive(page);
-  await checkBounds(page, 'review/attempts');
-  checkStill('review/attempts', placed, await boardRect(page));
-  await checkClicks(page, 'review/attempts', WHITE_SQUARES);
+  await checkBounds(page, 'revision/attempts');
+  checkStill('revision/attempts', placed, await boardRect(page));
+  await checkClicks(page, 'revision/attempts', CARD_SQUARES);
 }
 
 /**
@@ -300,7 +302,7 @@ page.on('console', (message) => {
 
 for (const [name, run] of [
   ['opening cards', testCardsView],
-  ['game review', testReviewView],
+  ['revision card', testRevisionCardView],
   ['layout shift', testLayoutShift],
   ['window resize', testWindowResize],
 ]) {

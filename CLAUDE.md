@@ -9,12 +9,14 @@ convention changes, update the matching section here in the same commit.
 
 ## What this is
 
-A local-only web app for a daily chess routine: drill slips I picked from my
-games (revision cards), play a game, review it, then drill openings as
-spaced-repetition cards.
+A local-only web app for a daily chess routine in two steps: drill slips I
+picked from my own games (revision cards), then drill openings as
+spaced-repetition cards. (Play-a-game and game-review steps existed and were
+**removed on purpose** — the user reviews games elsewhere. Don't bring back
+chess.com fetching, a review step or an in-app analysis board without being asked.)
 FastAPI + python-chess (Stockfish over UCI) + SQLite on the backend; plain HTML
 and vanilla JS ES modules with a vendored chessground on the frontend. No CDN,
-no Node at runtime. Status: all four steps complete (phases 0–3 done, plus fixes).
+no Node at runtime.
 
 ## Environment
 
@@ -23,9 +25,10 @@ no Node at runtime. Status: all four steps complete (phases 0–3 done, plus fix
   (or the env's python directly). Never use the system `python3` for the app.
 - **Stockfish**: `/opt/homebrew/bin/stockfish` (the default
   `CHESS_TRAINER_STOCKFISH_PATH`).
-- **chess.com user**: set in `.env` as `CHESS_TRAINER_CHESSCOM_USERNAME`. There
-  is **no default in code** (the repo is public and meant for anyone to run);
-  without it, fetching returns 503 with instructions and pasting assumes White.
+- **chess.com user**: optional, `.env` `CHESS_TRAINER_CHESSCOM_USERNAME`. Only
+  used to tell my side in a pasted PGN when making a revision card; without it
+  (or when the PGN doesn't name me) the card form asks for a colour. There is
+  **no default in code** (the repo is public and meant for anyone to run).
   Tests use the placeholder `test-player` (opponent `test-opponent`). Never write
   the owner's real username into the repo.
 - **Lichess token**: `LICHESS_TOKEN` in `.env` (gitignored; template in
@@ -61,10 +64,9 @@ Frontend (Node is dev-only; `npm install` and `npx playwright install chromium` 
 npm run smoke    # jsdom run of the real ES modules — needs a live server on :8791 (see above)
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
-npm run review   # Chromium: review move browsing, Hint, Why, Lichess link, single chess.com link
 npm run inaccuracy  # Chromium: revision cards (empty, caught up, making one, one card, delete)
 ```
-`clicks` and `cards` use `tests/frontend/stub_server.mjs` (real frontend, canned
+`clicks`, `cards` and `inaccuracy` use `tests/frontend/stub_server.mjs` (real frontend, canned
 payloads) — no server, engine, DB or network. After changing the lines the stub
 plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/generate.py`.
 `npm run vendor` re-bundles chessground after bumping its pinned version.
@@ -72,93 +74,52 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 ## Product rules (don't change without being asked; update here if you do)
 
 ### Session flow
-- Four steps, in order: `inaccuracy_cards` → `play` → `review_new_game` → `cards`
-  (titles: Revision cards, Play a game, Review that game, Opening cards;
-  `session/steps.py`, `session/flow.py`). There is no "review last game" step any
-  more: `review_new_game` is the only review step (it falls back to the latest
-  stored/fetched game if step 2 was skipped). Finishing the review advances to
-  `cards`.
+- Two steps, in order: `inaccuracy_cards` → `cards` (titles: Revision cards,
+  Opening cards; `session/steps.py`, `session/flow.py`).
 - **Start screen = one button per step** (no checkboxes): clicking a step starts
-  the session there with all four steps enabled (`POST /api/session/start` with
-  `start_at`); finishing a step advances to the next. All four are always on the
-  step bar; clicking any one jumps there, forward or back, at any time
-  (mid-review included). The backend still accepts a `steps` subset (dimmed on
-  the bar) but the UI no longer sends one.
-- Play step: open chess.com, then poll the archive ~2 min for a game newer than
-  the baseline; fall back to PGN paste. PGN paste is also available in the review.
+  the session there with every step enabled (`POST /api/session/start` with
+  `start_at`); finishing a step advances to the next. Both are always on the
+  step bar; clicking either jumps there at any time. The backend still accepts a
+  `steps` subset (dimmed on the bar) but the UI no longer sends one.
 - Cards have no end; the step counts as completed once a card is answered, but
   the session stays on it (`mark_completed`).
 
-### Game review
+### Engine judgement (shared)
 - Win% is Lichess's model: `50 + 50*(2/(1+exp(-0.00368208*cp)) - 1)`, cp capped
   at ±1000, mate = 100/0 (`engine/winpct.py`).
 - Classification by win% drop for the mover (`engine/classify.py`):
-  ≥10 inaccuracy, ≥20 mistake, ≥30 blunder.
-- Only *my* moves are classified; the walk **stops at my first inaccuracy (or
-  worse)** — nothing past it is analysed.
-- The drill replays to the position before that move. **Only Stockfish's top-1
-  move at the analysis depth (default 20) is accepted** — strict string match,
-  judged server-side (`review/verdict.py`). Unlimited retries, eval bar updates
-  on each; "Show answer" gives up. No inaccuracy → say so; if I also **won or
-  drew**, the review says "Congratulations — a perfect game!" (outcome from
-  chess.com's result code, else the PGN `Result` header: `review/outcome.py`,
-  `GameOut.my_outcome`). A clean loss gets no congratulation.
-- **Hint** (`review/hint.py`, `POST /api/review/hint`): reveals only the
-  from-square and piece type of the answer (yellow circle via
-  `board.setHighlights` = chessground autoShapes, which clicks don't erase).
-  Only while unsolved. Doesn't change correctness; recorded as `used_hint` in
-  the summary and `game_reviews` (migration 4).
-- **Why** (`review/explain.py`, `POST /api/review/explain`, `explanation_view.js`):
-  only after the review is finished (409 before — it names the answer). Two
-  lines from the slip position: best = answer + engine PV from the position
-  after it; mine = my move + engine PV after it. Notes are facts read off the
-  moves (capture/check/mate/promotion, the reply to my move, eval or mate,
-  material each side captures) — no LLM, stays local. Lines cut at 10 plies,
-  extended while the last move was a capture/check (max 20). Clicking a line
-  move shows it as a nav "aside". The analysis cache stores the PV (`pv`
-  column); `analysis.analyse(..., need_line=True)` re-searches entries cached
-  without one.
-- **Review at Lichess** (`review/lichess_link.py`, `ReviewStateOut.lichess_url`):
-  set only once the review is finished (clean games too). URL form
-  `https://lichess.org/analysis/pgn/<movetext>?color=<my colour>#<target ply>`
+  ≥10 inaccuracy, ≥20 mistake, ≥30 blunder (else `good`).
+- **Only Stockfish's top-1 move at the analysis depth (default 20) is accepted**
+  as a revision card's answer — strict string match, judged server-side.
+- Analysis is cached by `(fen, depth)` (`analysis_cache`, which also stores the PV).
+- **Hint** (`inaccuracies/hint.py`): only the from-square and piece type of the
+  answer (yellow circle via `board.setHighlights` = chessground autoShapes,
+  which clicks don't erase). Only while unsolved.
+- **Lichess link** (`inaccuracies/lichess_link.py`): URL form
+  `https://lichess.org/analysis/pgn/<movetext>?color=<my colour>#<ply>`
   (verified against lichess.org); movetext is percent-escaped except dots (SAN
-  has `#`, `+`, `=`), moves only — no player names. Non-standard start FEN →
-  `/analysis/<fen with _ for spaces>`. A plain link; the app never calls Lichess
-  for this. Trying your own moves is left to Lichess on purpose — don't build a
-  free-play board in the app.
-- Board-column layout under the review board: buttons → Review at Lichess →
-  Why → Attempts. Side panel: Game → prompt → Moves.
-- **Move browsing** (`review/browse.py`, `frontend/js/move_nav.js`, `move_list.js`):
-  ← / → step, Home/↑ and End/↓ jump, the move list is clickable. While the drill
-  is open the move list holds only the moves *before* the slip (nothing after
-  it) and the board accepts a move only at the live position.
-- **My game move is shown while solving** (review and revision cards): the
-  prompt says "You played 2.Nf3 here — a mistake." and the live position draws
-  it as a red arrow (a highlight/autoShape, with the hint circle, so clicks
-  don't erase it). `ReviewTargetOut` and `InaccuracyCardOut` carry
-  `my_move_uci/san` + classification; the engine's answer is still never sent
-  before the position is finished.
-  Once finished (solved, revealed, or no inaccuracy) the whole game is sent; the
-  engine's answer is an "aside" between the position before the slip and the
-  move I played (← from it: green best + red mine arrows; →: my actual move).
-  Keys typed in text fields (PGN box) are ignored.
-- Analysis runs in a background job with progress polling; cached by `(fen, depth)`.
-  `AppState.shutdown` must cancel/join the job before closing the DB.
+  has `#`, `+`, `=`), moves only — no player names. Non-standard start FEN or no
+  stored game → `/analysis/<fen with _ for spaces>`. A plain link; the app never
+  calls Lichess for this. Trying your own moves is left to Lichess on purpose —
+  the user chose this over an in-app analysis board; don't build one unasked.
+- **Move browsing** (`frontend/js/move_nav.js`, `move_list.js`): ← / → step,
+  Home/↑ and End/↓ jump, the move list is clickable; keys typed in text fields
+  are ignored. An "aside" is a position beside the game (the engine's answer
+  between the slip position and my move).
 
 ### Revision cards (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
 - Step 1, titled **"Revision cards"** in the UI. Internally everything keeps the
   old name — step `inaccuracy_cards`, `/api/inaccuracy-cards`, tables
   `inaccuracy_*`, `InaccuracyCard`, `inaccuracy_cards_view.js`. Don't rename one
   without the others.
-- **Made by hand only** (reviews no longer add cards; there is no card notice in
-  the review). "New card"/"Make a card": paste PGN + type **my move number**
+- **Made by hand only**. "New card"/"Make a card": paste PGN + type **my move number**
   ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:
   the request's `colour`, else my chess.com name in the PGN, else 422 asking to
   pick. `POST /preview` (no engine) returns the position before the move, my move
   (red arrow), the moves before it (browsable) and whether the position already
   has a card (`existing`: none/active/deleted). `POST /api/inaccuracy-cards`
   analyses before/after at the analysis depth: answer = engine top-1 (strict, as
-  in the review), classification/win% drop from the two evals (may be `good`;
+  in the opening cards' engine mode), classification/win% drop from the two evals (may be `good`;
   then the prompt just says "You played X here."). **Refused (422) if the top
   move is the move I played.** The game is stored in `games` (`paste_id`) so the
   card can show its moves. The answer is never sent before the card is answered.
@@ -179,13 +140,16 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   Once answered the whole game is browsable (`InaccuracyResultOut.moves/ply`):
   the board sits on the answer as a nav "aside"; ← from it = slip position with
   green answer + red mine arrows.
+- **Analyse at Lichess ↗** (`InaccuracyResultOut.lichess_url`): only once the
+  card is answered (never while solving — Lichess's engine would give it away),
+  opened at the card's position, my colour at the bottom.
 - **Delete card** (`DELETE /api/inaccuracy-cards/{id}`), while solving or after
   answering, behind an inline confirm: soft delete (`deleted_at` set, schedule
   row removed, review log kept). Doesn't grade or count the step.
 - First answer marks the step completed (streak) but the step stays until the
   deck is empty. With nothing due (or no cards yet) it says so, offers "Make a
-  card", and "Continue to Play a game" completes the step if a card was
-  answered, otherwise just jumps to `play` (an empty deck never counts).
+  card", and "Continue to Opening cards" completes the step if a card was
+  answered, otherwise just jumps to `cards` (an empty deck never counts).
 
 ### Opening-card tree (`openings/tree_rules.py`)
 - **Root exception**: the start position is not a card; *all* of White's first
@@ -224,8 +188,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   A failed card comes back later in the same session.
 
 ### Streak (`streak/`)
-- A day is active if at least one session step was completed (finishing a
-  review, or answering a card); multiple steps the same day count once.
+- A day is active if at least one session step was completed (answering a
+  card of either kind); multiple steps the same day count once.
 - Day boundary is midnight Asia/Seoul.
 - Current streak = run ending today, or ending yesterday if today isn't active
   yet; breaks only after a whole day with nothing completed. Longest is tracked too.
@@ -262,9 +226,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   ancestors, and views must call `board.refresh()` (synchronous) after any layout
   change around the board. A freshly built board is detached, so it needs a
   refresh once inserted. jsdom can't catch this — use `npm run clicks`.
-- Don't let the background review thread outlive the DB connection (segfault).
-- Review state is re-rendered on every 700 ms progress poll: anything a render
-  adds must go inside the card body that `setBody` replaces, never appended to
-  the card root (that once stacked up "Open on chess.com" links).
+- Views re-render panels through each card's `setBody`; anything a render adds
+  must go inside that body, never be appended to the card root (that once
+  stacked up duplicate links).
 - The browser tests' stub (`tests/frontend/stub_server.mjs`) only knows positions
   in `fixtures/board.json`; add new lines to `fixtures/generate.py` and rerun it.

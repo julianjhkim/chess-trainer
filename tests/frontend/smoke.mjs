@@ -133,19 +133,19 @@ check('eval bar accepts a live engine payload', bar.element.querySelector('.eval
 
 // ---- session + step bar + streak ---------------------------------------
 await api.resetSession();
-const started = await api.startSession(['inaccuracy_cards', 'cards']);
+const started = await api.startSession(['inaccuracy_cards']);
 check('startSession selects a subset', started.current === 'inaccuracy_cards');
 const { createStepBar } = await import(`${REPO}/js/stepbar.js`);
 const barHost = document.createElement('nav');
 document.body.append(barHost);
 createStepBar(barHost).render(started);
-check('step bar renders all four steps', barHost.querySelectorAll('.step').length === 4,
+check('step bar renders both steps', barHost.querySelectorAll('.step').length === 2,
       `${barHost.querySelectorAll('.step').length} rendered`);
 check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Revision cards'));
-check('step bar dims unselected steps', barHost.querySelectorAll('.step.disabled').length === 2);
+check('step bar dims unselected steps', barHost.querySelectorAll('.step.disabled').length === 1);
 
 const done = await api.completeStep('inaccuracy_cards');
-check('completing a step advances', done.session.current === 'cards');
+check('completing the only selected step finishes the session', done.session.current === null && done.session.finished);
 check('completing a step moves the streak', done.streak.current === 1);
 
 const { createStreakView } = await import(`${REPO}/js/streak_view.js`);
@@ -159,7 +159,7 @@ const screenHost = document.createElement('div');
 await api.resetSession();
 renderStartScreen(screenHost, { session: await api.getSession(), onStarted: () => {} });
 const stepButtons = [...screenHost.querySelectorAll('button.step-button')];
-check('start screen has one button per step', stepButtons.length === 4);
+check('start screen has one button per step', stepButtons.length === 2);
 check('start screen asks nothing to tick', screenHost.querySelectorAll('input[type=checkbox]').length === 0);
 let startedWith = null;
 renderStartScreen(screenHost, { session: await api.getSession(), onStarted: (s) => { startedWith = s; } });
@@ -202,137 +202,39 @@ check('an uninterrupted pause resolves true', (await pause.promise) === true);
 replayBoard.destroy();
 cancelBoard.destroy();
 
-// ---- pgn_paste.js -----------------------------------------------------
-const { createPgnPaste } = await import(`${REPO}/js/pgn_paste.js`);
-let submitted = null;
-const paste = createPgnPaste({ onSubmit: async (pgn) => { submitted = pgn; } });
-document.body.append(paste.element);
-check('paste widget starts collapsed', paste.element.open === false);
-const pasteButton = paste.element.querySelector('button');
-const pasteArea = paste.element.querySelector('textarea');
-
-pasteButton.click();
-await sleep(10);
-check('submitting an empty box shows an error', paste.element.querySelector('.paste-error').textContent.length > 0);
-check('an empty submit does not call onSubmit', submitted === null);
-
-pasteArea.value = '[White "a"]\n[Black "b"]\n\n1. e4 e5 *\n';
-pasteButton.click();
-await sleep(20);
-check('a filled box calls onSubmit', submitted !== null && submitted.includes('1. e4'));
-check('the error clears on a valid submit', paste.element.querySelector('.paste-error').textContent === '');
-paste.focus();
-check('focus() opens the widget', paste.element.open === true);
-
-// ---- review_view.js: the real review flow ----------------------------
-// A game where White loses immediately, so a low-depth review finds a target.
-// Named after whoever the live server is configured for, so the pasted game is "mine".
+// ---- revision cards: made from a PGN and a move number ------------------
+// A game where White loses at once, so the real engine disagrees with 2.g4.
+// Named after whoever the live server is configured for, so the game is "mine".
 const me = (await api.getHealth()).chesscom_username || 'test-player';
 const BLUNDER_PGN = `[White "${me}"]\n[Black "rival"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1\n`;
 await api.resetSession();
-await api.startSession(null, { startAt: 'review_new_game' });
-const pastedGame = (await api.pastePgn(BLUNDER_PGN)).game;
-check('a pasted game reports its own move count', pastedGame.move_count === 4, `${pastedGame.move_count}`);
-await api.startReview('review_new_game', { gameId: pastedGame.id, restart: true });
-
-const { renderReviewView } = await import(`${REPO}/js/review_view.js`);
-const reviewHost = document.createElement('main');
-document.body.append(reviewHost);
-const reviewStep = { step: 'review_new_game', position: 3, title: 'Review that game' };
-let completedSession = null;
-// The play step hands a game over through the store; mimic that here so the
-// view reviews the pasted game rather than the most recently *played* one.
-stateModule.set({ pendingGameId: pastedGame.id });
-const reviewView = renderReviewView(reviewHost, {
-  step: reviewStep,
-  onCompleted: (session) => { completedSession = session; },
-});
-
-// Wait for the view to finish analysing and auto-replaying.
-let reviewState = null;
-for (let i = 0; i < 120; i++) {
-  await sleep(250);
-  reviewState = await api.reviewState('review_new_game');
-  if (reviewState.status === 'ready') break;
-}
-check('review reaches ready', reviewState?.status === 'ready', reviewState?.status);
-check('review found a target', reviewState && !reviewState.no_inaccuracy,
-      JSON.stringify(reviewState?.no_inaccuracy));
-
-// Wait for the auto-replay to finish and the eval bar to be populated.
-let evalText = '—';
-for (let i = 0; i < 40; i++) {
-  await sleep(200);
-  evalText = reviewHost.querySelector('.evalbar-number')?.textContent ?? '—';
-  if (evalText !== '—' && evalText !== '…') break;
-}
-check('review view rendered a board', realPieces(reviewHost).length > 0, `${realPieces(reviewHost).length} pieces`);
-check('review view rendered an eval bar', reviewHost.querySelector('.evalbar-number') !== null);
-check('review view shows the eval number', /[0-9M]/.test(evalText), evalText);
-check('review view offers Show answer', [...reviewHost.querySelectorAll('button')].some((b) => b.textContent === 'Show answer'));
-check('review view offers Flip board', [...reviewHost.querySelectorAll('button')].some((b) => b.textContent === 'Flip board'));
-check('review view reviews the game it was given', reviewHost.textContent.includes('rival'),
-      reviewHost.textContent.includes('test-opponent') ? 'reviewed the wrong game' : 'opponent missing');
-check('review view shows the move count of that game', reviewHost.textContent.includes('Moves4') || reviewHost.textContent.includes('Moves 4'));
-check('review view offers a PGN paste fallback', reviewHost.querySelector('.pgn-paste') !== null);
-
-// Solve it through the API the way the board would, then confirm the summary renders.
-const targetFen = reviewState.target.fen_before;
-const best = (await api.evaluate(targetFen)).best_move;
-const hinted = await api.reviewHint('review_new_game');
-check('a hint names the square the answer moves from', hinted.hint.square === best.slice(0, 2), JSON.stringify(hinted.hint));
-check('the hint does not give the destination away', !JSON.stringify(hinted.hint).includes(best.slice(2, 4)) || best.slice(0, 2) === best.slice(2, 4));
-let explainedEarly = null;
-try { await api.reviewExplain('review_new_game'); } catch (error) { explainedEarly = error.message; }
-check('no explanation before the position is solved', explainedEarly !== null, explainedEarly ?? 'it explained');
-const wrongMove = 'h2h3';
-const wrong = await api.reviewAttempt('review_new_game', wrongMove.slice(0, 2), wrongMove.slice(2, 4), null);
-check('a wrong attempt is rejected with its own eval', wrong.correct === false && !!wrong.evaluation.text, wrong.evaluation.text);
-const solved = await api.reviewAttempt('review_new_game', best.slice(0, 2), best.slice(2, 4), best.length > 4 ? best[4] : null);
-check('the engine move solves the review', solved.correct === true);
-check('solving returns a summary', solved.review.summary?.found_an_inaccuracy === true);
-check('the summary names my move and the best move',
-      !!solved.review.summary.my_move_san && !!solved.review.summary.best_move_san,
-      `${solved.review.summary.my_move_san} vs ${solved.review.summary.best_move_san}`);
-check('solving completes the step', solved.session?.steps.find((s) => s.step === 'review_new_game')?.completed === true);
-check('solving advances to the opening cards', solved.session?.current === 'cards');
-check('the summary notes the hint', solved.review.summary.used_hint === true);
-check('the review no longer makes a card by itself', !('inaccuracy_card' in solved.review));
-const previewed = await api.previewInaccuracyCard({ pgn: BLUNDER_PGN, move_number: 2 });
+await api.startSession(null, { startAt: 'inaccuracy_cards' });
+const previewed = await api.previewInaccuracyCard({ pgn: BLUNDER_PGN, move_number: 2, colour: 'white' });
 check('a card preview finds my move 2', previewed.move_label === '2.g4' && previewed.moves.length === 2,
       `${previewed.move_label} after ${previewed.moves.length} moves`);
-const made = await api.createInaccuracyCard({ pgn: BLUNDER_PGN, move_number: 2 });
+let missing = null;
+try { await api.previewInaccuracyCard({ pgn: BLUNDER_PGN, move_number: 9, colour: 'white' }); } catch (error) { missing = error.message; }
+check('a move the game lacks is refused readably', /no move 9/.test(missing ?? ''), missing ?? 'accepted');
+const made = await api.createInaccuracyCard({ pgn: BLUNDER_PGN, move_number: 2, colour: 'white' });
 check('making the card schedules it', !!made.due_on && made.counts.total >= 1, JSON.stringify(made));
-check('making the card does not give the answer away', !JSON.stringify(made).includes(best));
+const bestHere = (await api.evaluate(previewed.fen)).best_move;
+check('making the card does not give the answer away', !JSON.stringify(made).includes(bestHere));
 const deckAfter = await api.nextInaccuracyCard();
 check('the new card is not due until tomorrow', deckAfter.exhausted === true && deckAfter.counts.total >= 1,
       JSON.stringify(deckAfter.counts));
-const explained = await api.reviewExplain('review_new_game');
-check('the explanation starts the best line with the answer', explained.best.moves[0]?.uci === best,
-      explained.best.moves.map((m) => m.label).join(' '));
-check('the explanation starts my line with my move', explained.mine.moves[0]?.uci === solved.review.summary.my_move_uci,
-      explained.mine.moves.map((m) => m.label).join(' '));
-check('the real engine gives a line longer than one move', explained.best.moves.length > 1 && explained.mine.moves.length > 1);
-check('the explanation says something about each line', explained.best.notes.length > 0 && explained.mine.notes.length > 0,
-      JSON.stringify(explained.mine.notes));
-reviewView.destroy();
 
-// ---- play_view.js -----------------------------------------------------
-const { renderPlayView } = await import(`${REPO}/js/play_view.js`);
-const playHost = document.createElement('main');
-document.body.append(playHost);
-window.open = () => null; // jsdom does not implement window.open
-const playView = renderPlayView(playHost, {
-  step: { step: 'play', position: 2, title: 'Play a game' },
+const { renderInaccuracyCardsView } = await import(`${REPO}/js/inaccuracy_cards_view.js`);
+const revisionHost = document.createElement('main');
+document.body.append(revisionHost);
+const revisionView = renderInaccuracyCardsView(revisionHost, {
+  step: { step: 'inaccuracy_cards', position: 1, title: 'Revision cards' },
   onCompleted: () => {},
 });
-await sleep(1500); // the baseline call reaches chess.com
-const playButtons = [...playHost.querySelectorAll('button')].map((b) => b.textContent);
-check('play view offers an Open chess.com button', playButtons.some((t) => t.includes('Open chess.com')));
-check('play view offers a fetch button', playButtons.some((t) => t.includes('fetch my game')));
-check('play view offers a PGN paste fallback', playHost.querySelector('.pgn-paste') !== null);
-check('play view reports the baseline game', /latest game so far|Could not reach/.test(playHost.textContent));
-playView.destroy();
+for (let i = 0; i < 50 && !revisionHost.textContent.includes('All caught up'); i++) await sleep(50);
+check('the revision view says nothing is due yet', revisionHost.textContent.includes('All caught up'));
+check('and offers to make a card', [...revisionHost.querySelectorAll('button')].some((b) => b.textContent === 'Make a card'));
+revisionView.destroy();
+await api.resetSession();
 
 // ---- router wires the real views to their steps ----------------------
 const routerModule = await import(`${REPO}/js/router.js`);
@@ -477,7 +379,7 @@ check('the cards step stays current', revealed.session.current === 'cards');
 
 cardsView.destroy();
 
-// ---- router covers all four steps -------------------------------------
+// ---- router -----------------------------------------------------------
 check('router exposes createRouter', typeof routerModule.createRouter === 'function');
 
 console.log(`\n${failures === 0 ? 'ALL FRONTEND CHECKS PASSED' : failures + ' FRONTEND CHECK(S) FAILED'}`);

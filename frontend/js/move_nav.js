@@ -6,7 +6,7 @@
  * says where the cursor is and tells it when that changes.
  *
  * One position may sit *beside* the game rather than in it: the engine's move
- * at my first inaccuracy, shown once the review is over. That "aside" lives
+ * at my slip, shown once the card is answered. That "aside" lives
  * between the position before my move and the one after it, so ← from it goes
  * back to where I went wrong and → goes on to the move I actually played.
  *
@@ -17,7 +17,7 @@ const FIRST_KEYS = new Set(['Home', 'ArrowUp']);
 const LAST_KEYS = new Set(['End', 'ArrowDown']);
 
 /**
- * `moves` is the review's move list (`{uci, fen_before, fen_after, ...}`).
+ * `moves` is the game's move list (`{uci, fen_before, fen_after, ...}`).
  * `onChange(view)` gets `{index, aside, fen, lastMove, move}` after every move
  * of the cursor; `lastMove` is a UCI string or null.
  */

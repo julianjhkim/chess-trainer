@@ -12,19 +12,13 @@ from chess_trainer import __version__, paths
 
 ENV_PREFIX = "CHESS_TRAINER_"
 
-#: Whose games to fetch. Deliberately no default: the code is public and is
-#: meant to be run by anyone, so each user names their own account in `.env`.
-USERNAME_HELP = (
-    "Set your chess.com username: add CHESS_TRAINER_CHESSCOM_USERNAME=<your username> "
-    "to the .env file next to README.md, then restart chess-trainer."
-)
 DEFAULT_STOCKFISH_PATH = "/opt/homebrew/bin/stockfish"
 DEFAULT_DEPTH = 20
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 DEFAULT_TIMEZONE = "Asia/Seoul"
 
-#: Descriptive User-Agent, as the chess.com and Lichess APIs both ask for.
+#: Descriptive User-Agent, as the Lichess API asks for.
 USER_AGENT = (
     f"chess-trainer/{__version__} "
     "(local personal training tool; +https://github.com/julianjhkim/chess-trainer)"
@@ -33,7 +27,8 @@ USER_AGENT = (
 
 @dataclass(frozen=True, slots=True)
 class Config:
-    #: Empty until the user sets it; fetching from chess.com needs it.
+    #: My chess.com username, to tell which side I had in a pasted PGN. Optional
+    #: (no default: the code is public); without it, a new card asks for a colour.
     chesscom_username: str = ""
     stockfish_path: Path = Path(DEFAULT_STOCKFISH_PATH)
     engine_depth: int = DEFAULT_DEPTH

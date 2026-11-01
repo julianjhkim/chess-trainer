@@ -3,7 +3,7 @@
  *
  * The click-mapping test needs the genuine HTML, CSS, chessground and view
  * modules in a real browser, but it must not need Stockfish, a database, the
- * Lichess API or a chess.com account. So this serves `frontend/` as the app
+ * Lichess API. So this serves `frontend/` as the app
  * does and answers `/api/*` from canned payloads shaped like the FastAPI
  * schemas, with the legal-move data generated from the real rules module
  * (`fixtures/generate.py`).
@@ -11,9 +11,8 @@
  * `POST /__scenario {"step": "cards", "engineAgrees": false}` chooses which
  * step the session says is current -- i.e. which view the page renders on the
  * next load -- and what the card says about Stockfish agreeing with the
- * masters. Adding `"review": "browse"` swaps the one-position review for a real
- * five-move game whose first slip is White's third ply, which is also slow to
- * analyse: the first few polls report progress before the target arrives.
+ * masters. `"inaccuracy": "empty" | "caught-up" | "one"` picks what the
+ * revision-card deck holds.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -43,8 +42,6 @@ const MIME = {
 
 const STEPS = [
   ['inaccuracy_cards', 'Revision cards'],
-  ['play', 'Play a game'],
-  ['review_new_game', 'Review that game'],
   ['cards', 'Opening cards'],
 ];
 
@@ -128,41 +125,17 @@ const GRADE = {
   ef: 2.5,
 };
 
-const GAME = {
-  id: 'stub-game',
-  url: 'https://www.chess.com/game/live/0',
-  my_colour: 'white',
-  opponent: 'a-very-long-opponent-username',
-  white_username: 'tester',
-  black_username: 'a-very-long-opponent-username',
-  my_result: 'checkmated',
-  time_class: 'rapid',
-  end_time: 1762000000,
-  source: 'paste',
-  move_count: 4,
-};
-
-const REVIEW_TARGET = {
-  ply: 0,
-  move_number: 1,
-  move_label: '1. f3',
-  fen_before: START_FEN,
-  replay_ucis: [],
-  mover_is_white: true,
-  orientation: 'white',
-};
+const OPPONENT = 'a-very-long-opponent-username';
 
 /**
- * The review game for the `browse` scenario: 1.e4 e5 2.Nf3 Nc6 3.Bb5, where
- * 2.Nf3 is the slip and 2.Bc4 the engine's answer.
+ * The revision card's game: 1.e4 e5 2.Nf3 Nc6 3.Bb5, where 2.Nf3 is the slip
+ * and 2.Bc4 the engine's answer.
  */
 const BROWSE_LINE = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5'];
 const BROWSE_TARGET_PLY = 2;
 const BROWSE_ANSWER = 'f1c4';
-/** Polls answered with "still analysing" before the browse review is ready. */
-const BROWSE_ANALYSING_POLLS = 3;
 
-/** The review's move list for `line`, shaped like `ReviewMoveOut`. */
+/** The move list for `line`, shaped like `GameMoveOut`. */
 function movesOf(line, myColour = 'white') {
   let fen = START_FEN;
   return line.map((uci, ply) => {
@@ -201,59 +174,6 @@ const BROWSE_TARGET = {
   classification: 'inaccuracy',
 };
 
-const BROWSE_SUMMARY = {
-  found_an_inaccuracy: true,
-  move_label: '2.Nf3',
-  my_move_san: 'Nf3',
-  my_move_uci: 'g1f3',
-  classification: 'inaccuracy',
-  best_move_san: 'Bc4',
-  best_move_uci: BROWSE_ANSWER,
-  eval_before: EVALUATION,
-  eval_after: { cp: -20, mate: null, text: '−0.20', fraction: 0.47 },
-  win_percent_drop: 11.2,
-  attempts: 1,
-  used_show_answer: false,
-  solved_first_try: true,
-};
-
-/** Which review the stub serves: null for the one-position one, or 'browse'. */
-let reviewScenario = null;
-let reviewPolls = 0;
-let reviewFinished = false;
-let reviewHinted = false;
-/** How the `clean` scenario's game ended for me: 'win', 'draw' or 'loss'. */
-let cleanOutcome = 'win';
-
-const BROWSE_HINT = { square: 'f1', piece: 'bishop', text: 'Move your bishop on f1.' };
-
-/** The "why" for the browse game, shaped like `ExplanationResponse`. */
-function browseExplanation() {
-  const answer = fixture.moves[`${BROWSE_TARGET.fen_before}|${BROWSE_ANSWER}`];
-  const [nf3, nc6] = BROWSE_MOVES.slice(2, 4);
-  const lineMove = (m) => ({
-    uci: m.uci,
-    san: m.san,
-    label: m.label,
-    fen_after: m.fen_after,
-    mover_is_white: m.mover_is_white,
-  });
-  return {
-    best: {
-      moves: [
-        { uci: BROWSE_ANSWER, san: answer.san, label: `2.${answer.san}`, fen_after: answer.fen, mover_is_white: true },
-      ],
-      evaluation: EVALUATION,
-      notes: ['After it the engine rates the position +0.31.'],
-    },
-    mine: {
-      moves: [lineMove(nf3), lineMove(nc6)],
-      evaluation: BROWSE_SUMMARY.eval_after,
-      notes: ['The engine answers 2...Nc6.', 'It costs 11.2% of your winning chances (+0.31 → −0.20).'],
-    },
-  };
-}
-
 // -- inaccuracy cards ---------------------------------------------------------
 /** 'empty' (no cards at all), 'caught-up' (none due) or 'one' (one due card). */
 let inaccuracyScenario = 'empty';
@@ -275,7 +195,7 @@ const INACCURACY_CARD = {
   my_move_san: 'Nf3',
   move_label: '2.Nf3',
   source: 'due',
-  opponent: GAME.opponent,
+  opponent: OPPONENT,
   played_on: 1736942614,
   interval_days: 1,
   reps: 0,
@@ -341,6 +261,7 @@ function inaccuracyAttempt(body) {
       },
       moves: BROWSE_MOVES,
       ply: BROWSE_TARGET_PLY,
+      lichess_url: 'https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3%20Nc6%203.Bb5?color=white#2',
     },
     counts: inaccuracyCounts(),
     session: { ...session(currentStep), steps: session(currentStep).steps.map((st) => st.step === 'inaccuracy_cards' ? { ...st, completed: true } : st) },
@@ -352,8 +273,6 @@ function inaccuracyAttempt(body) {
 let currentStep = 'cards';
 /** What the served card says about Stockfish agreeing with the masters. */
 let engineAgrees = null;
-/** Attempts made in the stubbed review, so the attempts card can grow. */
-let reviewAttempts = 0;
 
 function session(step) {
   return {
@@ -372,90 +291,6 @@ function session(step) {
 }
 
 const STREAK = { current: 4, longest: 9, active_today: true, total_days: 21 };
-
-function reviewState(extra = {}) {
-  if (reviewScenario === 'browse') return browseReviewState(extra);
-  if (reviewScenario === 'clean') return cleanReviewState(extra);
-  return {
-    step: currentStep,
-    status: 'ready',
-    game: GAME,
-    orientation: 'white',
-    depth: 20,
-    assessed: 4,
-    total_moves: 4,
-    progress: 1,
-    error: null,
-    target: REVIEW_TARGET,
-    no_inaccuracy: false,
-    attempts: reviewAttempts,
-    used_show_answer: false,
-    solved: false,
-    finished: false,
-    summary: null,
-    ...extra,
-  };
-}
-
-/** A game without a single inaccuracy, ending as `cleanOutcome` says. */
-function cleanReviewState(extra = {}) {
-  return {
-    step: currentStep,
-    status: 'ready',
-    game: { ...GAME, move_count: BROWSE_LINE.length, my_outcome: cleanOutcome },
-    orientation: 'white',
-    depth: 20,
-    assessed: 3,
-    total_moves: 3,
-    progress: 1,
-    error: null,
-    target: null,
-    no_inaccuracy: true,
-    attempts: 0,
-    used_show_answer: false,
-    used_hint: false,
-    hint: null,
-    solved: false,
-    finished: true,
-    summary: { found_an_inaccuracy: false, attempts: 0, used_show_answer: false, used_hint: false, solved_first_try: false },
-    lichess_url: 'https://lichess.org/analysis/pgn/1.e4?color=white#0',
-    moves: BROWSE_MOVES,
-    ...extra,
-  };
-}
-
-function browseReviewState(extra = {}) {
-  const analysing = reviewPolls < BROWSE_ANALYSING_POLLS;
-  return {
-    step: currentStep,
-    status: analysing ? 'analysing' : 'ready',
-    game: { ...GAME, move_count: BROWSE_LINE.length },
-    orientation: 'white',
-    depth: 20,
-    assessed: analysing ? reviewPolls : 2,
-    total_moves: 3,
-    progress: analysing ? reviewPolls / 3 : 1,
-    error: null,
-    target: analysing ? null : BROWSE_TARGET,
-    no_inaccuracy: false,
-    attempts: reviewAttempts,
-    used_show_answer: false,
-    used_hint: reviewHinted,
-    hint: reviewHinted ? BROWSE_HINT : null,
-    solved: reviewFinished,
-    finished: reviewFinished,
-    summary: reviewFinished ? { ...BROWSE_SUMMARY, used_hint: reviewHinted } : null,
-    lichess_url: reviewFinished
-      ? 'https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3%20Nc6%203.Bb5?color=white#2'
-      : null,
-    moves: analysing
-      ? []
-      : reviewFinished
-        ? BROWSE_MOVES
-        : BROWSE_MOVES.slice(0, BROWSE_TARGET_PLY),
-    ...extra,
-  };
-}
 
 function boardMove(body) {
   const key = `${body.fen}|${body.from}${body.to}${body.promotion ?? ''}`;
@@ -530,42 +365,6 @@ const routes = {
     };
   },
 
-  // -- game review ------------------------------------------------------
-  'POST /api/review/start': () => {
-    reviewAttempts = 0;
-    reviewPolls = 0;
-    reviewFinished = false;
-    reviewHinted = false;
-    return reviewState();
-  },
-  'POST /api/review/hint': () => {
-    reviewHinted = true;
-    return { hint: BROWSE_HINT, review: reviewState() };
-  },
-  'POST /api/review/explain': () =>
-    reviewFinished ? browseExplanation() : { error: 'Solve the position or show the answer first.' },
-  'GET /api/review/review_new_game': () => {
-    reviewPolls += 1;
-    return reviewState();
-  },
-  'POST /api/review/attempt': (body) => {
-    reviewAttempts += 1;
-    const uci = `${body.from}${body.to}${body.promotion ?? ''}`;
-    if (reviewScenario === 'browse') return browseAttempt(body, uci);
-    const move = boardMove({ ...body, fen: START_FEN });
-    return {
-      correct: false,
-      uci,
-      san: move?.san ?? uci,
-      evaluation: EVALUATION,
-      fen_after: move?.fen ?? START_FEN,
-      attempts: reviewAttempts,
-      review: reviewState(),
-      session: null,
-      streak: null,
-    };
-  },
-
   // -- inaccuracy cards -------------------------------------------------
   'POST /api/inaccuracy-cards/next': () => {
     inaccuracyAttempts = 0;
@@ -595,16 +394,15 @@ const routes = {
     inaccuracyDeleted = true;
     return inaccuracyCounts();
   },
-  'POST /api/session/jump/play': () => {
-    currentStep = 'play';
-    return session('play');
+  'POST /api/session/jump/cards': () => {
+    currentStep = 'cards';
+    return session('cards');
   },
 
   // -- test control -----------------------------------------------------
   'POST /__scenario': (body) => {
     currentStep = body.step;
     engineAgrees = body.engineAgrees ?? null;
-    reviewScenario = body.review ?? null;
     inaccuracyScenario = body.inaccuracy ?? 'empty';
     inaccuracyServed = false;
     inaccuracyAnswered = false;
@@ -612,31 +410,9 @@ const routes = {
     inaccuracyAttempts = 0;
     inaccuracyDeleted = false;
     inaccuracyCreated = 0;
-    cleanOutcome = body.outcome ?? 'win';
-    reviewAttempts = 0;
-    reviewPolls = 0;
-    reviewFinished = false;
-    reviewHinted = false;
-    return { step: currentStep, engineAgrees, review: reviewScenario };
+    return { step: currentStep, engineAgrees, inaccuracy: inaccuracyScenario };
   },
 };
-
-function browseAttempt(body, uci) {
-  const move = boardMove({ ...body, fen: BROWSE_TARGET.fen_before });
-  const correct = uci === BROWSE_ANSWER;
-  if (correct) reviewFinished = true;
-  return {
-    correct,
-    uci,
-    san: move?.san ?? uci,
-    evaluation: EVALUATION,
-    fen_after: move?.fen ?? BROWSE_TARGET.fen_before,
-    attempts: reviewAttempts,
-    review: reviewState(),
-    session: correct ? session(currentStep) : null,
-    streak: correct ? STREAK : null,
-  };
-}
 
 async function serveStatic(pathname, response) {
   const relative = pathname === '/' ? 'index.html' : normalize(pathname).replace(/^\/+/, '');

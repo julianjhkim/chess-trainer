@@ -18,7 +18,7 @@ def test_start_selects_the_first_step():
 
 def test_start_with_a_subset_begins_at_the_earliest_selected():
     flow = SessionFlow()
-    assert flow.start({Step.REVIEW_NEW_GAME, Step.CARDS}) is Step.REVIEW_NEW_GAME
+    assert flow.start({Step.CARDS}) is Step.CARDS
 
 
 def test_start_with_an_empty_selection_has_no_current_step():
@@ -28,15 +28,7 @@ def test_start_with_an_empty_selection_has_no_current_step():
 def test_completing_advances_to_the_next_step():
     flow = SessionFlow()
     flow.start()
-    assert flow.complete_current() is Step.PLAY
-
-
-def test_finishing_the_play_step_moves_to_the_review_step():
-    """The spec requires step 2 to hand straight over to step 3."""
-    flow = SessionFlow()
-    flow.start()
-    flow.complete(Step.INACCURACY_CARDS)
-    assert flow.complete(Step.PLAY) is Step.REVIEW_NEW_GAME
+    assert flow.complete_current() is Step.CARDS
 
 
 def test_completing_skips_unselected_steps():
@@ -74,8 +66,8 @@ def test_jump_moves_backward():
 def test_jumping_to_an_unselected_step_selects_it():
     flow = SessionFlow()
     flow.start({Step.CARDS})
-    flow.jump_to(Step.PLAY)
-    assert Step.PLAY in flow.enabled
+    flow.jump_to(Step.INACCURACY_CARDS)
+    assert Step.INACCURACY_CARDS in flow.enabled
 
 
 def test_jumping_does_not_clear_completion():
@@ -97,8 +89,8 @@ def test_uncomplete_allows_rerunning_a_step():
 
 def test_is_finished_requires_every_selected_step():
     flow = SessionFlow()
-    flow.start({Step.PLAY, Step.CARDS})
-    flow.complete(Step.PLAY)
+    flow.start({Step.INACCURACY_CARDS, Step.CARDS})
+    flow.complete(Step.INACCURACY_CARDS)
     assert not flow.is_finished
     flow.complete(Step.CARDS)
     assert flow.is_finished
@@ -111,8 +103,8 @@ def test_a_flow_that_never_started_is_not_finished():
 def test_remaining_lists_outstanding_steps_in_order():
     flow = SessionFlow()
     flow.start()
-    flow.complete(Step.PLAY)
-    assert flow.remaining == [Step.INACCURACY_CARDS, Step.REVIEW_NEW_GAME, Step.CARDS]
+    flow.complete(Step.CARDS)
+    assert flow.remaining == [Step.INACCURACY_CARDS]
 
 
 def test_reset_clears_everything():
@@ -125,22 +117,23 @@ def test_reset_clears_everything():
     assert flow.enabled == set(ORDER)
 
 
-def test_step_bar_always_shows_all_four_steps():
+def test_step_bar_always_shows_every_step():
     flow = SessionFlow()
     flow.start({Step.CARDS})
     bar = flow.step_bar()
-    assert len(bar) == 4
-    assert [i.position for i in bar] == [1, 2, 3, 4]
+    assert [i.step for i in bar] == list(ORDER)
+    assert [i.position for i in bar] == [1, 2]
 
 
 def test_step_bar_flags_state_correctly():
     flow = SessionFlow()
-    flow.start({Step.INACCURACY_CARDS, Step.PLAY})
+    flow.start({Step.INACCURACY_CARDS})
+    bar = {info.step: info for info in flow.step_bar()}
+    assert bar[Step.INACCURACY_CARDS].current
+    assert not bar[Step.CARDS].enabled
     flow.complete(Step.INACCURACY_CARDS)
     bar = {info.step: info for info in flow.step_bar()}
     assert bar[Step.INACCURACY_CARDS].completed
-    assert bar[Step.PLAY].current
-    assert not bar[Step.CARDS].enabled
 
 
 def test_start_can_begin_at_any_step():
@@ -151,11 +144,11 @@ def test_start_can_begin_at_any_step():
 
 def test_starting_at_a_step_then_completing_it_moves_on():
     flow = SessionFlow()
-    flow.start(at=Step.PLAY)
-    assert flow.complete_current() is Step.REVIEW_NEW_GAME
+    flow.start(at=Step.INACCURACY_CARDS)
+    assert flow.complete_current() is Step.CARDS
 
 
 def test_starting_at_an_unselected_step_selects_it():
     flow = SessionFlow()
-    assert flow.start({Step.PLAY}, at=Step.CARDS) is Step.CARDS
+    assert flow.start({Step.INACCURACY_CARDS}, at=Step.CARDS) is Step.CARDS
     assert Step.CARDS in flow.enabled

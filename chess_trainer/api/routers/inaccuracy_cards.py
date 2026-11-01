@@ -3,7 +3,7 @@
 I make a card by pasting a game and naming the number of my move that went
 wrong; the card is the position before it. The answer is the engine's top
 move there at the analysis depth, found when the card is made (the same strict
-top-1 as the review). Grading and scheduling are the opening
+top-1 everywhere in the app). Grading and scheduling are the opening
 cards' modified SM-2; a hint caps the grade at q=3. A card that looks wrong
 or useless can be deleted for good.
 """
@@ -29,7 +29,7 @@ from chess_trainer.api.schemas import (
     NewCardOut,
     NewCardPreviewOut,
     NewCardRequest,
-    ReviewMoveOut,
+    GameMoveOut,
     SessionOut,
     StreakOut,
 )
@@ -42,6 +42,7 @@ from chess_trainer.engine.winpct import win_percent_drop
 from chess_trainer.inaccuracies import deck as deck_module
 from chess_trainer.inaccuracies import slip as slip_module
 from chess_trainer.inaccuracies.deck import DeckAnswer, DeckItem
+from chess_trainer.inaccuracies.lichess_link import analysis_url
 from chess_trainer.pgn import parse
 from chess_trainer.pgn import positions as positions_module
 from chess_trainer.pgn.parse import ParsedGame, PgnParseError, PlayerNotInGame
@@ -84,8 +85,8 @@ def _game_moves(conn: sqlite3.Connection, card: InaccuracyCard) -> list[Position
     return positions
 
 
-def _moves_out(positions: list[PositionMove], colour: str) -> list[ReviewMoveOut]:
-    return [ReviewMoveOut.of(p, colour) for p in positions]
+def _moves_out(positions: list[PositionMove], colour: str) -> list[GameMoveOut]:
+    return [GameMoveOut.of(p, colour) for p in positions]
 
 
 def _card_out(conn: sqlite3.Connection, card: InaccuracyCard, source: CardSource) -> InaccuracyCardOut:
@@ -138,6 +139,7 @@ def _result_out(
     conn: sqlite3.Connection, card: InaccuracyCard, answer: DeckAnswer, *, revealed: bool
 ) -> InaccuracyResultOut:
     result = answer.result
+    positions = _game_moves(conn, card)
     return InaccuracyResultOut(
         answer_uci=card.best_move_uci,
         answer_san=card.best_move_san,
@@ -156,8 +158,14 @@ def _result_out(
             due_on=result.due_on.isoformat() if result else None,
             ef=result.state.ef if result else None,
         ),
-        moves=_moves_out(_game_moves(conn, card), card.my_colour),
+        moves=_moves_out(positions, card.my_colour),
         ply=card.ply,
+        lichess_url=analysis_url(
+            positions,
+            start_fen=positions[0].fen_before if positions else card.fen,
+            ply=card.ply if positions else 0,
+            my_colour=card.my_colour,
+        ),
     )
 
 
@@ -392,7 +400,7 @@ async def create(
 
 @router.delete("/{card_id}", response_model=InaccuracyCountsOut)
 def delete_card(card_id: int, state: State, conn: Conn, config: Cfg) -> InaccuracyCountsOut:
-    """Delete a card for good: it is never due again, nor made again from a review.
+    """Delete a card: it is never due again (making it again restores it).
 
     Deleting the card on screen clears it, so the next step is to ask for the
     next card. Answers already given stay in the log (and in the streak).

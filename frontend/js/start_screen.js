@@ -1,7 +1,7 @@
 /**
  * The start screen: one button per step.
  *
- * Clicking a step starts the session right there, with all four steps on: when
+ * Clicking a step starts the session right there, with every step on: when
  * it is done the next one follows, and the step bar jumps anywhere at any time.
  */
 
@@ -10,8 +10,6 @@ import { set, withStatus } from './state.js';
 
 const NOTES = {
   inaccuracy_cards: 'Warm up on slips you picked from your games',
-  play: 'Open chess.com, then fetch the game you just played',
-  review_new_game: 'Analyse the game you just played',
   cards: 'Opening drills from the Lichess masters database',
 };
 

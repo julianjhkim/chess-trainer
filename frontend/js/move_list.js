@@ -1,5 +1,5 @@
 /**
- * The game score beside the review board: `1. e4 e5  2. Nf3 …`.
+ * The game score beside a revision card's board: `1. e4 e5  2. Nf3 …`.
  *
  * Built once per move list and then only re-highlighted, so stepping through
  * the game with the arrow keys never rebuilds the panel (a rebuild can change
@@ -14,8 +14,8 @@ export function createMoveList({ onSelect = null } = {}) {
   let entries = [];
 
   /**
-   * `moves` as the review sends them. `marked` is the ply of my first
-   * inaccuracy, shown once the review is over, or null.
+   * `moves` as the server sends them. `marked` is the ply of my slip, shown
+   * once the card is answered, or null.
    */
   function setMoves(moves, { marked = null } = {}) {
     element.replaceChildren();

@@ -5,7 +5,7 @@ from urllib.parse import unquote
 import chess
 
 from chess_trainer.pgn.positions import walk
-from chess_trainer.review.lichess_link import analysis_url, movetext
+from chess_trainer.inaccuracies.lichess_link import analysis_url, movetext
 
 LINE = ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5"]
 

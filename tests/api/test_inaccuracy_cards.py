@@ -1,7 +1,7 @@
 """The revision-card endpoints (internally "inaccuracy cards").
 
 Cards are made by hand: a pasted game and the number of my move that went
-wrong. Reviews no longer make them.
+wrong.
 """
 
 from __future__ import annotations
@@ -11,10 +11,24 @@ from datetime import date
 from chess_trainer.db import inaccuracy_cards_repo as repo
 from chess_trainer.db.connection import connect
 from chess_trainer.db.schedule_repo import ScheduleRow
+from chess_trainer.engine.eval_types import Eval
+from chess_trainer.pgn.parse import parse_pgn
+from chess_trainer.pgn.positions import from_parsed
 from chess_trainer.streak import seoul_day
-from tests.api.test_review import BLACK_PGN, PGN, STEP, make_blunder, start_review
+
+PGN = '[White "test-player"]\n[Black "rival"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *\n'
+BLACK_PGN = '[White "rival"]\n[Black "test-player"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *\n'
 
 NO_NAMES = "\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *\n"
+
+
+def make_blunder(engine, ply: int, best_move: str, pgn=PGN) -> None:
+    """Rig the fake engine so my move at `ply` looks like a blunder."""
+    target = from_parsed(parse_pgn(pgn))[ply]
+    worse = Eval(cp=-900) if target.mover_is_white else Eval(cp=900)
+    engine.results[target.fen_before] = Eval(cp=0)
+    engine.results[target.fen_after] = worse
+    engine.best_moves[target.fen_before] = best_move
 
 
 def make_card(client, fake_engine, *, move_number=2, pgn=PGN, colour=None):
@@ -129,14 +143,6 @@ def test_making_the_same_card_twice_keeps_one(client, fake_engine_for_api):
     assert preview["existing"] == "active"
 
 
-def test_a_review_no_longer_makes_a_card(client, fake_engine_for_api):
-    make_blunder(fake_engine_for_api, 2, "d2d4")
-    start_review(client)
-    client.post("/api/review/show-answer", json={"step": STEP})
-    assert "inaccuracy_card" not in client.get(f"/api/review/{STEP}").json()
-    assert client.get("/api/inaccuracy-cards/state").json()["counts"]["total"] == 0
-
-
 def test_nothing_is_due_on_the_day_the_card_is_made(client, fake_engine_for_api):
     make_card(client, fake_engine_for_api)
     payload = client.post("/api/inaccuracy-cards/next").json()
@@ -177,6 +183,20 @@ def test_the_result_opens_the_whole_game(client, fake_engine_for_api):
     result = client.post("/api/inaccuracy-cards/show-answer").json()["result"]
     assert [m["san"] for m in result["moves"]] == ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6"]
     assert result["ply"] == 2
+
+
+def test_the_result_links_to_lichess_at_the_slip(client, fake_engine_for_api):
+    serve(client, fake_engine_for_api)
+    result = client.post("/api/inaccuracy-cards/show-answer").json()["result"]
+    assert result["lichess_url"] == (
+        "https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3%20Nc6%203.Bb5%20a6?color=white#2"
+    )
+    assert "rival" not in result["lichess_url"]  # moves only, no names
+
+
+def test_no_lichess_link_while_solving(client, fake_engine_for_api):
+    card = serve(client, fake_engine_for_api)["card"]
+    assert "lichess" not in str(card)
 
 
 def test_a_wrong_move_is_unlimited_and_evaluated(client, fake_engine_for_api):

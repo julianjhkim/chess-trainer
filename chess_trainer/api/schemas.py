@@ -7,24 +7,15 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from chess_trainer.db.cards_repo import CardRow
-from chess_trainer.db.games_repo import StoredGame
 from chess_trainer.db.schedule_repo import ScheduleRow
 from chess_trainer.engine.eval_format import bar_fraction, format_eval
 from chess_trainer.engine.eval_types import Eval
-from chess_trainer.pgn import positions as positions_module
 from chess_trainer.pgn.positions import PositionMove
-from chess_trainer.review import my_moves
-from chess_trainer.review.browse import browsable_moves
-from chess_trainer.review.explain import ExplainedLine, Explanation
-from chess_trainer.review.hint import hint_for
-from chess_trainer.review.lichess_link import analysis_url
-from chess_trainer.review.outcome import my_outcome
-from chess_trainer.review.review_job import ReviewJob, ReviewStatus
-from chess_trainer.review.review_session import ReviewTarget
+from chess_trainer.pgn import my_moves
+from chess_trainer.inaccuracies.hint import hint_for
 from chess_trainer.openings import card_builder, line as line_module
 from chess_trainer.openings.card_types import CardMode
 from chess_trainer.openings.stats_table import StatsTable
-from chess_trainer.review.verdict import ReviewSummary
 from chess_trainer.srs.due import CardSource
 from chess_trainer.srs.scheduler import AnswerOutcome, QueueCounts
 from chess_trainer.session.flow import SessionFlow
@@ -148,101 +139,8 @@ class HealthOut(BaseModel):
     timezone: str
 
 
-# -- games ---------------------------------------------------------------
-class GameOut(BaseModel):
-    """A stored game, as the UI needs to describe it."""
-
-    id: str
-    url: str | None = None
-    my_colour: str
-    opponent: str | None = None
-    white_username: str | None = None
-    black_username: str | None = None
-    my_result: str | None = None
-    #: ``win`` / ``draw`` / ``loss`` from my side, when the game says.
-    my_outcome: str | None = None
-    time_class: str | None = None
-    end_time: int | None = None
-    source: str
-    move_count: int | None = None
-
-    @classmethod
-    def of(
-        cls,
-        game: StoredGame,
-        *,
-        move_count: int | None = None,
-        pgn_result: str | None = None,
-    ) -> "GameOut":
-        return cls(
-            id=game.id,
-            url=game.url,
-            my_colour=game.my_color,
-            opponent=game.opponent,
-            white_username=game.white_username,
-            black_username=game.black_username,
-            my_result=game.my_result,
-            my_outcome=my_outcome(game.my_result, pgn_result, game.my_color),
-            time_class=game.time_class,
-            end_time=game.end_time,
-            source=game.source,
-            move_count=move_count,
-        )
-
-
-class GameResponse(BaseModel):
-    game: GameOut
-
-
-class LatestGameResponse(BaseModel):
-    game: GameOut | None = None
-
-
-class PastePgnRequest(BaseModel):
-    pgn: str = Field(min_length=1, description="Full PGN text of the game")
-
-
-class PollRequest(BaseModel):
-    budget_seconds: float | None = Field(
-        default=None,
-        gt=0,
-        le=30,
-        description="How long this polling window may take (default ~12s).",
-    )
-
-
-class PollResponse(BaseModel):
-    """One polling window. The client repeats these until the ~2 minute budget."""
-
-    found: bool
-    game: GameOut | None = None
-    attempts: int
-    waited: float
-    error: str | None = None
-    total_budget_seconds: float
-
-
-# -- review --------------------------------------------------------------
-class ReviewTargetOut(BaseModel):
-    """The position to solve. The answer itself is deliberately not included.
-
-    The move I actually played here is: knowing what not to play helps, and
-    it gives nothing about the engine's move away.
-    """
-
-    ply: int
-    move_number: int
-    move_label: str
-    fen_before: str
-    replay_ucis: list[str]
-    mover_is_white: bool
-    orientation: str
-    my_move_uci: str
-    my_move_san: str
-    classification: str
-
-
-class ReviewMoveOut(BaseModel):
+# -- moves and hints ---------------------------------------------------
+class GameMoveOut(BaseModel):
     """One move of the game, for stepping through it with the arrow keys."""
 
     ply: int
@@ -256,7 +154,7 @@ class ReviewMoveOut(BaseModel):
     is_mine: bool
 
     @classmethod
-    def of(cls, position: PositionMove, my_colour: str) -> "ReviewMoveOut":
+    def of(cls, position: PositionMove, my_colour: str) -> "GameMoveOut":
         return cls(
             ply=position.ply,
             move_number=position.move_number,
@@ -281,246 +179,6 @@ class HintOut(BaseModel):
     def of(cls, fen: str, square: str) -> "HintOut":
         hint = hint_for(fen, square)
         return cls(square=hint.square, piece=hint.piece, text=hint.text)
-
-
-class ReviewSummaryOut(BaseModel):
-    found_an_inaccuracy: bool
-    move_label: str | None = None
-    my_move_san: str | None = None
-    my_move_uci: str | None = None
-    classification: str | None = None
-    best_move_san: str | None = None
-    best_move_uci: str | None = None
-    eval_before: EvalOut | None = None
-    eval_after: EvalOut | None = None
-    win_percent_drop: float | None = None
-    attempts: int = 0
-    used_show_answer: bool = False
-    used_hint: bool = False
-    solved_first_try: bool = False
-
-    @classmethod
-    def of(cls, summary: ReviewSummary) -> "ReviewSummaryOut":
-        return cls(
-            found_an_inaccuracy=summary.found_an_inaccuracy,
-            move_label=summary.move_label,
-            my_move_san=summary.my_move_san,
-            my_move_uci=summary.my_move_uci,
-            classification=summary.classification,
-            best_move_san=summary.best_move_san,
-            best_move_uci=summary.best_move_uci,
-            eval_before=EvalOut.of(summary.eval_before) if summary.eval_before else None,
-            eval_after=EvalOut.of(summary.eval_after) if summary.eval_after else None,
-            win_percent_drop=summary.win_percent_drop,
-            attempts=summary.attempts,
-            used_show_answer=summary.used_show_answer,
-            used_hint=summary.used_hint,
-            solved_first_try=summary.solved_first_try,
-        )
-
-
-class ReviewStateOut(BaseModel):
-    """Everything the review view needs, at any point in its lifecycle."""
-
-    step: Step
-    status: ReviewStatus
-    game: GameOut
-    orientation: str
-    depth: int
-    assessed: int
-    total_moves: int
-    progress: float
-    error: str | None = None
-    #: Present once the analysis is done and an inaccuracy was found.
-    target: ReviewTargetOut | None = None
-    #: True when the game held no inaccuracy at all.
-    no_inaccuracy: bool = False
-    attempts: int = 0
-    used_show_answer: bool = False
-    #: Once a hint is taken, the square and piece it pointed at, so coming
-    #: back to the review shows it again.
-    used_hint: bool = False
-    hint: HintOut | None = None
-    solved: bool = False
-    finished: bool = False
-    summary: ReviewSummaryOut | None = None
-    #: The moves that can be stepped through: those before my first inaccuracy
-    #: while the drill is open, the whole game once the review is over. Empty
-    #: while analysing.
-    moves: list[ReviewMoveOut] = Field(default_factory=list)
-    #: Once the review is over: the game on Lichess's analysis board, opened
-    #: at the position before my first inaccuracy, to try moves there.
-    lichess_url: str | None = None
-
-    @classmethod
-    def of(cls, step: Step, job: ReviewJob) -> "ReviewStateOut":
-        orientation = job.my_colour
-        state = cls(
-            step=step,
-            status=job.status,
-            game=GameOut.of(
-                job.game, move_count=job.parsed.move_count, pgn_result=job.parsed.result
-            ),
-            orientation=orientation,
-            depth=job.depth,
-            assessed=job.assessed,
-            total_moves=job.total_moves,
-            progress=job.progress_fraction,
-            error=job.error,
-        )
-        session = job.session
-        if session is None:
-            return state
-
-        target = session.target
-        state.attempts = session.attempt_count
-        state.used_show_answer = session.used_show_answer
-        state.used_hint = session.used_hint
-        if session.used_hint and target is not None:
-            state.hint = HintOut.of(target.fen_before, target.best_move_uci[:2])
-        state.solved = session.solved
-        state.finished = session.finished
-        state.no_inaccuracy = target is None
-        if target is not None and not session.finished:
-            state.target = _target_out(target, orientation)
-        if session.finished:
-            state.summary = ReviewSummaryOut.of(session.summary())
-            if target is not None:
-                state.target = _target_out(target, orientation)
-        positions = positions_module.from_parsed(job.parsed)
-        state.moves = [
-            ReviewMoveOut.of(position, job.my_colour)
-            for position in browsable_moves(
-                positions,
-                target_ply=target.ply if target is not None else None,
-                finished=session.finished,
-            )
-        ]
-        if session.finished:
-            state.lichess_url = analysis_url(
-                positions,
-                start_fen=job.parsed.start_fen,
-                ply=target.ply if target is not None else 0,
-                my_colour=job.my_colour,
-            )
-        return state
-
-
-def _target_out(target: ReviewTarget, orientation: str) -> ReviewTargetOut:
-    return ReviewTargetOut(
-        ply=target.ply,
-        move_number=target.move_number,
-        move_label=target.move_label,
-        fen_before=target.fen_before,
-        replay_ucis=list(target.replay_ucis),
-        mover_is_white=target.mover_is_white,
-        orientation=orientation,
-        my_move_uci=target.my_move_uci,
-        my_move_san=target.my_move_san,
-        classification=target.classification,
-    )
-
-
-class StartReviewRequest(BaseModel):
-    step: Step
-    #: Omit to review the most recent stored game.
-    game_id: str | None = None
-    #: Re-analyse from scratch rather than resuming an in-progress review.
-    restart: bool = False
-
-
-class AttemptRequest(BaseModel):
-    step: Step
-    from_square: str = Field(alias="from", min_length=2, max_length=2)
-    to_square: str = Field(alias="to", min_length=2, max_length=2)
-    promotion: str | None = None
-
-    model_config = {"populate_by_name": True}
-
-
-class AttemptResponse(BaseModel):
-    correct: bool
-    uci: str
-    san: str
-    #: Evaluation of the position after the attempted move, for the eval bar.
-    evaluation: EvalOut
-    fen_after: str
-    attempts: int
-    review: ReviewStateOut
-    session: SessionOut | None = None
-    streak: StreakOut | None = None
-
-
-class AcknowledgeResponse(BaseModel):
-    """Returned when closing a review that had nothing to solve."""
-
-    review: ReviewStateOut
-    session: SessionOut | None = None
-    streak: StreakOut | None = None
-
-
-class ShowAnswerRequest(BaseModel):
-    step: Step
-
-
-class ShowAnswerResponse(BaseModel):
-    best_move_uci: str
-    best_move_san: str
-    fen_after: str
-    evaluation: EvalOut
-    review: ReviewStateOut
-    session: SessionOut | None = None
-    streak: StreakOut | None = None
-
-
-class HintResponse(BaseModel):
-    hint: HintOut
-    review: ReviewStateOut
-
-
-class LineMoveOut(BaseModel):
-    uci: str
-    san: str
-    label: str
-    fen_after: str
-    mover_is_white: bool
-
-
-class ExplainedLineOut(BaseModel):
-    moves: list[LineMoveOut]
-    evaluation: EvalOut
-    notes: list[str]
-
-    @classmethod
-    def of(cls, line: ExplainedLine) -> "ExplainedLineOut":
-        return cls(
-            moves=[
-                LineMoveOut(
-                    uci=m.uci,
-                    san=m.san,
-                    label=m.label,
-                    fen_after=m.fen_after,
-                    mover_is_white=m.mover_is_white,
-                )
-                for m in line.moves
-            ],
-            evaluation=EvalOut.of(line.evaluation),
-            notes=list(line.notes),
-        )
-
-
-class ExplanationResponse(BaseModel):
-    """The engine's line after its move, and after mine, read back in words."""
-
-    best: ExplainedLineOut
-    mine: ExplainedLineOut
-
-    @classmethod
-    def of(cls, explanation: Explanation) -> "ExplanationResponse":
-        return cls(
-            best=ExplainedLineOut.of(explanation.best),
-            mine=ExplainedLineOut.of(explanation.mine),
-        )
 
 
 # -- opening cards -------------------------------------------------------
@@ -804,7 +462,7 @@ class InaccuracyCardOut(BaseModel):
     reps: int = 0
     #: The game's moves before the slip, to step through while solving. Empty
     #: when the game is not stored.
-    moves: list[ReviewMoveOut] = Field(default_factory=list)
+    moves: list[GameMoveOut] = Field(default_factory=list)
 
 
 class InaccuracyGradeOut(BaseModel):
@@ -831,8 +489,12 @@ class InaccuracyResultOut(BaseModel):
     grade: InaccuracyGradeOut
     #: The whole game, to step through once the card is answered; the slip is
     #: move ``ply`` (0-based), so position ``ply`` is the card's position.
-    moves: list[ReviewMoveOut] = Field(default_factory=list)
+    moves: list[GameMoveOut] = Field(default_factory=list)
     ply: int = 0
+    #: The game on Lichess's analysis board, opened at the card's position
+    #: (just the position when the game is not stored). Only once answered:
+    #: Lichess's engine would give the answer away.
+    lichess_url: str | None = None
 
 
 class InaccuracyStateOut(BaseModel):
@@ -882,7 +544,7 @@ class NewCardPreviewOut(BaseModel):
     last_move_uci: str | None = None
     opponent: str | None = None
     #: The moves before the slip, to step through.
-    moves: list[ReviewMoveOut] = Field(default_factory=list)
+    moves: list[GameMoveOut] = Field(default_factory=list)
     #: "none", "active" (the position already has a card) or "deleted".
     existing: str = "none"
 

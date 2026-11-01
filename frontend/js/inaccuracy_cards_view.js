@@ -15,7 +15,9 @@
  * card, so it comes back later in the session. ← / → step through the moves
  * before the slip while solving, and the whole game once it is answered (the
  * answer sits beside the game, between the slip position and my move).
- * *Delete card* (after an inline confirm) takes a card out of the deck.
+ * *Analyse at Lichess* (once answered) opens the game on Lichess's analysis
+ * board at the card's position -- the app has no board of its own for trying
+ * moves. *Delete card* (after an inline confirm) takes a card out of the deck.
  *
  * With nothing due -- including before any card has been made -- it says so,
  * offers to make a card, and to go on to the next step.
@@ -188,7 +190,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     }
     const row = document.createElement('div');
     row.className = 'button-row';
-    row.append(button('Make a card', startCreating), button('Continue to Play a game', moveOn, 'primary'));
+    row.append(button('Make a card', startCreating), button('Continue to Opening cards', moveOn, 'primary'));
     body.append(row);
     promptCard.setBody(body);
     buildControls();
@@ -205,7 +207,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     const done = session?.steps.find((s) => s.step === step.step)?.completed;
     const next = done
       ? (await withStatus('Moving on…', () => api.completeStep(step.step))).session
-      : await withStatus('Moving on…', () => api.jumpToStep('play'));
+      : await withStatus('Moving on…', () => api.jumpToStep('cards'));
     set({ session: next });
     if (onCompleted) onCompleted(next);
   }
@@ -526,6 +528,18 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (grade.ef != null) addRow(list, 'Ease', grade.ef.toFixed(2));
     if (grade.requeued) addRow(list, 'Again', 'later this session');
     body.append(list);
+    if (shown.lichess_url) {
+      const link = document.createElement('a');
+      link.className = 'lichess-link';
+      link.href = shown.lichess_url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Analyse at Lichess ↗';
+      const linkLine = document.createElement('p');
+      linkLine.style.margin = '0 0 10px';
+      linkLine.append(link);
+      body.append(linkLine);
+    }
     if (shown.moves?.length) {
       body.append(
         paragraph('← → step through the whole game. The engine’s move sits between the position and the move you played.', 'choice-note'),

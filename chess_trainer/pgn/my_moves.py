@@ -1,6 +1,6 @@
-"""Selecting the moves that are mine.
+"""Which moves of a game are mine (shown bold in the move list).
 
-Only my moves get classified, so the review walks this filtered list. Pure.
+Pure.
 """
 
 from __future__ import annotations

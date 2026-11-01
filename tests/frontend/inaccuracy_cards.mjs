@@ -91,9 +91,10 @@ async function testEmptyDeck(page, base) {
   const text = await page.innerText('.side-panel');
   check('it says how cards are made', text.includes('paste its PGN and give the number of the move you got wrong'));
   check('the step is first on the bar', (await page.innerText('.step.current')).includes('Revision cards'));
-  await page.click('button:text-is("Continue to Play a game")');
-  await waitFor(page, 'the play step', () => document.querySelector('.step.current')?.textContent.includes('Play a game'));
-  check('Continue moves on to Play a game', (await page.innerText('.step.current')).includes('Play a game'));
+  await page.click('button:text-is("Continue to Opening cards")');
+  await waitFor(page, 'the opening cards', () => document.querySelector('.step.current')?.textContent.includes('Opening cards'));
+  check('Continue moves on to Opening cards', (await page.innerText('.step.current')).includes('Opening cards'));
+  check('there are only two steps', (await page.locator('.step').count()) === 2);
 }
 
 async function testCaughtUp(page, base) {
@@ -117,6 +118,7 @@ async function testOneCard(page, base) {
   const prompt = await page.innerText('.side-panel');
   check('the prompt names the game and the move', prompt.includes('From your game vs a-very-long-opponent-username') && prompt.includes('move 2, White to play'));
   check('the answer is not on screen', !prompt.includes('Bc4'));
+  check('no Lichess link while solving', (await page.locator('a.lichess-link').count()) === 0);
   check('the move I played is, with what kind of slip it was', prompt.includes('You played 2.Nf3 here — a mistake.'));
   check('and drawn as a red arrow', (await board(page)).highlights.join() === 'red:g1f3', (await board(page)).highlights.join());
   let state = await board(page);
@@ -163,6 +165,10 @@ async function testOneCard(page, base) {
   state = await board(page);
   check('the board shows the answer played', state.fen === ANSWERED);
   check('the solving marks are gone', state.highlights.length === 0);
+  const lichess = page.locator('a.lichess-link');
+  check('Analyse at Lichess appears once answered', (await lichess.count()) === 1 && (await lichess.innerText()).includes('Analyse at Lichess'));
+  check('it opens the game at the card position, my side down', (await lichess.getAttribute('href')).endsWith('?color=white#2'));
+  check('in a new tab', (await lichess.getAttribute('target')) === '_blank');
   check('the whole game is listed now', (await page.innerText('.move-list')).includes('Bb5'));
   await page.keyboard.press('ArrowLeft');
   await waitFor(page, 'the slip position with arrows', (fen) => {

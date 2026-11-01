@@ -1,14 +1,15 @@
 # chess-trainer
 
-A local-only web app for a daily chess routine: warm up on the slips from your past
-games, play a new one, review it, and drill openings as spaced-repetition cards.
+A local-only web app for a daily chess routine: drill the slips you picked from your
+own games (revision cards), then drill openings as spaced-repetition cards.
 
 Runs entirely on `localhost`. Stockfish does the analysis, the Lichess masters
 database supplies the opening lines, and all frontend libraries are vendored into
 the repo so the app works offline.
 
-**Status: complete** — all four steps work: revision cards, playing a game,
-reviewing it, and opening cards.
+**Status: complete** — both steps work: revision cards and opening cards. (Playing
+and reviewing a game used to be steps too; they were removed — review your games on
+chess.com or Lichess, and make cards from the slips worth drilling.)
 
 ---
 
@@ -29,12 +30,13 @@ The opening cards need a Lichess token (the explorer returns 401 without one):
 ```bash
 cp .env.example .env
 # then edit .env and set:
-#   CHESS_TRAINER_CHESSCOM_USERNAME=<your chess.com username>
 #   LICHESS_TOKEN=lip_...
+#   CHESS_TRAINER_CHESSCOM_USERNAME=<your chess.com username>   (optional)
 ```
 
-The chess.com username has no default — without it the app still runs and PGN
-paste still works, but fetching your games says what to set.
+The chess.com username is optional and has no default. It only lets a pasted PGN
+tell which side you played when you make a revision card; without it, you pick
+White or Black.
 
 Create the token at <https://lichess.org/account/oauth/token/create>. **Leave every
 scope unchecked** — the explorer only needs an authenticated identity, not
@@ -85,70 +87,21 @@ a move; End comes back). Find the engine's move: only its top choice counts,
 retries are unlimited and the eval bar updates on each. *Hint* circles the piece
 to move; *Show answer* gives up. The result shows the grade and the next due date,
 and the whole game opens up: the board shows the answer played, and ← from it
-shows the position with the answer in green and your move in red, like the
-review. Cards are graded and scheduled exactly like the opening cards (see *The
+shows the position with the answer in green and your move in red. Cards are graded and scheduled exactly like the opening cards (see *The
 SM-2 variant*), except that a hint caps the grade at "right with a hint" (q=3,
 still a pass). One position is only ever one card: making it again brings the
 card back to the next day. *Delete card* (it asks first) takes a card out of the
 deck; making that card again restores it. With nothing due the step says so and
-*Continue to Play a game* moves on without counting towards the streak.
+*Continue to Opening cards* moves on without counting towards the streak.
 
-**Step 2 — Play a game.** *Open chess.com* opens a tab; play your game and come
-back. *I'm done — fetch my game* watches the chess.com archive for about two
-minutes for a game newer than the one you had before (the archive lags a minute or
-so behind a finished game), counting down as it goes. If nothing turns up, a PGN
-paste box appears. Either way, finishing hands straight over to step 3.
+Once a card is answered, **Analyse at Lichess ↗** opens the game on the Lichess
+analysis board at the card's position, from your side, for trying moves of your
+own — something this app deliberately leaves to Lichess. The link carries only
+the moves (no names), in the URL itself; nothing is sent to Lichess unless you
+click it. It is not offered while you are solving, since Lichess's engine would
+give the answer away.
 
-**Step 3 — Review that game.** The game you just played (or, if you skipped step 2,
-your most recent chess.com game) is fetched and your moves are analysed at depth
-20, stopping at the first inaccuracy. A progress bar
-counts the moves; a long game can take a minute or two the first time, and is
-instant afterwards because results are cached. Then the game auto-replays to the
-position just before your first slip and you play the move yourself. The move you
-actually played there is named ("You played 2.Nf3 here — an inaccuracy") and drawn
-as a red arrow, so you know what not to play. Only Stockfish's top choice is
-accepted; wrong tries are unlimited and each one updates
-the eval bar so you can see what it would have cost. *Hint* circles the piece the
-answer moves (and says which, e.g. "Move your bishop on f1") without saying where
-it goes; the summary and the review history note that a hint was used. *Show
-answer* gives up. When you find it, the review ends with a summary: the move you played and its
-classification, the engine's move, the evals either side and the win% you dropped.
-A review does not make a revision card by itself: you choose which slips become
-cards (step 1).
-If the game had no inaccuracy, it says so — and if you also won or drew it, it
-congratulates you on a perfect game.
-
-Once the board is up, **← / →** step through the game, **Home / End** (or ↑ / ↓)
-jump to either end, and the move list beside the board is clickable. While you
-are solving, that covers only the moves that led to the position — the board takes
-a move only back at the live position, which End returns you to. Once the review
-is over the whole game opens up to the last move: the engine's answer sits beside
-it, ← from there shows the position with the engine's move (green) and yours (red),
-and → goes on to the move you actually played and the rest of the game. Your slip
-is marked red in the list.
-
-Under the board, a **Review at Lichess** card links to the game on the Lichess
-analysis board, opened at the position before your slip and from your side, for
-trying moves of your own — something this app deliberately leaves to Lichess. The
-link only carries the moves (no names), in the URL itself; nothing is sent to
-Lichess unless you click it. A clean game gets the link too, from the first move.
-
-Below it, a **Why** card reads back the engine's reasoning — not in prose, since there
-is no understanding behind it, but as its own lines with the facts that can be
-read straight off them:
-
-- **Best** — the engine's move and its continuation: what the move captures or
-  checks, the evaluation after it (or a forced mate), and the material each side
-  picks up along the line.
-- **You played** — your move and the engine's punishing reply: what that reply
-  captures or threatens ("The engine answers 2...Qh4#, which is checkmate"), how
-  much of your winning chances the move cost, and the material over the line.
-
-Lines stop after ten plies, but never half-way through an exchange or a run of
-checks. Every move in them is clickable and shows that position on the board; ←
-and → from there step back into the game.
-
-**Step 4 — Opening cards.** Anki-style drills built from the Lichess masters
+**Step 2 — Opening cards.** Anki-style drills built from the Lichess masters
 database, grown lazily as you go. The first card is 1.e4; the tree expands only
 when you pass a card (right on the first or second try).
 
@@ -192,26 +145,23 @@ board* button.
 
 Other things worth poking at:
 
-- **Step bar** — all four steps always visible; click any one to jump forward or
-  back at any time, mid-review included.
-- **Board orientation** — a review orients the board to the colour you played.
-  *Flip board* turns it round.
+- **Step bar** — both steps always visible; click either to jump there at any
+  time.
+- **Board orientation** — a revision card puts your colour at the bottom; opening
+  cards keep White there. *Flip board* turns it round.
 - **Eval bar** — always visible, always from White's perspective
   (`+0.45`, `−1.20`, `M3`).
-- **PGN paste** — available in the review step at any point, for when chess.com
-  is unreachable or the game has not appeared in the archive yet.
-- **Streak** — top right, current and longest. Finishing a review counts the day;
+- **Streak** — top right, current and longest. Answering a card counts the day;
   the boundary is midnight in Asia/Seoul, and a second step the same day does not
   double-count.
-- **Review history** — every finished review is written to the `game_reviews`
-  table: which game, the Seoul date, the ply of your first inaccuracy, your move
-  and its classification, the engine's move, both evals, the attempt count and
-  whether you revealed the answer. Card answers go to `card_reviews` the same way.
+- **Answer history** — every card answer is logged (`card_reviews` for opening
+  cards, `inaccuracy_reviews` for revision cards): the Seoul date, the grade, the
+  attempt count and whether you revealed the answer.
 - **Scheduling** — cards use a modified SM-2 (see below). There is no daily limit:
   due reviews come first, oldest first, then new cards one at a time, until you
   stop. Getting a card wrong brings it back later in the same session.
 - **Status bar** — bottom left reports what just happened (or what failed); bottom
-  right shows the version, engine depth, chess.com username and whether a Lichess
+  right shows the version, engine depth, chess.com username (if set) and whether a Lichess
   token is present.
 
 ## Configuration
@@ -222,7 +172,7 @@ Command line flags override both.
 | Variable | Default | Meaning |
 |---|---|---|
 | `LICHESS_TOKEN` | — | Lichess API token, needed for the opening explorer |
-| `CHESS_TRAINER_CHESSCOM_USERNAME` | — | your chess.com username; required for fetching games (no default) |
+| `CHESS_TRAINER_CHESSCOM_USERNAME` | — | optional: your chess.com username, to tell your side in a pasted PGN (no default) |
 | `CHESS_TRAINER_STOCKFISH_PATH` | `/opt/homebrew/bin/stockfish` | engine binary |
 | `CHESS_TRAINER_ENGINE_DEPTH` | `20` | fixed search depth |
 | `CHESS_TRAINER_DB` | `~/.local/share/chess-trainer/chess_trainer.db` | database |
@@ -270,16 +220,10 @@ question screen and what its stats table marks afterwards:
 npm run cards
 ```
 
-And a third, over stepping through a reviewed game with the arrow keys — before
-and after the slip is solved — the Hint circle, the Why card, and the game card's
-single chess.com link, and the Lichess link:
-
-```bash
-npm run review
-```
-
-and a fourth over the inaccuracy-card drill (an empty deck, an all-caught-up deck,
-and one card solved with a hint after a wrong try):
+And a third over revision cards: an empty deck, an all-caught-up deck, making a card
+from a PGN and a move number, one card solved with a hint after a wrong try (stepping
+back through the moves before it, then through the whole game, and the Lichess link),
+and deleting a card:
 
 ```bash
 npm run inaccuracy
@@ -322,14 +266,9 @@ chess_trainer/
   db/        connection.py, schema.py (migrations), one repository per table
   engine/    stockfish.py (process), analysis.py (cached), eval_format.py,
              winpct.py, classify.py, best_move.py, eval_types.py
-  chesscom/  client.py (HTTP), archives.py, latest_game.py, polling.py,
-             game_model.py
-  pgn/       parse.py, positions.py
-  review/    my_moves.py, first_inaccuracy.py, verdict.py, review_session.py,
-             review_job.py (background analysis + progress), browse.py,
-             hint.py, explain.py (the "why", read off the engine's lines),
-             lichess_link.py, outcome.py
-  inaccuracies/  card_from_review.py, deck.py (adding, serving, grading)
+  pgn/       parse.py, positions.py, my_moves.py
+  inaccuracies/  (revision cards) slip.py (move number → position), deck.py
+             (adding, serving, grading), hint.py, lichess_link.py
   explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
              explorer_types.py
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,
@@ -343,32 +282,12 @@ frontend/
 ```
 The frontend has one module per concern: `api.js`, `state.js`, `router.js`,
 `board.js`, `evalbar.js`, `stepbar.js`, `streak_view.js`, `start_screen.js`,
-`inaccuracy_cards_view.js`, `review_view.js`, `move_nav.js`, `move_list.js`,
-`explanation_view.js`, `play_view.js`, `cards_view.js`, `stats_table.js`,
-`arrows.js`, `animate.js`, `pgn_paste.js`.
+`inaccuracy_cards_view.js` (revision cards), `move_nav.js`, `move_list.js`,
+`cards_view.js`, `stats_table.js`, `arrows.js`, `animate.js`.
 
 `rules.py` is the single authority on move legality: the browser carries no rules
 engine and asks the server instead, which also means a drill answer can never be
 judged client-side.
-
-### Review analysis runs in the background
-
-Classifying a move needs the evaluation before it *and* after it, and the "after"
-position is not reusable as the next move's "before" (you moved, then your
-opponent did). So Stockfish ends up scoring roughly every ply. Two things keep
-that bearable: only *your* moves are classified and given a best-move answer, and
-the walk **stops at your first inaccuracy** — a slip on move 8 costs a handful of
-searches rather than one per ply of the whole game. Everything is cached by
-`(fen, depth)`, so re-reviewing is instant. The cache keeps the engine's whole
-principal variation too, for the Why card; a position cached before that was kept
-is searched once more when its line is first needed.
-
-Even so, a game where the first slip is the last move played can take a minute at
-depth 20. That would look like a hung page, so `review/review_job.py` runs the
-analysis in a worker thread and reports `assessed / total` progress for the browser
-to poll. The job is cancellable, and `AppState.shutdown` cancels and joins it
-before closing the database — a background thread reading a closed SQLite
-connection is a use-after-free that segfaults the interpreter.
 
 ### How the card tree stays cheap
 
@@ -453,18 +372,6 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/board/state` | legal destinations and status for a FEN |
 | `POST /api/board/move` | apply a move, get SAN and the new position |
 | `POST /api/engine/eval` | evaluate a position, read through the cache |
-| `GET /api/game/latest` | the most recent stored game (no network) |
-| `POST /api/game/fetch-latest` | fetch my newest chess.com game and store it |
-| `POST /api/game/baseline` | record the newest game *before* I play one |
-| `POST /api/game/poll-new` | one ~12s window watching for a newer game |
-| `POST /api/game/paste` | store a game from pasted PGN |
-| `POST /api/review/start` | begin a review; analyses in the background |
-| `GET /api/review/{step}` | review progress and state (polled while analysing), including the browsable `moves` and, once finished, `lichess_url` |
-| `POST /api/review/attempt` | try a move; returns correctness and an eval |
-| `POST /api/review/hint` | the square and piece the answer moves from (not its destination) |
-| `POST /api/review/show-answer` | reveal the engine's move, ending the review |
-| `POST /api/review/explain` | once finished: the engine's line after its move and after mine, with notes |
-| `POST /api/review/acknowledge` | close a review that had no inaccuracy |
 | `GET /api/cards/state` | the card on screen and the queue behind it |
 | `POST /api/cards/next` | serve the next card (due first, then new) |
 | `POST /api/cards/attempt` | try a move on the current card |
@@ -486,13 +393,12 @@ The app still starts; only evaluation is unavailable.
 
 **Port already in use** — `chess-trainer --port 8800`.
 
-**"No new game appeared in two minutes"** — the chess.com archive sometimes lags
-further behind. Press the fetch button again, or open the game on chess.com and
-paste its PGN (Share → PGN) into the box that appears.
+**"Couldn't tell which side you played"** — the PGN doesn't name your chess.com
+user (or none is set). Pick White or Black next to the move number.
 
-**The review is analysing for a long time** — a long game at depth 20 takes a
-while the first time. Lower it with `chess-trainer --depth 14` if you would rather
-trade some accuracy for speed; results at each depth are cached separately.
+**Saving a card takes a few seconds** — Stockfish searches the position (and the
+one after your move) at depth 20. Lower it with `chess-trainer --depth 14` if you
+would rather trade some accuracy for speed; results at each depth are cached.
 
 **"The opening cards need a Lichess API token"** — the explorer returns 401 for
 every request without one. Create a token (no scopes) at
@@ -504,8 +410,8 @@ this should be rare.
 
 **Starting over** — delete the database
 (`~/.local/share/chess-trainer/chess_trainer.db`). It holds the streak, the engine
-and explorer caches, the games you have reviewed and the whole card tree with its
-scheduling; schema migrations run automatically on startup.
+and explorer caches, the games your revision cards came from and the whole card
+tree with its scheduling; schema migrations run automatically on startup.
 
 ## Licence
 

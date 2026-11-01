@@ -26,7 +26,7 @@ from chess_trainer.srs import grading, sm2
 from chess_trainer.srs.due import CardSource, Requeued
 from chess_trainer.srs.sm2 import SchedulingResult, SchedulingState
 
-#: A new card is due this many days after the review that created it.
+#: A new card is due this many days after it is made.
 FIRST_INTERVAL_DAYS = 1
 
 

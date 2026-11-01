@@ -36,7 +36,7 @@ class SessionFlow:
         *,
         at: Step | None = None,
     ) -> Step | None:
-        """Begin a session with the given steps selected (default: all four).
+        """Begin a session with the given steps selected (default: all of them).
 
         ``at`` begins at that step instead of the first one -- the start screen
         is one button per step -- and selects it if it was not.
@@ -109,7 +109,7 @@ class SessionFlow:
 
     # -- presentation ----------------------------------------------------
     def step_bar(self) -> list[StepInfo]:
-        """All four steps, for rendering the step bar."""
+        """Every step, for rendering the step bar."""
         return [
             StepInfo(
                 step=step,

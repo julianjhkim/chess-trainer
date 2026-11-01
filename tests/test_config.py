@@ -95,7 +95,3 @@ def test_the_username_comes_from_the_environment(monkeypatch, tmp_path):
 def test_no_username_without_the_environment(tmp_path):
     cfg = load_config(env_file=tmp_path / "missing.env")
     assert cfg.chesscom_username == ""
-
-
-def test_the_missing_username_message_says_what_to_set():
-    assert "CHESS_TRAINER_CHESSCOM_USERNAME" in config_module.USERNAME_HELP
