@@ -92,9 +92,7 @@ async function testEmptyDeck(page, base) {
   check('it points to step 1 for making cards', text.includes('Make one in step 1'));
   check('there is no card-making button here', (await page.locator('button:text-is("Make a card"), button:text-is("New card")').count()) === 0);
   check('the step is current on the bar', (await page.innerText('.step.current')).includes('Revision cards'));
-  await page.click('button:text-is("Continue to Opening cards")');
-  await waitFor(page, 'the opening cards', () => document.querySelector('.step.current')?.textContent.includes('Opening cards'));
-  check('Continue moves on to Opening cards', (await page.innerText('.step.current')).includes('Opening cards'));
+  check('no Continue button', (await page.locator('button:has-text("Continue")').count()) === 0);
 }
 
 async function testCaughtUp(page, base) {
@@ -225,10 +223,8 @@ async function testMakeCard(page, base) {
   check('the first card completes the step', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'make_card')?.completed === true));
   check('the form stays, for another card', await page.isVisible('textarea[aria-label="PGN"]'));
-
-  await page.click('button:text-is("Continue to Revision cards")');
-  await waitFor(page, 'the revision cards', () => document.querySelector('.step.current')?.textContent.includes('Revision cards'));
-  check('Continue goes on to Revision cards', (await page.innerText('.step.current')).includes('Revision cards'));
+  check('no Continue button', (await page.locator('button:has-text("Continue")').count()) === 0);
+  check('Show position is a plain button', !(await page.locator('button:text-is("Show position")').getAttribute('class')));
 }
 
 // -- deleting --------------------------------------------------------------------

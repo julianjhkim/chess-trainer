@@ -13,8 +13,8 @@
  * board at the card's position -- the app has no board of its own for trying
  * moves. *Delete card* (after an inline confirm) takes a card out of the deck.
  *
- * With nothing due -- including before any card has been made -- it says so
- * and offers to go on to the next step.
+ * With nothing due -- including before any card has been made -- it says so;
+ * the step bar moves on.
  */
 
 import * as api from './api.js';
@@ -23,7 +23,7 @@ import { createBoard } from './board.js';
 import { createEvalBar } from './evalbar.js';
 import { createMoveList } from './move_list.js';
 import { bindArrowKeys, createMoveNav } from './move_nav.js';
-import { get, set, setStatus, withStatus } from './state.js';
+import { set, setStatus, withStatus } from './state.js';
 
 const WRONG_MOVE_LINGER_MS = 1000;
 
@@ -177,28 +177,9 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
         ),
       );
     }
-    const row = document.createElement('div');
-    row.className = 'button-row';
-    row.append(button('Continue to Opening cards', moveOn, 'primary'));
-    body.append(row);
     promptCard.setBody(body);
     buildControls();
     setStatus(counts?.total ? 'No revision cards due.' : 'No revision cards yet.');
-  }
-
-  /**
-   * Go on to the next step. Having answered a card, the step is already done
-   * and completing it just advances; with nothing answered it is skipped
-   * rather than completed, so an empty deck never counts towards the streak.
-   */
-  async function moveOn() {
-    const session = get().session;
-    const done = session?.steps.find((s) => s.step === step.step)?.completed;
-    const next = done
-      ? (await withStatus('Moving on…', () => api.completeStep(step.step))).session
-      : await withStatus('Moving on…', () => api.jumpToStep('cards'));
-    set({ session: next });
-    if (onCompleted) onCompleted(next);
   }
 
   // -- answering ---------------------------------------------------------

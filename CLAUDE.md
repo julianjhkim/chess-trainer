@@ -128,8 +128,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   move is the move I played.** The game is stored in `games` (`paste_id`) so the
   card can show its moves. The answer is never sent before the card is answered.
   The first card saved in a session marks `make_card` completed (streak) but the
-  step stays open for more; "Continue to Revision cards" completes it, or just
-  jumps to `inaccuracy_cards` if none was made.
+  step stays open for more. There are **no "Continue to …" buttons** anywhere
+  (the user asked to remove them): the step bar is how you move on.
 - One card per position (unique EPD). A new card is scheduled as if passed once:
   `n=1, I=1, EF=2.5`, **due the next day**. Making an existing card again brings
   its due date forward to tomorrow (never later); making a deleted one restores it.
@@ -155,8 +155,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   row removed, review log kept). Doesn't grade or count the step.
 - First answer marks the step completed (streak) but the step stays until the
   deck is empty. With nothing due (or no cards yet) it says so (pointing to step
-  1), and "Continue to Opening cards" completes the step if a card was
-  answered, otherwise just jumps to `cards` (an empty deck never counts).
+  1); an empty deck never counts towards the streak.
 
 ### Opening-card tree (`openings/tree_rules.py`)
 - **Root exception**: the start position is not a card; *all* of White's first

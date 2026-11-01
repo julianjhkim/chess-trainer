@@ -79,8 +79,7 @@ and ← / → (or the buttons and the move list) step through the moves leading 
 becomes the answer — it is never shown while you make the card. If the engine's
 top move *is* the move you played, the card is refused (check the move number).
 A new card is first due the next day. The first card you save completes the step
-(and counts the day); the form stays for more, and *Continue to Revision cards*
-moves on (without counting the step if you made none).
+(and counts the day); the form stays for more. Use the step bar to move on.
 
 **Step 2 — Revision cards.** Drilling the cards you made, as a warm-up before the
 openings.
@@ -96,8 +95,8 @@ shows the position with the answer in green and your move in red. Cards are grad
 SM-2 variant*), except that a hint caps the grade at "right with a hint" (q=3,
 still a pass). One position is only ever one card: making it again brings the
 card back to the next day. *Delete card* (it asks first) takes a card out of the
-deck; making that card again restores it. With nothing due the step says so and
-*Continue to Opening cards* moves on without counting towards the streak.
+deck; making that card again restores it. With nothing due the step says so; an
+empty deck never counts towards the streak.
 
 Once a card is answered, **Analyse at Lichess ↗** opens the game on the Lichess
 analysis board at the card's position, from your side, for trying moves of your

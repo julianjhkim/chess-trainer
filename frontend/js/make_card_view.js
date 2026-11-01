@@ -7,7 +7,7 @@
  * and the move list) step through the moves leading there. *Save card* asks
  * Stockfish for the answer -- never shown here -- and schedules the card for
  * the next day. The first card saved completes the step (and counts the day);
- * the step stays open for more until *Continue to Revision cards*.
+ * the step stays open for more, and the step bar moves on.
  */
 
 import * as api from './api.js';
@@ -15,7 +15,7 @@ import { createBoard } from './board.js';
 import { createEvalBar } from './evalbar.js';
 import { createMoveList } from './move_list.js';
 import { bindArrowKeys, createMoveNav } from './move_nav.js';
-import { get, set, setStatus, withStatus } from './state.js';
+import { set, setStatus, withStatus } from './state.js';
 
 export function renderMakeCardView(container, { step, onCompleted }) {
   container.replaceChildren();
@@ -140,7 +140,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 
     const row = document.createElement('div');
     row.className = 'button-row';
-    row.append(button('Show position', runPreview, preview ? '' : 'primary'));
+    row.append(button('Show position', runPreview));
     body.append(textarea, fields, row);
 
     if (error) body.append(paragraph(error, 'paste-error'));
@@ -196,20 +196,6 @@ export function renderMakeCardView(container, { step, onCompleted }) {
     setStatus(savedText(made));
   }
 
-  /**
-   * Go on to the revision cards. Having made a card the step is done and
-   * completing it just advances; with none made it is skipped, not completed.
-   */
-  async function moveOn() {
-    const session = get().session;
-    const done = session?.steps.find((s) => s.step === step.step)?.completed;
-    const next = done
-      ? (await withStatus('Moving on…', () => api.completeStep(step.step))).session
-      : await withStatus('Moving on…', () => api.jumpToStep('inaccuracy_cards'));
-    set({ session: next });
-    if (onCompleted) onCompleted(next);
-  }
-
   function savedText(made) {
     if (made.restored) return `Restored the card for ${made.move_label} you had deleted — due ${made.due_on}.`;
     if (!made.created) return `You already had a card for ${made.move_label} — it is now due ${made.due_on}.`;
@@ -237,10 +223,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
   function buildControls() {
     controls.replaceChildren();
     if (preview) controls.append(button('Save card', saveCard, 'primary'));
-    controls.append(
-      button('Continue to Revision cards', moveOn, preview ? '' : 'primary'),
-      button('Flip board', () => board.flip()),
-    );
+    controls.append(button('Flip board', () => board.flip()));
     panelChanged();
   }
 
