@@ -51,5 +51,12 @@ def test_lifespan_migrates_the_database(config):
     conn.close()
 
 
+def test_frontend_files_are_always_revalidated(client):
+    """Without this a browser may run old cached modules after an update."""
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/js/app.js").headers["cache-control"] == "no-cache"
+    assert client.get("/css/app.css").headers["cache-control"] == "no-cache"
+
+
 def test_unknown_paths_404(client):
     assert client.get("/no/such/page").status_code == 404

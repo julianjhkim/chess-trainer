@@ -253,5 +253,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - Views re-render panels through each card's `setBody`; anything a render adds
   must go inside that body, never be appended to the card root (that once
   stacked up duplicate links).
+- Frontend files are served with `Cache-Control: no-cache` (`api/app.py`):
+  without it the browser ran stale cached modules after an update, so a new
+  button simply didn't appear. Keep it.
 - The browser tests' stub (`tests/frontend/stub_server.mjs`) only knows positions
   in `fixtures/board.json`; add new lines to `fixtures/generate.py` and rerun it.
