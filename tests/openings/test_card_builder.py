@@ -319,6 +319,32 @@ def test_a_child_lichess_does_not_name_keeps_its_parents_name(
     assert by_move["c5"].opening_label == "B20 Sicilian Defense"
 
 
+def test_a_child_is_played_from_its_parents_named_position(conn, explorer, fake_engine):
+    card = prepared_e4(conn, explorer, fake_engine)
+    result = card_builder.expand_card(
+        conn, explorer, fake_engine, card, engine_depth=10
+    )
+    assert card_builder.opening_before(conn, result.new_cards[0]) == "B00 King's Pawn Game"
+    assert card_builder.opening_before(conn, card) is None
+
+
+def test_after_the_answer_the_name_is_the_answers_own_or_carries_on(
+    conn, explorer, fake_engine, explorer_e4
+):
+    import copy
+
+    from chess_trainer.explorer.explorer_types import PositionStats
+
+    card = prepared_e4(conn, explorer, fake_engine)  # answer: 1...c5
+    stats = PositionStats.of(explorer_e4)
+    assert card_builder.opening_after(stats, card) == "B20 Sicilian Defense"
+    unnamed = copy.deepcopy(explorer_e4)
+    for move in unnamed["moves"]:
+        move["opening"] = None
+    stats = PositionStats.of(unnamed)
+    assert card_builder.opening_after(stats, card) == "B00 King's Pawn Game"
+
+
 def test_children_are_one_deeper_and_sequenced_in_order(conn, explorer, fake_engine):
     card = prepared_e4(conn, explorer, fake_engine)
     result = card_builder.expand_card(

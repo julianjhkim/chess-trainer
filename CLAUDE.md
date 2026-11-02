@@ -182,9 +182,13 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - Opening names come from the explorer, which names only exact book positions;
   a card it gives no name takes its parent's (as Lichess's board does), and an
   exact name found later wins. Migration 7 backfilled older cards this way.
+- The opening name follows the board, as on Lichess: with the arrow, the name of
+  the position it is played from (`CardOut.opening_before_label` = the parent
+  card's; none for a first move); once played, the card's own name; once
+  answered, the position after the answer (`opening_after_label`: the answer
+  move's book name from the card's record, else the card's name carries on).
 - Card flow: earlier moves auto-play → branch move shown as an arrow (only it is
-  draggable), with the opening name it leads to (shown from the start: it names
-  the line, not the answer) → find the answer with no arrow → stats
+  draggable) → find the answer with no arrow → stats
   table (answer, most played, Stockfish's choice marked) and **Analyse at
   Lichess ↗** as a button right of Next card (`lichess_url` on the attempt/show-answer response, only once
   finished): `/analysis/pgn/<line + answer>?color=white#<line length>`, i.e. the

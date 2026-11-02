@@ -113,8 +113,11 @@ when you pass a card (right on the first or second try).
 
 Each card runs the same way: the earlier moves of the line auto-play, then the
 branch move appears as an **arrow** for you to play — only that move is draggable —
-together with the **opening name** that move leads to (a position with no book
-name of its own keeps the name of the line it came from, as on Lichess). Then you have to find the answer move with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
+and the **opening name** follows the board as on Lichess: with the arrow it
+names the position so far (1.d3: Mieses Opening), once you play the arrow move
+the new one (1.d3 e5: Mieses Opening: Reversed Rat), and once answered the
+position after the answer (a position with no book name of its own keeps the
+last one). The answer move has to be found with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
 answer* gives up. Afterwards you get the **stats table**: every master move with
 its share, game count, white/draw/black split and average rating, with the answer,
 the most played move and Stockfish's own choice all marked. Next to *Next card*,

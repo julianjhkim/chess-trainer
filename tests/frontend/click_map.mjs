@@ -183,20 +183,16 @@ async function testCardsView(page, base) {
 
   // 1. The arrow phase: the queue and prompt panels have just been filled in.
   await waitForText(page, 'the arrow shows it');
-  check(
-    'cards: the opening name is shown with the arrow',
-    (await page.innerText('body')).includes("King's Pawn Game"),
-  );
   await waitForInteractive(page);
   await checkBounds(page, 'cards/arrow');
   await checkClicks(page, 'cards/arrow', WHITE_SQUARES);
   const placed = await boardRect(page);
 
-  // 2. Play the arrow move; the opening name stays beside the board.
+  // 2. Play the arrow move; the opening name changes beside the board.
   await clickMove(page, 'e2', 'e4');
   await waitForText(page, 'No arrow this time');
   check(
-    'cards: the opening name stays once the given move is played',
+    'cards: the opening name is shown once the given move is played',
     (await page.innerText('body')).includes("King's Pawn Game"),
   );
   await waitForInteractive(page);

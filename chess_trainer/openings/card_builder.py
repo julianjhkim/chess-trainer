@@ -197,6 +197,30 @@ def engine_best_move(
     return best_move_module.best_move(conn, engine, card.fen, engine_depth)
 
 
+def opening_before(conn: sqlite3.Connection, card: CardRow) -> str | None:
+    """The opening name of the position the arrow move is played from.
+
+    That is the parent card's position (its name already inherited if Lichess
+    gives it none); a first move starts from the unnamed start position.
+    """
+    if card.parent_card_id is None:
+        return None
+    parent = cards_repo.get(conn, card.parent_card_id)
+    return parent.opening_label if parent is not None else None
+
+
+def opening_after(stats: PositionStats, card: CardRow) -> str | None:
+    """The opening name of the position after the answer, as Lichess shows it.
+
+    The position's own book name if the card's record gives one for the
+    answer move, else the card's name carries on.
+    """
+    move = stats.move(card.answer_uci) if card.answer_uci else None
+    if move is not None and move.opening is not None:
+        return move.opening.label
+    return card.opening_label
+
+
 def engine_agrees(card: CardRow, engine_best_uci: str | None) -> bool | None:
     """Whether a card's answer is also Stockfish's top move.
 

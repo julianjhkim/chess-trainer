@@ -361,8 +361,8 @@ check('cards view asks for the arrow move',
       new RegExp(`Play ${served.given_move_san.replace(/[+#]/g, '\\$&')} `).test(cardsHost.textContent),
       `expected "Play ${served.given_move_san}" in the prompt`);
 check('cards view offers Flip board', [...cardsHost.querySelectorAll('button')].some((b) => b.textContent === 'Flip board'));
-check('the opening name, if any, is shown with the arrow',
-      !served.opening_label || cardsHost.textContent.includes(served.opening_label));
+check('the name shown with the arrow is the position it is played from',
+      !served.opening_before_label || cardsHost.textContent.includes(served.opening_before_label));
 
 // White stays at the bottom by default, per the spec.
 const cgOrientation = cardsHost.querySelector('.cg-wrap')?.classList.contains('orientation-black');

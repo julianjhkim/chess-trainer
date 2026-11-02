@@ -92,6 +92,7 @@ def get_state(state: State, conn: Conn, config: Cfg) -> CardStateOut:
             source=CardSource.DUE,
             schedule=schedule_repo.get(conn, card.id or 0),
             engine_best_uci=_cached_engine_move(conn, card, config),
+            opening_before_label=card_builder.opening_before(conn, card),
         ),
         counts=counts,
         attempts=len(state.card_attempts),
@@ -152,6 +153,7 @@ async def next_card(
             source=item.source,
             schedule=item.schedule,
             engine_best_uci=prepared.engine_best_uci,
+            opening_before_label=card_builder.opening_before(conn, card),
         ),
         counts=_counts(state, conn, config),
     )
@@ -315,6 +317,7 @@ async def _finish_card(
     response.answer_uci = card.answer_uci
     response.answer_san = card.answer_san
     response.lichess_url = _lichess_url(card)
+    response.opening_after_label = card_builder.opening_after(stats, card)
     response.stats = StatsTableOut.of(table)
     response.grade = CardGradeOut.of(outcome)
     response.dead_ends = _dead_ends_out(conn, card, stats)

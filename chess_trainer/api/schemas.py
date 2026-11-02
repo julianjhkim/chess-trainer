@@ -231,10 +231,12 @@ class CardOut(BaseModel):
     fen_before_given: str
     #: Position after the given move: the one whose answer I must find.
     fen: str
-    #: Revealed once I have played the given move.
+    #: Name of the position after the given move: shown once I have played it.
     opening_eco: str | None = None
     opening_name: str | None = None
     opening_label: str | None = None
+    #: Name of the position before the given move: shown with the arrow.
+    opening_before_label: str | None = None
     mode: str | None = None
     position_games: int
     #: Whether the most played move is also Stockfish's top move at the
@@ -253,6 +255,7 @@ class CardOut(BaseModel):
         source: CardSource,
         schedule: ScheduleRow | None = None,
         engine_best_uci: str | None = None,
+        opening_before_label: str | None = None,
     ) -> "CardOut":
         ucis = card.ucis
         before = line_module.position_of(ucis[:-1])
@@ -270,6 +273,7 @@ class CardOut(BaseModel):
             opening_eco=card.opening_eco,
             opening_name=card.opening_name,
             opening_label=card.opening_label,
+            opening_before_label=opening_before_label,
             mode=card.mode,
             position_games=card.position_games,
             engine_agrees=card_builder.engine_agrees(card, engine_best_uci),
@@ -418,6 +422,8 @@ class CardAttemptResponse(BaseModel):
     #: Once finished: the line on Lichess's analysis board, opened at the
     #: card's position with the answer one move on.
     lichess_url: str | None = None
+    #: Once finished: the opening name of the position after the answer.
+    opening_after_label: str | None = None
 
 
 class ShowCardAnswerResponse(BaseModel):
@@ -436,6 +442,8 @@ class ShowCardAnswerResponse(BaseModel):
     #: Once finished: the line on Lichess's analysis board, opened at the
     #: card's position with the answer one move on.
     lichess_url: str | None = None
+    #: Once finished: the opening name of the position after the answer.
+    opening_after_label: str | None = None
 
 
 # -- inaccuracy cards ----------------------------------------------------

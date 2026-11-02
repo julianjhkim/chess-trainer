@@ -67,6 +67,9 @@ const CARD = {
   opening_eco: 'B00',
   opening_name: "King's Pawn Game: Nimzowitsch Defence, Declined Variation",
   opening_label: "B00 — King's Pawn Game: Nimzowitsch Defence, Declined Variation",
+  // Made-up names: 1.e4 really starts from the unnamed start position, but the
+  // tests need to tell the three names apart.
+  opening_before_label: 'A00 Stub Opening Before',
   mode: 'frequency',
   position_games: 1234567,
   source: 'new',
@@ -381,6 +384,7 @@ const routes = {
       session: session(currentStep),
       streak: STREAK,
       lichess_url: 'https://lichess.org/analysis/pgn/1.e4%20e5?color=white#1',
+      opening_after_label: 'C20 Stub Opening After',
     };
   },
 

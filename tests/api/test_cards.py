@@ -74,6 +74,18 @@ def test_the_card_carries_its_opening_name(client):
     assert card["opening_label"] == "B00 King's Pawn Game"
 
 
+def test_a_first_move_has_no_name_before_its_arrow(client):
+    """1.e4 is played from the start position, which has no opening name."""
+    assert start_cards(client)["card"]["opening_before_label"] is None
+
+
+def test_answering_names_the_position_after_the_answer(client):
+    start_cards(client)
+    payload = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()
+    assert payload["finished"]
+    assert payload["opening_after_label"] == "B20 Sicilian Defense"
+
+
 def test_the_card_reports_its_mode_and_game_count(client):
     card = start_cards(client)["card"]
     assert card["mode"] == "frequency"

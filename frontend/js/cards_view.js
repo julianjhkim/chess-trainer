@@ -4,11 +4,12 @@
  * One card runs like this:
  *
  *   1. the earlier moves of the line auto-play quickly
- *   2. the branch move is shown as an arrow, with the opening name it leads
- *      to; you play it
+ *   2. the branch move is shown as an arrow, with the name of the opening so
+ *      far; you play it, and the name becomes that of the new position
  *   3. you find the answer move, with no arrow; retries are unlimited and the
  *      eval bar updates after each one
- *   4. the stats table, the grade and any "max depth reached" lines appear
+ *   4. the stats table, the grade and any "max depth reached" lines appear;
+ *      the name is that of the position after the answer
  *
  * White stays at the bottom by default, with a Flip board button.
  */
@@ -251,14 +252,10 @@ export function renderCardsView(container, { step, onCompleted }) {
     header.append(lineText);
     body.append(header);
 
-    // The name of the opening the arrow move leads to: shown with the arrow,
-    // since it names the line, not the answer.
-    if (card.opening_label) {
-      const opening = document.createElement('p');
-      opening.className = 'opening-name';
-      opening.textContent = card.opening_label;
-      body.append(opening);
-    }
+    // The name follows the board, as on Lichess: the position the arrow is
+    // played from, then the position after it.
+    const name = phase === 'given' ? card.opening_before_label : card.opening_label;
+    if (name) body.append(openingName(name));
 
     if (phase === 'given') {
       body.append(paragraph(`Play ${card.given_move_san} — the arrow shows it.`, ''));
@@ -355,12 +352,9 @@ export function renderCardsView(container, { step, onCompleted }) {
       body.append(list);
     }
 
-    if (card.opening_label) {
-      const opening = document.createElement('p');
-      opening.className = 'opening-name';
-      opening.textContent = card.opening_label;
-      body.append(opening);
-    }
+    // Now the position after the answer: its own book name, if it has one.
+    const name = response.opening_after_label ?? card.opening_label;
+    if (name) body.append(openingName(name));
 
     body.append(renderStatsTable(response.stats));
 
@@ -470,6 +464,13 @@ function card_(title, onChange) {
       if (onChange) onChange();
     },
   };
+}
+
+function openingName(text) {
+  const element = document.createElement('p');
+  element.className = 'opening-name';
+  element.textContent = text;
+  return element;
 }
 
 function paragraph(text, className) {

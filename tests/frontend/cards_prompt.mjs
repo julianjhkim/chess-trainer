@@ -112,6 +112,29 @@ async function openQuestion(page, base, engineAgrees) {
 
 // -- the question screen --------------------------------------------------
 
+async function testTheNameFollowsTheBoard(page, base) {
+  console.log('\nThe opening name follows the board');
+  await page.request.post(`${base}/__scenario`, { data: { step: 'cards', engineAgrees: null } });
+  await page.goto(base, { waitUntil: 'load' });
+  await waitForText(page, 'the arrow shows it');
+  await waitForInteractive(page);
+  let text = await prompt(page);
+  check('with the arrow: the position it is played from', text.includes('Stub Opening Before'), quote(text));
+  check("with the arrow: not yet the arrow move's name", !text.includes("King's Pawn Game"));
+  await clickSquare(page, 'e2');
+  await clickSquare(page, 'e4');
+  await waitForText(page, 'No arrow this time');
+  text = await prompt(page);
+  check("after the arrow move: that position's name", text.includes("King's Pawn Game"), quote(text));
+  check('after the arrow move: the old name is gone', !text.includes('Stub Opening Before'));
+  await clickSquare(page, 'e7');
+  await clickSquare(page, 'e5');
+  await page.waitForSelector('.stats-table', { timeout: 15000 });
+  text = await page.innerText('body');
+  check('after the answer: the name of the position after it', text.includes('Stub Opening After'));
+  check("after the answer: the card's name is gone", !text.includes("King's Pawn Game"));
+}
+
 async function testAgreement(page, base) {
   console.log('\nWhen the engine agrees with the masters');
   await openQuestion(page, base, true);
@@ -226,6 +249,7 @@ for (const [name, run] of [
   ['silence', testSilence],
   ['secrecy', testTheAnswerIsNotGivenAway],
   ['stats table', testTheTableMarksBothMoves],
+  ['opening name', testTheNameFollowsTheBoard],
 ]) {
   try {
     await run(page, stub.url);
