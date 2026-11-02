@@ -1,6 +1,6 @@
 /**
- * Revision cards (step 2; internally "inaccuracy cards"): slips I picked from
- * my own games, drilled again. Cards are made in step 1 (`make_card_view.js`).
+ * Revision cards (step 1; internally "inaccuracy cards"): slips I picked from
+ * my own games, drilled again. Cards are made in step 2 (`make_card_view.js`).
  *
  * Each card is the position before the slip, from my side of the
  * board, with my move drawn as a red arrow. Find the engine's move: retries
@@ -163,7 +163,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       body.append(
         paragraph('No revision cards yet.', 'empty-headline'),
         paragraph(
-          'Make one in step 1, “Make a revision card”: paste a game and give the number of the move you got wrong.',
+          'Make one in step 2, “Make a revision card”: paste a game and give the number of the move you got wrong.',
           'choice-note',
         ),
       );

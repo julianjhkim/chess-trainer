@@ -1,5 +1,5 @@
 /**
- * Make a revision card (step 1): pick a slip from one of my games.
+ * Make a revision card (step 2): pick a slip from one of my games.
  *
  * Paste a game's PGN and type the number of my move that went wrong ("9" for
  * my ninth move, White or Black). *Show position* puts the board on the

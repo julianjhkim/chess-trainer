@@ -12,7 +12,7 @@ def test_a_new_flow_has_not_started():
 
 def test_start_selects_the_first_step():
     flow = SessionFlow()
-    assert flow.start() is Step.MAKE_CARD
+    assert flow.start() is Step.INACCURACY_CARDS
     assert flow.started
 
 
@@ -28,7 +28,7 @@ def test_start_with_an_empty_selection_has_no_current_step():
 def test_completing_advances_to_the_next_step():
     flow = SessionFlow()
     flow.start()
-    assert flow.complete_current() is Step.INACCURACY_CARDS
+    assert flow.complete_current() is Step.MAKE_CARD
     assert flow.complete_current() is Step.CARDS
 
 
@@ -105,7 +105,7 @@ def test_remaining_lists_outstanding_steps_in_order():
     flow = SessionFlow()
     flow.start()
     flow.complete(Step.CARDS)
-    assert flow.remaining == [Step.MAKE_CARD, Step.INACCURACY_CARDS]
+    assert flow.remaining == [Step.INACCURACY_CARDS, Step.MAKE_CARD]
 
 
 def test_reset_clears_everything():
@@ -145,7 +145,7 @@ def test_start_can_begin_at_any_step():
 
 def test_starting_at_a_step_then_completing_it_moves_on():
     flow = SessionFlow()
-    flow.start(at=Step.INACCURACY_CARDS)
+    flow.start(at=Step.MAKE_CARD)
     assert flow.complete_current() is Step.CARDS
 
 

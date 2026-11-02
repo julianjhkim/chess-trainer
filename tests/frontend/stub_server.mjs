@@ -41,8 +41,8 @@ const MIME = {
 };
 
 const STEPS = [
-  ['make_card', 'Make a revision card'],
   ['inaccuracy_cards', 'Revision cards'],
+  ['make_card', 'Make a revision card'],
   ['cards', 'Opening cards'],
 ];
 

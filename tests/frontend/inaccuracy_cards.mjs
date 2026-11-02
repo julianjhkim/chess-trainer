@@ -1,7 +1,8 @@
 /**
  * The revision-card drill (internally "inaccuracy cards"), in a real browser.
  *
- * Step 1 of the session: slips you picked from your own games, drilled again.
+ * Step 1 of the session: slips you picked from your own games, drilled again
+ * (made in step 2).
  * Covers what it says with nothing to drill (no cards yet, and all caught up);
  * making a card from a PGN and a move number; one card driven by real clicks
  * (the prompt, stepping back through the moves, a hint, a wrong try, the
@@ -89,7 +90,7 @@ async function testEmptyDeck(page, base) {
   await open(page, base, 'empty');
   await waitForText(page, 'No revision cards yet.');
   const text = await page.innerText('.side-panel');
-  check('it points to step 1 for making cards', text.includes('Make one in step 1'));
+  check('it points to step 2 for making cards', text.includes('Make one in step 2'));
   check('there is no card-making button here', (await page.locator('button:text-is("Make a card"), button:text-is("New card")').count()) === 0);
   check('the step is current on the bar', (await page.innerText('.step.current')).includes('Revision cards'));
   check('no Continue button', (await page.locator('button:has-text("Continue")').count()) === 0);
@@ -192,7 +193,7 @@ async function testOneCard(page, base) {
 const PGN = '[White "test-player"]\n[Black "test-opponent"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *';
 
 async function testMakeCard(page, base) {
-  console.log('\nMaking a card (step 1)');
+  console.log('\nMaking a card (step 2)');
   await page.request.post(`${base}/__scenario`, { data: { step: 'make_card', inaccuracy: 'empty' } });
   await page.goto(base, { waitUntil: 'load' });
   await waitForText(page, 'type the number of the move you got wrong');

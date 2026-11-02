@@ -79,8 +79,9 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 ## Product rules (don't change without being asked; update here if you do)
 
 ### Session flow
-- Three steps, in order: `make_card` → `inaccuracy_cards` → `cards` (titles:
-  Make a revision card, Revision cards, Opening cards; `session/steps.py`,
+- Three steps, in order: `inaccuracy_cards` → `make_card` → `cards` (titles:
+  Revision cards, Make a revision card, Opening cards — the drill comes first,
+  as a warm-up, by the user's choice; `session/steps.py`,
   `session/flow.py`). Making cards and drilling them are separate steps on
   purpose — the drill screen has **no** card-making button (the user found two
   buttons for one thing confusing).
@@ -116,12 +117,12 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   between the slip position and my move).
 
 ### Revision cards (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
-- Step 1 **"Make a revision card"** (`make_card`, `make_card_view.js`) makes
-  them; step 2 **"Revision cards"** drills them. Internally the drill keeps the
+- Step 1 **"Revision cards"** drills them; step 2 **"Make a revision card"**
+  (`make_card`, `make_card_view.js`) makes them. Internally the drill keeps the
   old name — step `inaccuracy_cards`, `/api/inaccuracy-cards`, tables
   `inaccuracy_*`, `InaccuracyCard`, `inaccuracy_cards_view.js`. Don't rename one
   without the others.
-- **Made by hand only**, in step 1: paste PGN + type **my move number**
+- **Made by hand only**, in step 2: paste PGN + type **my move number**
   ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:
   the request's `colour`, else my names (top bar) in the PGN, else 422 asking to
   pick. `POST /preview` (no engine) returns the position before the move, my move
@@ -161,7 +162,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   row removed, review log kept). Doesn't grade or count the step.
 - First answer marks the step completed (streak) but the step stays until the
   deck is empty. With nothing due (or no cards yet) it says so (pointing to step
-  1); an empty deck never counts towards the streak.
+  2); an empty deck never counts towards the streak.
 
 ### Opening-card tree (`openings/tree_rules.py`)
 - **Root exception**: the start position is not a card; *all* of White's first

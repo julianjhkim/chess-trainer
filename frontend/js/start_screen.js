@@ -9,8 +9,8 @@ import * as api from './api.js';
 import { set, withStatus } from './state.js';
 
 const NOTES = {
-  make_card: 'Paste a game and pick the move you got wrong',
   inaccuracy_cards: 'Drill the slips you picked from your games',
+  make_card: 'Paste a game and pick the move you got wrong',
   cards: 'Opening drills from the Lichess masters database',
 };
 

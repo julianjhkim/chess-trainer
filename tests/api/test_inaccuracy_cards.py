@@ -122,7 +122,7 @@ def test_making_a_card_schedules_it_for_tomorrow(client, fake_engine_for_api):
 
 
 def test_the_first_card_made_completes_the_step_and_counts_the_day(client, fake_engine_for_api):
-    client.post("/api/session/start", json={})
+    client.post("/api/session/start", json={"start_at": "make_card"})
     first = make_card(client, fake_engine_for_api).json()
     steps = {s["step"]: s for s in first["session"]["steps"]}
     assert steps["make_card"]["completed"] is True

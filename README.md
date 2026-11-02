@@ -71,20 +71,8 @@ The start screen has one button per step: click the one you want and the session
 starts there. When a step is done the next one follows, and the step bar jumps
 anywhere at any time.
 
-**Step 1 — Make a revision card.** Pick the slips worth drilling from your own
-games: paste a game's PGN and type the number of the move you got wrong — "9" for your
-ninth move, whether you were White or Black. Your side is read from your names
-(top right) in the PGN; if neither player has one, pick White or Black. *Show position* puts the
-board on the position before that move, with the move you played as a red arrow,
-and ← / → (or the buttons and the move list) step through the moves leading there.
-*Save card* asks Stockfish (at the analysis depth) for its top move there, which
-becomes the answer — it is never shown while you make the card. If the engine's
-top move *is* the move you played, the card is refused (check the move number).
-A new card is first due the next day. The first card you save completes the step
-(and counts the day); the form stays for more. Use the step bar to move on.
-
-**Step 2 — Revision cards.** Drilling the cards you made, as a warm-up before the
-openings.
+**Step 1 — Revision cards.** A warm-up on the slips you picked from your own games
+(cards are made in step 2).
 
 Drilling a card: the position before your slip, from your side of the board, with
 the move you played named and drawn as a red arrow, so you know what not to play.
@@ -106,6 +94,18 @@ own — something this app deliberately leaves to Lichess. The link carries only
 the moves (no names), in the URL itself; nothing is sent to Lichess unless you
 click it. It is not offered while you are solving, since Lichess's engine would
 give the answer away.
+
+**Step 2 — Make a revision card.** Pick the slips worth drilling from your own
+games: paste a game's PGN and type the number of the move you got wrong — "9" for your
+ninth move, whether you were White or Black. Your side is read from your names
+(top right) in the PGN; if neither player has one, pick White or Black. *Show position* puts the
+board on the position before that move, with the move you played as a red arrow,
+and ← / → (or the buttons and the move list) step through the moves leading there.
+*Save card* asks Stockfish (at the analysis depth) for its top move there, which
+becomes the answer — it is never shown while you make the card. If the engine's
+top move *is* the move you played, the card is refused (check the move number).
+A new card is first due the next day. The first card you save completes the step
+(and counts the day); the form stays for more. Use the step bar to move on.
 
 **Step 3 — Opening cards.** Anki-style drills built from the Lichess masters
 database, grown lazily as you go. The first card is 1.e4; the tree expands only

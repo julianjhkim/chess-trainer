@@ -239,7 +239,7 @@ const { renderMakeCardView } = await import(`${REPO}/js/make_card_view.js`);
 const makeHost = document.createElement('main');
 document.body.append(makeHost);
 const makeView = renderMakeCardView(makeHost, {
-  step: { step: 'make_card', position: 1, title: 'Make a revision card' },
+  step: { step: 'make_card', position: 2, title: 'Make a revision card' },
   onCompleted: () => {},
 });
 check('the make-card view asks for a PGN and a move number',
