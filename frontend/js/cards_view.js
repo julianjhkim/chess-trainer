@@ -1,14 +1,14 @@
 /**
- * Opening cards (step 4).
+ * Opening cards (step 3).
  *
  * One card runs like this:
  *
  *   1. the earlier moves of the line auto-play quickly
- *   2. the branch move is shown as an arrow; you play it
- *   3. the opening name appears
- *   4. you find the answer move, with no arrow; retries are unlimited and the
+ *   2. the branch move is shown as an arrow, with the opening name it leads
+ *      to; you play it
+ *   3. you find the answer move, with no arrow; retries are unlimited and the
  *      eval bar updates after each one
- *   5. the stats table, the grade and any "max depth reached" lines appear
+ *   4. the stats table, the grade and any "max depth reached" lines appear
  *
  * White stays at the bottom by default, with a Flip board button.
  */
@@ -251,18 +251,18 @@ export function renderCardsView(container, { step, onCompleted }) {
     header.append(lineText);
     body.append(header);
 
+    // The name of the opening the arrow move leads to: shown with the arrow,
+    // since it names the line, not the answer.
+    if (card.opening_label) {
+      const opening = document.createElement('p');
+      opening.className = 'opening-name';
+      opening.textContent = card.opening_label;
+      body.append(opening);
+    }
+
     if (phase === 'given') {
-      body.append(
-        paragraph(`Play ${card.given_move_san} — the arrow shows it.`, ''),
-        paragraph('The opening name appears once you have played it.', 'choice-note'),
-      );
+      body.append(paragraph(`Play ${card.given_move_san} — the arrow shows it.`, ''));
     } else {
-      if (card.opening_label) {
-        const opening = document.createElement('p');
-        opening.className = 'opening-name';
-        opening.textContent = card.opening_label;
-        body.append(opening);
-      }
       body.append(
         paragraph(
           `Find the move for ${card.side_to_move}. No arrow this time.`,

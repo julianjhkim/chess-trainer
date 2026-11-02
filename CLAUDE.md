@@ -179,8 +179,12 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   fetched only when the card is first served. Cache keyed by EPD (transpositions
   share a card). New cards arrive breadth-first. Lichess calls are throttled; a
   429 waits 60 s and retries once.
+- Opening names come from the explorer, which names only exact book positions;
+  a card it gives no name takes its parent's (as Lichess's board does), and an
+  exact name found later wins. Migration 7 backfilled older cards this way.
 - Card flow: earlier moves auto-play → branch move shown as an arrow (only it is
-  draggable) → opening name revealed → find the answer with no arrow → stats
+  draggable), with the opening name it leads to (shown from the start: it names
+  the line, not the answer) → find the answer with no arrow → stats
   table (answer, most played, Stockfish's choice marked) and **Analyse at
   Lichess ↗** as a button right of Next card (`lichess_url` on the attempt/show-answer response, only once
   finished): `/analysis/pgn/<line + answer>?color=white#<line length>`, i.e. the

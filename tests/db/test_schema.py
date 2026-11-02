@@ -77,7 +77,40 @@ def test_a_version_3_database_upgrades_in_place():
         " VALUES ('x', 20, 10, NULL, 'e2e4', 'now')"
     )
     applied = schema.migrate(conn)
-    assert [m.version for m in applied] == [4, 5, 6]
+    assert [m.version for m in applied] == [4, 5, 6, 7]
     row = conn.execute("SELECT pv FROM analysis_cache WHERE fen = 'x'").fetchone()
     assert row[0] is None
+    conn.close()
+
+
+def _card(conn, card_id, parent, line, eco=None, name=None):
+    conn.execute(
+        "INSERT INTO cards (id, epd, fen, line_uci, depth, parent_card_id,"
+        " side_to_move, given_move_uci, given_move_san, status, position_games,"
+        " queue_seq, opening_eco, opening_name, created_at)"
+        " VALUES (?, ?, 'fen', ?, ?, ?, 'white', 'a1a2', 'x', 'active', 100, ?,"
+        " ?, ?, 'now')",
+        (card_id, f"epd{card_id}", line, line.count(" ") + 1, parent, card_id, eco, name),
+    )
+
+
+def test_unnamed_opening_cards_take_the_nearest_named_ancestors_name():
+    conn = open_memory_db()
+    for migration in schema.MIGRATIONS[:6]:
+        conn.executescript(migration.sql)
+    conn.execute("PRAGMA user_version = 6")
+    _card(conn, 1, None, "e2e3", "A00", "Van't Kruijs Opening")
+    _card(conn, 2, 1, "e2e3 d7d5")
+    _card(conn, 3, 2, "e2e3 d7d5 g1f3")
+    _card(conn, 4, 3, "e2e3 d7d5 g1f3 c7c5", "A13", "Named Here")
+    _card(conn, 5, None, "h2h4")
+    schema.migrate(conn)
+    names = dict(conn.execute("SELECT id, opening_eco || ' ' || opening_name FROM cards"))
+    assert names == {
+        1: "A00 Van't Kruijs Opening",
+        2: "A00 Van't Kruijs Opening",
+        3: "A00 Van't Kruijs Opening",
+        4: "A13 Named Here",
+        5: None,
+    }
     conn.close()

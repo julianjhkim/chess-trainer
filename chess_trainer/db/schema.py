@@ -262,7 +262,32 @@ _M006 = Migration(
     """,
 )
 
-MIGRATIONS: tuple[Migration, ...] = (_M001, _M002, _M003, _M004, _M005, _M006)
+#: Opening cards whose position Lichess does not name (1.e3 d5) take the name
+#: of the nearest named card up their line (1.e3: Van't Kruijs Opening), as new
+#: cards now do when they are created.
+_M007 = Migration(
+    version=7,
+    name="inherited_opening_names",
+    sql="""
+    WITH RECURSIVE up(id, ancestor) AS (
+        SELECT id, parent_card_id FROM cards WHERE opening_name IS NULL
+        UNION ALL
+        SELECT up.id, c.parent_card_id
+        FROM up JOIN cards c ON c.id = up.ancestor
+        WHERE c.opening_name IS NULL
+    )
+    UPDATE cards SET (opening_eco, opening_name) = (
+        SELECT a.opening_eco, a.opening_name
+        FROM up JOIN cards a ON a.id = up.ancestor
+        WHERE up.id = cards.id AND a.opening_name IS NOT NULL
+    )
+    WHERE opening_name IS NULL;
+    """,
+)
+
+MIGRATIONS: tuple[Migration, ...] = (
+    _M001, _M002, _M003, _M004, _M005, _M006, _M007,
+)
 
 
 def current_version(conn: sqlite3.Connection) -> int:

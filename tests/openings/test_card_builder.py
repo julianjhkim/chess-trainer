@@ -299,6 +299,26 @@ def test_children_get_their_opening_names(conn, explorer, fake_engine):
     assert by_move["c6"].opening_label == "B10 Caro-Kann Defense"
 
 
+def test_a_child_lichess_does_not_name_keeps_its_parents_name(
+    conn, explorer, fake_engine, explorer_e4
+):
+    """1.e3 d5 has no name of its own; it stays the Van't Kruijs, as on Lichess."""
+    import copy
+
+    unnamed = copy.deepcopy(explorer_e4)
+    for move in unnamed["moves"]:
+        if move["san"] == "e6":
+            move["opening"] = None
+    explorer.by_epd[epd_of(["e2e4"])] = unnamed
+    card = prepared_e4(conn, explorer, fake_engine)
+    result = card_builder.expand_card(
+        conn, explorer, fake_engine, card, engine_depth=10
+    )
+    by_move = {c.given_move_san: c for c in result.new_cards}
+    assert by_move["e6"].opening_label == "B00 King's Pawn Game"
+    assert by_move["c5"].opening_label == "B20 Sicilian Defense"
+
+
 def test_children_are_one_deeper_and_sequenced_in_order(conn, explorer, fake_engine):
     card = prepared_e4(conn, explorer, fake_engine)
     result = card_builder.expand_card(

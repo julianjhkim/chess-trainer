@@ -310,7 +310,7 @@ def _create_children(
 
     for branch, sequence in queue_order.assign_sequences(chosen, start=start):
         child_position = line_module.extend(parent_position, branch.uci)
-        opening = _child_opening(stats, branch.uci)
+        opening = _child_opening(stats, branch.uci) or _opening_of(parent)
         status = (
             STATUS_ACTIVE if branch.games >= tree_rules.MIN_GAMES else STATUS_DEAD_END
         )
@@ -342,3 +342,17 @@ def _child_opening(stats: PositionStats, uci: str) -> Opening | None:
     """The opening of the position after ``uci``, as the parent's record says."""
     move = stats.move(uci)
     return move.opening if move is not None else None
+
+
+def _opening_of(card: CardRow | None) -> Opening | None:
+    """A card's opening, inherited by a child the explorer gives no name.
+
+    Lichess names only exact book positions (1.e3 is the Van't Kruijs Opening,
+    1.e3 d5 has no name of its own), so like Lichess's own board a nameless
+    position keeps the name of the line it came from. Should the position's
+    own record name it later, that name wins (``set_answer`` keeps a stored
+    name only when the record has none).
+    """
+    if card is None or not card.opening_name:
+        return None
+    return Opening(eco=card.opening_eco or "", name=card.opening_name)

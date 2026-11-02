@@ -112,9 +112,9 @@ database, grown lazily as you go. The first card is 1.e4; the tree expands only
 when you pass a card (right on the first or second try).
 
 Each card runs the same way: the earlier moves of the line auto-play, then the
-branch move appears as an **arrow** for you to play — only that move is draggable.
-Playing it reveals the **opening name**, and then you have to find the answer move
-with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
+branch move appears as an **arrow** for you to play — only that move is draggable —
+together with the **opening name** that move leads to (a position with no book
+name of its own keeps the name of the line it came from, as on Lichess). Then you have to find the answer move with no arrow. Retries are unlimited and the eval bar updates on each one; *Show
 answer* gives up. Afterwards you get the **stats table**: every master move with
 its share, game count, white/draw/black split and average rating, with the answer,
 the most played move and Stockfish's own choice all marked. Next to *Next card*,
