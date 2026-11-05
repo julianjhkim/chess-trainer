@@ -313,7 +313,8 @@ def expand_card(
     if card.depth == 1 and not repertoire.black_only(card.ucis):
         # One of my White first moves: Black's replies start my White side.
         created += _create_children(
-            conn, parent=card, parent_position=position, plan=plan, stats=stats
+            conn, parent=card, parent_position=position, plan=plan, stats=stats,
+            branches=_replies(card, plan, stats),
         )
     created += _expand_through_answer(
         conn, source, engine, card, stats, plan, engine_depth=engine_depth
@@ -372,7 +373,7 @@ def _expand_through_answer(
                 best = best_move_module.best_move(conn, engine, after.fen, engine_depth)
                 replies = tree_rules.engine_branch(best, after_stats) if best else ()
             else:
-                replies = after_plan.branches
+                replies = _replies(card, after_plan, after_stats)
             inherited = (
                 after_stats.opening or _child_opening(stats, answer) or _opening_of(card)
             )
@@ -381,6 +382,83 @@ def _expand_through_answer(
                 stats=after_stats, branches=replies, inherited=inherited,
             )
     return created
+
+
+def _replies(card: CardRow, plan: CardPlan, stats: PositionStats) -> tuple[Branch, ...]:
+    """The opponent's replies, in a position decided by frequency.
+
+    Wider for the first reply after a first-move card (``first_reply_branches``):
+    Black's to my 1.e4, or White's after my 1...c5.
+    """
+    if card.depth == 1:
+        return tree_rules.first_reply_branches(stats)
+    return plan.branches
+
+
+def widen_first_replies(conn: sqlite3.Connection) -> int:
+    """Add the 1,000-game first replies to first-move cards grown before them.
+
+    Uses only cached records (both were fetched when the card was expanded),
+    so no network; a card whose record is missing is left as it is. Rows
+    already there are kept as they are. Returns how many cards were added.
+    """
+    added = 0
+    for card in cards_repo.roots(conn):
+        if not card.is_expanded or card.status != STATUS_ACTIVE:
+            continue
+        stats = cached_stats_for_card(conn, card)
+        if stats is None:
+            continue
+        position = line_module.position_of(card.ucis)
+        plan = tree_rules.plan_position(stats)
+        if not repertoire.black_only(card.ucis) and plan.mode is CardMode.FREQUENCY:
+            added += _add_missing(
+                conn, parent=card, parent_position=position, plan=plan, stats=stats,
+                branches=_replies(card, plan, stats),
+            )
+        if card.answer_uci is None:
+            continue
+        after = line_module.extend(position, card.answer_uci)
+        payload = explorer_cache.cached_only(conn, after.epd)
+        if payload is None:
+            continue
+        after_stats = PositionStats.of(payload)
+        after_plan = tree_rules.plan_position(after_stats)
+        if after_plan.mode is CardMode.FREQUENCY:
+            added += _add_missing(
+                conn, parent=card, parent_position=after, plan=after_plan,
+                stats=after_stats, branches=_replies(card, after_plan, after_stats),
+                inherited=(
+                    after_stats.opening
+                    or _child_opening(stats, card.answer_uci)
+                    or _opening_of(card)
+                ),
+            )
+    return added
+
+
+def _add_missing(
+    conn: sqlite3.Connection,
+    *,
+    parent: CardRow,
+    parent_position: LinePosition,
+    branches: tuple[Branch, ...],
+    **kwargs,
+) -> int:
+    """Create the branches that have no card yet; return how many."""
+    missing = tuple(
+        b for b in branches
+        if cards_repo.get_by_epd(conn, line_module.extend(parent_position, b.uci).epd)
+        is None
+    )
+    if not missing:
+        return 0
+    return len(
+        _create_children(
+            conn, parent=parent, parent_position=parent_position, branches=missing,
+            **kwargs,
+        )
+    )
 
 
 def _create_children(

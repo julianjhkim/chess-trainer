@@ -186,6 +186,14 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
     such a first-move card is first passed it also branches on every Black
     reply (5%+, one ply down) — those ask my White move, and grow the same way.
     Any other first move is Black-only.
+  - **The opponent's first reply is wider** (`tree_rules.first_reply_branches`,
+    `FIRST_REPLY_MIN_GAMES = 1000`): every move with **1,000+ master games**
+    branches there whatever its share, as do 5% moves. That is White's reply
+    after my Black answer to any first move (1.e4 c5 → 2.Nf3 … 2.c4) and
+    Black's reply to my White first move (1.e4 → 1...c5 … 1...b6). From the
+    next opponent move on, only the usual 5% rule — the user chose this over
+    the 1,000-game rule at every depth. `card_builder.widen_first_replies`
+    adds the missing ones to older trees at startup (cached records only).
   - The two sides share the tree but never a position (Black-to-move cards are
     my Black side, White-to-move my White side); a transposition keeps the
     card where it was first reached.

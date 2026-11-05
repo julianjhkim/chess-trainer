@@ -285,8 +285,40 @@ def test_my_white_first_move_roots_my_white_side(conn, explorer, fake_engine):
     result = card_builder.expand_card(
         conn, explorer, fake_engine, card, engine_depth=10
     )
-    assert [c.given_move_san for c in white_roots(result)] == ["c5", "e5", "e6", "c6"]
+    assert [c.given_move_san for c in white_roots(result)] == ["c5", "e5", "e6", "c6", "d6", "g6", "d5", "Nf6", "Nc6", "b6"]
     assert all(c.side_to_move == "white" for c in white_roots(result))
+
+
+def test_the_first_reply_takes_moves_with_1000_games_under_5_percent(
+    conn, explorer, fake_engine
+):
+    """1...b6 has 1,940 games (0.1%): a branch here, as the first reply only."""
+    card = prepared_e4(conn, explorer, fake_engine)
+    result = card_builder.expand_card(
+        conn, explorer, fake_engine, card, engine_depth=10
+    )
+    by_move = {c.given_move_san: c for c in white_roots(result)}
+    assert by_move["b6"].position_games == 1940
+    # One ply further down, my Black side's first reply: the same wider rule,
+    # but 2.h3 has only 10 games and 1%.
+    assert [c.given_move_san for c in replies(result)] == ["Nf3", "Nc3", "d4"]
+
+
+def test_further_down_the_usual_5_percent_rule_applies(conn, explorer, fake_engine):
+    """A first reply's own card is not a first-move card: 1,000 games is no branch."""
+    card = prepared_e4(conn, explorer, fake_engine)
+    c5 = white_roots(
+        card_builder.expand_card(conn, explorer, fake_engine, card, engine_depth=10)
+    )[0]
+    c5 = card_builder.prepare_card(conn, explorer, fake_engine, c5, engine_depth=10).card
+    assert c5.answer_uci == "g1f3"
+    explorer.by_epd[epd_of(["e2e4", "c7c5", "g1f3"])] = explorer_record(
+        {"d7d6": 90000, "b8c6": 60000, "e7e6": 50000, "g7g6": 4000, "a7a6": 1500}
+    )
+    result = card_builder.expand_card(conn, explorer, fake_engine, c5, engine_depth=10)
+    # Not a first reply any more: 2...g6 (4,000 games) and 2...a6 (1,500) are
+    # under 5%, so the usual rule leaves them out.
+    assert [c.given_move_san for c in result.new_cards] == ["d6", "Nc6", "e6"]
 
 
 def test_a_card_branches_only_through_its_answer(conn, explorer, fake_engine):

@@ -23,7 +23,7 @@ from chess_trainer.api.routers import (
 )
 from chess_trainer.config import Config, load_config
 from chess_trainer.db import schema
-from chess_trainer.openings import prune
+from chess_trainer.openings import card_builder, prune
 
 ROUTERS = (
     health.router,
@@ -47,6 +47,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         app.state.ctx = state
         schema.migrate(state.conn)
         prune.prune(state.conn)
+        card_builder.widen_first_replies(state.conn)
         try:
             yield
         finally:

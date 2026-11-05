@@ -125,6 +125,12 @@ move in thin positions).
   on. After 1.g3 or any other first move you never play, nothing asks a White
   move.
 
+The opponent's **first** reply is wider: any move played in 1,000 or more
+master games is included even under 5%, because so early in the game even a
+rare-looking move is one you will actually meet (after 1.e4, Black's replies
+down to 1...b6; after 1.e4 c5, White's from 2.Nf3 down to 2.c4). From the
+opponent's next move on, the usual 5% rule applies.
+
 Nothing ever asks the opponent's move. Cards grown under older rules are
 reshaped to this when the app starts (cards that still fit keep their history).
 

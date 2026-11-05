@@ -13,6 +13,10 @@ tie, or to answer an engine-mode card), and the builder performs it.
 
 The start position is the exception: it is not a card, and *all* of White's
 first moves branch from it, with no 5% filter, ordered by game count.
+
+The opponent's first reply is wider too: a move played in 1,000+ master games
+branches even under 5% (after 1.e4, Black's 1...b6; after 1.e4 c5, White's
+2.c4), so the common sidelines of the first moves are all covered.
 """
 
 from __future__ import annotations
@@ -39,6 +43,21 @@ def branches_by_frequency(
         Branch(uci=move.uci, games=move.games, share=move.share_of(total))
         for move in stats.by_games()
         if move.share_of(total) >= min_share
+    )
+
+
+#: The opponent's first reply also branches on any move with this many games.
+FIRST_REPLY_MIN_GAMES = 1000
+
+
+def first_reply_branches(stats: PositionStats) -> tuple[Branch, ...]:
+    """The opponent's first reply: 5% of the games, or 1,000 games, either."""
+    total = stats.total_games
+    return tuple(
+        Branch(uci=move.uci, games=move.games, share=move.share_of(total))
+        for move in stats.by_games()
+        if move.share_of(total) >= BRANCH_SHARE_PERCENT
+        or move.games >= FIRST_REPLY_MIN_GAMES
     )
 
 

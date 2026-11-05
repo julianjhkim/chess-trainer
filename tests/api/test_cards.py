@@ -421,9 +421,10 @@ def _serve_card_for_line(client, ucis: list[str]):
 def test_answering_correctly_unlocks_the_branches(client):
     start_cards(client)
     payload = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()
-    # Black's four replies (my White side) and White's three to 1...c5 (my Black side).
-    assert payload["branches_created"] == 7
-    assert payload["counts"]["new"] == 26  # 20 - 1 answered + 7 new
+    # Black's ten 1,000-game replies (my White side, down to 1...b6) and
+    # White's three to 1...c5 (my Black side).
+    assert payload["branches_created"] == 13
+    assert payload["counts"]["new"] == 32  # 20 - 1 answered + 13 new
 
 
 def test_failing_does_not_unlock_the_branches(client):
@@ -441,7 +442,7 @@ def test_branches_are_not_created_twice(client):
     from chess_trainer.db.connection import connect
 
     conn = connect(client.app.state.ctx.config.db_path)
-    assert cards_repo.count(conn) == 27
+    assert cards_repo.count(conn) == 33
     conn.close()
 
 

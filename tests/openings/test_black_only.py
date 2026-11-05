@@ -23,13 +23,11 @@ def test_any_other_first_move_is_black_only():
     assert not repertoire.black_only([])
 
 
-def unnamed(payload: dict) -> dict:
-    """A copy of a record with no opening names, so names can be traced."""
-    out = copy.deepcopy(payload)
-    out["opening"] = None
-    for move in out["moves"]:
-        move["opening"] = None
-    return out
+#: White's replies after 1.g3 c5: four at 5%+, a 1,000-game sideline (2.b3,
+#: a first reply, so it counts) and a rare one (2.h4).
+G3_C5 = explorer_record(
+    {"e2e4": 40000, "d2d4": 30000, "g1f3": 9000, "c2c4": 6000, "b2b3": 1200, "h2h4": 300}
+)
 
 
 @pytest.fixture
@@ -40,7 +38,7 @@ def explorer(explorer_root, explorer_e4) -> FakeExplorer:
         {
             epd_of([]): explorer_root,
             epd_of(["g2g3"]): explorer_e4,
-            epd_of(["g2g3", "c7c5"]): unnamed(explorer_root),
+            epd_of(["g2g3", "c7c5"]): G3_C5,
         }
     )
 
@@ -58,6 +56,7 @@ def test_a_black_only_card_branches_only_through_its_answer(conn, explorer, fake
     lines = [c.line_uci for c in result.new_cards]
     assert lines == [
         "g2g3 c7c5 e2e4", "g2g3 c7c5 d2d4", "g2g3 c7c5 g1f3", "g2g3 c7c5 c2c4",
+        "g2g3 c7c5 b2b3",
     ]
 
 
@@ -102,10 +101,10 @@ def test_my_white_first_moves_also_root_my_white_side(conn, explorer, explorer_e
     card = cards_repo.get_by_epd(conn, epd_of(["e2e4"]))
     card = card_builder.prepare_card(conn, explorer, fake_engine, card, engine_depth=10).card
     result = card_builder.expand_card(conn, explorer, fake_engine, card, engine_depth=10)
-    assert [c.line_uci for c in result.new_cards] == [
-        "e2e4 c7c5", "e2e4 e7e5", "e2e4 e7e6", "e2e4 c7c6",  # my White move next
-        "e2e4 c7c5 g1f3",  # my Black move next
-    ]
+    lines = [c.line_uci for c in result.new_cards]
+    assert lines[:4] == ["e2e4 c7c5", "e2e4 e7e5", "e2e4 e7e6", "e2e4 c7c6"]
+    assert lines[-1] == "e2e4 c7c5 g1f3"  # my Black move next
+    assert all(c.side_to_move == "white" for c in result.new_cards[:-1])
 
 
 def test_a_black_only_first_move_roots_no_white_side(conn, explorer, fake_engine):
@@ -135,3 +134,27 @@ def test_a_thin_position_after_the_answer_branches_on_the_engines_reply(
     result = card_builder.expand_card(conn, explorer, fake_engine, card, engine_depth=10)
     rows = result.new_cards + result.dead_ends
     assert [c.line_uci for c in rows] == ["g2g3 c7c5 f1g2"]
+
+
+def test_older_first_move_cards_are_widened_from_cached_records(
+    conn, explorer, explorer_e4, fake_engine
+):
+    """A first-move card grown before the 1,000-game rule gets its sidelines."""
+    explorer.by_epd[epd_of(["e2e4"])] = explorer_e4
+    explorer.by_epd[epd_of(["e2e4", "c7c5"])] = explorer_record(
+        {"g1f3": 9000, "b1c3": 800, "c2c4": 1100}
+    )
+    card_builder.ensure_bootstrapped(conn, explorer)
+    card = cards_repo.get_by_epd(conn, epd_of(["e2e4"]))
+    card = card_builder.prepare_card(conn, explorer, fake_engine, card, engine_depth=10).card
+    card_builder.expand_card(conn, explorer, fake_engine, card, engine_depth=10)
+    # Undo the wide part, as an older tree would have it.
+    for line in (["e2e4", "b7b6"], ["e2e4", "c7c5", "c2c4"]):
+        cards_repo.delete(conn, cards_repo.get_by_epd(conn, epd_of(line)).id)
+    calls = explorer.call_count
+
+    assert card_builder.widen_first_replies(conn) == 2
+    assert cards_repo.get_by_epd(conn, epd_of(["e2e4", "b7b6"])) is not None
+    assert cards_repo.get_by_epd(conn, epd_of(["e2e4", "c7c5", "c2c4"])) is not None
+    assert explorer.call_count == calls  # cached records only
+    assert card_builder.widen_first_replies(conn) == 0
