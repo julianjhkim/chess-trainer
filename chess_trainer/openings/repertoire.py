@@ -1,11 +1,13 @@
-"""Which first moves I play as White, and what that means for the tree.
+"""Which sides of which openings I study.
 
-Pure. A line that starts with one of my White first moves is studied from both
-sides. Any other first move I only ever meet as Black, so its tree asks only
-Black's moves: one card per Black-to-move position, answered with the main
-move (most played, or the engine's when the games are few), and no card where
-White is to move -- White's replies branch straight through to the next
-Black-to-move position, by the usual rules.
+Pure. The rule everywhere: on my own moves I study only the main move; on the
+opponent's, every reply the tree rules allow. So a card always asks my move
+and branches only through its answer, and the opponent's replies after it are
+the next cards (``card_builder``).
+
+As Black I meet every first move, so every first move is a card for my Black
+side. As White I play only 1.e4, 1.d4, 1.Nf3 and 1.c4: after those, each Black
+reply is a card asking my White move. Any other first move is Black-only.
 """
 
 from __future__ import annotations

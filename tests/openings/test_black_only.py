@@ -1,4 +1,4 @@
-"""Lines that start with a first move I only meet as Black grow Black's main moves only."""
+"""My moves: main line only; the opponent's: every reply the rules allow."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pytest
 
 from chess_trainer.db import cards_repo
 from chess_trainer.openings import card_builder, line as line_module, repertoire
+from tests.conftest import explorer_record
 from tests.openings.test_card_builder import FakeExplorer, epd_of
 
 
@@ -94,13 +95,23 @@ def test_the_arrow_is_played_from_the_position_after_the_answer(conn, explorer, 
     assert card_builder.opening_before(conn, child) == "B20 Sicilian Defense"
 
 
-def test_my_white_first_moves_still_grow_both_sides(conn, explorer, explorer_e4, fake_engine):
+def test_my_white_first_moves_also_root_my_white_side(conn, explorer, explorer_e4, fake_engine):
     explorer.by_epd[epd_of(["e2e4"])] = explorer_e4
+    explorer.by_epd[epd_of(["e2e4", "c7c5"])] = explorer_record({"g1f3": 700})
     card_builder.ensure_bootstrapped(conn, explorer)
     card = cards_repo.get_by_epd(conn, epd_of(["e2e4"]))
     card = card_builder.prepare_card(conn, explorer, fake_engine, card, engine_depth=10).card
     result = card_builder.expand_card(conn, explorer, fake_engine, card, engine_depth=10)
-    assert [c.given_move_san for c in result.new_cards] == ["c5", "e5", "e6", "c6"]
+    assert [c.line_uci for c in result.new_cards] == [
+        "e2e4 c7c5", "e2e4 e7e5", "e2e4 e7e6", "e2e4 c7c6",  # my White move next
+        "e2e4 c7c5 g1f3",  # my Black move next
+    ]
+
+
+def test_a_black_only_first_move_roots_no_white_side(conn, explorer, fake_engine):
+    card = g3_card(conn, explorer, fake_engine)
+    result = card_builder.expand_card(conn, explorer, fake_engine, card, engine_depth=10)
+    assert all(c.depth == 3 for c in result.new_cards)
 
 
 def test_too_few_games_after_the_answer_is_a_dead_end(conn, explorer, explorer_thin, fake_engine):

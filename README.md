@@ -111,13 +111,22 @@ A new card is first due the next day. The first card you save completes the step
 database, grown lazily as you go. The first card is 1.e4; the tree expands only
 when you pass a card (right on the first or second try).
 
-Only 1.e4, 1.d4, 1.Nf3 and 1.c4 are studied as White (`openings/repertoire.py`).
-Every other first move you only meet as Black, so its tree asks Black's moves
-only, and only the main one: after 1.g3 you learn 1...d5 (the most played, or
-the engine's move when there are few games), and nothing asks you what White
-plays next. Instead each of White's usual replies (2.Bg2, …) is the next card,
-again asking only Black's main move, all the way down the tree. Cards grown
-before this rule are pruned to it when the app starts.
+The rule throughout: **on your own moves you learn only the main line; on your
+opponent's, every reply that is played often enough.** The main line is the
+most played move (or the engine's, when there are few master games), and the
+opponent's replies are the moves with 5% or more of the games (or the engine's
+move in thin positions).
+
+- *Your Black side* covers every first move: 1.e4 asks you for 1...c5, then
+  White's 2.Nf3, 2.Nc3 and 2.c3 each ask your next Black move, and so on.
+- *Your White side* covers only 1.e4, 1.d4, 1.Nf3 and 1.c4
+  (`openings/repertoire.py`): after 1.e4, Black's 1...c5, 1...e5, 1...e6 and
+  1...c6 each ask your White move, then every common Black reply to it, and so
+  on. After 1.g3 or any other first move you never play, nothing asks a White
+  move.
+
+Nothing ever asks the opponent's move. Cards grown under older rules are
+reshaped to this when the app starts (cards that still fit keep their history).
 
 Each card runs the same way: the earlier moves of the line auto-play, then the
 branch move appears as an **arrow** for you to play — only that move is draggable —

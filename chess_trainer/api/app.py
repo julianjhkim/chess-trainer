@@ -46,7 +46,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         state = AppState(cfg)
         app.state.ctx = state
         schema.migrate(state.conn)
-        prune.prune_black_only(state.conn)
+        prune.prune(state.conn)
         try:
             yield
         finally:

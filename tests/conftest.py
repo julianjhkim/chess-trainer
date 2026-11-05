@@ -165,3 +165,21 @@ def explorer_deep() -> dict:
 def explorer_thin() -> dict:
     """A position with 11 games: engine mode territory."""
     return _explorer_fixture("thin.json")
+
+
+def explorer_record(games: dict[str, int], *, opening: dict | None = None) -> dict:
+    """A synthetic masters record: each move's games, all of them draws.
+
+    For positions no recorded response covers, such as the one after a card's
+    answer, which decides the opponent's replies.
+    """
+    return {
+        "white": 0,
+        "draws": sum(games.values()),
+        "black": 0,
+        "opening": opening,
+        "moves": [
+            {"uci": uci, "san": uci, "white": 0, "draws": n, "black": 0, "opening": None}
+            for uci, n in games.items()
+        ],
+    }

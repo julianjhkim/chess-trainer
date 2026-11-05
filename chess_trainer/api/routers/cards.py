@@ -339,9 +339,9 @@ def _branch_stats(
 ) -> PositionStats:
     """The record a branch move was counted in.
 
-    The card's own, except in a Black-only line, where a White reply two moves
-    on was counted in the record of the position after the answer (cached when
-    the card was expanded).
+    The card's own for a branch right under it (a root of my White side);
+    an opponent's reply two moves on was counted in the record of the position
+    after the answer (cached when the card was expanded).
     """
     if child.depth <= card.depth + 1:
         return stats

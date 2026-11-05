@@ -7,7 +7,7 @@ import pytest
 from chess_trainer.db import cards_repo, explorer_repo
 from chess_trainer.openings import card_builder, line as line_module
 from chess_trainer.openings.card_types import CardMode
-from tests.conftest import FakeEngine
+from tests.conftest import FakeEngine, explorer_record
 
 
 class FakeExplorer:
@@ -48,8 +48,13 @@ def explorer(explorer_root, explorer_e4, explorer_deep, explorer_thin) -> FakeEx
             epd_of(["e2e4"]): explorer_e4,
             epd_of(deep_line): explorer_deep,
             epd_of([*deep_line, "h2h3"]): explorer_thin,
+            # After 1.e4's answer, 1...c5: White's replies (Nf3, Nc3, d4 at 5%+).
+            epd_of(["e2e4", "c7c5"]): AFTER_C5,
         }
     )
+
+
+AFTER_C5 = explorer_record({"g1f3": 700, "b1c3": 150, "d2d4": 100, "h2h3": 10})
 
 
 # -- bootstrap -----------------------------------------------------------
@@ -264,20 +269,43 @@ def prepared_e4(conn, explorer, engine):
     return card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10).card
 
 
-def test_expanding_creates_the_five_percent_branches(conn, explorer, fake_engine):
+def white_roots(result):
+    """The depth-2 cards: Black's replies to my White first move."""
+    return [c for c in result.new_cards if c.depth == 2]
+
+
+def replies(result):
+    """The depth-3 cards: White's replies after my Black answer."""
+    return [c for c in result.new_cards if c.depth == 3]
+
+
+def test_my_white_first_move_roots_my_white_side(conn, explorer, fake_engine):
+    """Every Black reply with 5% asks my White move next."""
     card = prepared_e4(conn, explorer, fake_engine)
     result = card_builder.expand_card(
         conn, explorer, fake_engine, card, engine_depth=10
     )
-    assert [c.given_move_san for c in result.new_cards] == ["c5", "e5", "e6", "c6"]
+    assert [c.given_move_san for c in white_roots(result)] == ["c5", "e5", "e6", "c6"]
+    assert all(c.side_to_move == "white" for c in white_roots(result))
 
 
-def test_expanding_costs_no_extra_requests(conn, explorer, fake_engine):
-    """A parent's move counts are the children's totals, so nothing is fetched."""
+def test_a_card_branches_only_through_its_answer(conn, explorer, fake_engine):
+    """1...c5 is my answer; White's replies to it each ask my Black move."""
+    card = prepared_e4(conn, explorer, fake_engine)
+    result = card_builder.expand_card(
+        conn, explorer, fake_engine, card, engine_depth=10
+    )
+    assert [c.line_uci for c in replies(result)] == [
+        "e2e4 c7c5 g1f3", "e2e4 c7c5 b1c3", "e2e4 c7c5 d2d4",
+    ]
+    assert all(c.side_to_move == "black" for c in replies(result))
+
+
+def test_expanding_costs_one_request_for_the_answers_position(conn, explorer, fake_engine):
     card = prepared_e4(conn, explorer, fake_engine)
     before = explorer.call_count
     card_builder.expand_card(conn, explorer, fake_engine, card, engine_depth=10)
-    assert explorer.call_count == before
+    assert explorer.calls[before:] == [epd_of(["e2e4", "c7c5"])]
 
 
 def test_children_inherit_their_game_counts_from_the_parent(conn, explorer, fake_engine):
@@ -285,8 +313,9 @@ def test_children_inherit_their_game_counts_from_the_parent(conn, explorer, fake
     result = card_builder.expand_card(
         conn, explorer, fake_engine, card, engine_depth=10
     )
-    by_move = {c.given_move_san: c for c in result.new_cards}
-    assert by_move["c5"].position_games == 601092
+    by_line = {c.line_uci: c for c in result.new_cards}
+    assert by_line["e2e4 c7c5"].position_games == 601092
+    assert by_line["e2e4 c7c5 g1f3"].position_games == 700
 
 
 def test_children_get_their_opening_names(conn, explorer, fake_engine):
@@ -294,9 +323,11 @@ def test_children_get_their_opening_names(conn, explorer, fake_engine):
     result = card_builder.expand_card(
         conn, explorer, fake_engine, card, engine_depth=10
     )
-    by_move = {c.given_move_san: c for c in result.new_cards}
+    by_move = {c.given_move_san: c for c in white_roots(result)}
     assert by_move["c5"].opening_label == "B20 Sicilian Defense"
     assert by_move["c6"].opening_label == "B10 Caro-Kann Defense"
+    # The replies' record names nothing: they keep the name of 1...c5.
+    assert replies(result)[0].opening_label == "B20 Sicilian Defense"
 
 
 def test_a_child_lichess_does_not_name_keeps_its_parents_name(
@@ -345,14 +376,12 @@ def test_after_the_answer_the_name_is_the_answers_own_or_carries_on(
     assert card_builder.opening_after(stats, card) == "B00 King's Pawn Game"
 
 
-def test_children_are_one_deeper_and_sequenced_in_order(conn, explorer, fake_engine):
+def test_children_are_sequenced_after_every_first_move(conn, explorer, fake_engine):
     card = prepared_e4(conn, explorer, fake_engine)
     result = card_builder.expand_card(
         conn, explorer, fake_engine, card, engine_depth=10
     )
-    assert all(c.depth == 2 for c in result.new_cards)
     seqs = [c.queue_seq for c in result.new_cards]
-    assert seqs == sorted(seqs)
     assert min(seqs) > 20  # after every depth-1 card
 
 
@@ -424,13 +453,15 @@ def deep_card(conn, explorer, engine):
     return card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10).card
 
 
-def test_a_deep_position_branches_only_above_five_percent(conn, explorer, fake_engine):
+def test_a_deep_card_branches_through_its_answer(conn, explorer, fake_engine):
     card = deep_card(conn, explorer, fake_engine)
+    assert card.answer_san == "Qxd8+"
+    explorer.by_epd[epd_of([*DEEP, "d1d8"])] = explorer_record({"e8d8": 900})
     result = card_builder.expand_card(
         conn, explorer, fake_engine, card, engine_depth=10
     )
-    assert [c.given_move_san for c in result.new_cards] == ["Qxd8+"]
-    assert result.dead_ends == []  # the thin moves are below 5%, so never branches
+    assert [c.line_uci.split()[-2:] for c in result.new_cards] == [["d1d8", "e8d8"]]
+    assert result.dead_ends == []
 
 
 def test_a_thin_branch_becomes_a_dead_end(conn, explorer, fake_engine, explorer_deep):
@@ -519,11 +550,12 @@ def test_an_engine_mode_card_has_exactly_one_branch(conn, explorer):
         ),
     )
     prepared = card_builder.prepare_card(conn, explorer, engine, card, engine_depth=10)
+    explorer.by_epd[epd_of([*thin_line, "d8d1"])] = explorer_record({"f1d1": 30})
     result = card_builder.expand_card(
         conn, explorer, engine, prepared.card, engine_depth=10
     )
     assert result.created == 1
-    assert (result.new_cards + result.dead_ends)[0].given_move_uci == "d8d1"
+    assert (result.new_cards + result.dead_ends)[0].ucis[-2:] == ("d8d1", "f1d1")
 
 
 # -- ties ----------------------------------------------------------------

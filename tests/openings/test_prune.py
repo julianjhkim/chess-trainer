@@ -59,13 +59,13 @@ def old_g3_tree(conn):
 
 def test_other_black_moves_go_with_everything_under_them(conn):
     old_g3_tree(conn)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert not any(line.startswith("g2g3 g8f6") for line in lines(conn))
 
 
 def test_the_white_to_move_card_goes_and_its_replies_move_up(conn):
     g3, _, bg2 = old_g3_tree(conn)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert lines(conn) == {"g2g3", "g2g3 d7d5 f1g2", "g2g3 d7d5 b2b3"}
     assert cards_repo.get(conn, bg2.id).parent_card_id == g3.id
 
@@ -73,14 +73,14 @@ def test_the_white_to_move_card_goes_and_its_replies_move_up(conn):
 def test_a_moved_card_keeps_its_schedule(conn):
     _, _, bg2 = old_g3_tree(conn)
     schedule(conn, bg2)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert schedule_repo.get(conn, bg2.id) is not None
 
 
 def test_a_deleted_card_takes_its_schedule_with_it(conn):
     _, d5, _ = old_g3_tree(conn)
     schedule(conn, d5)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert schedule_repo.get(conn, d5.id) is None
 
 
@@ -88,7 +88,7 @@ def test_my_white_first_moves_are_left_alone(conn):
     e4 = add(conn, "e2e4", answer="c7c5", expanded=True)
     c5 = add(conn, "e2e4 c7c5", parent=e4, answer="g1f3")
     add(conn, "e2e4 e7e5", parent=e4, answer="g1f3")
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert lines(conn) == {"e2e4", "e2e4 c7c5", "e2e4 e7e5"}
     assert cards_repo.get(conn, c5.id) is not None
 
@@ -96,7 +96,7 @@ def test_my_white_first_moves_are_left_alone(conn):
 def test_an_answer_never_expanded_lets_the_card_grow_again(conn):
     g3 = add(conn, "g2g3", answer="d7d5", expanded=True)
     add(conn, "g2g3 d7d5", parent=g3)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert lines(conn) == {"g2g3"}
     assert not cards_repo.get(conn, g3.id).is_expanded
 
@@ -104,7 +104,7 @@ def test_an_answer_never_expanded_lets_the_card_grow_again(conn):
 def test_a_dead_end_answer_stays_as_the_note(conn):
     g3 = add(conn, "g2g3", answer="d7d5", expanded=True)
     add(conn, "g2g3 d7d5", parent=g3, status=STATUS_DEAD_END)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert lines(conn) == {"g2g3", "g2g3 d7d5"}
 
 
@@ -114,7 +114,7 @@ def test_pruning_goes_all_the_way_down(conn):
     e5 = add(conn, "g2g3 d7d5 f1g2 e7e5", parent=bg2, answer="d2d3", expanded=True)
     add(conn, "g2g3 d7d5 f1g2 c7c6", parent=bg2)
     add(conn, "g2g3 d7d5 f1g2 e7e5 d2d3", parent=e5)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     assert "g2g3 d7d5 f1g2 e7e5 d2d3" in lines(conn)
     assert "g2g3 d7d5 f1g2 e7e5" not in lines(conn)
     assert "g2g3 d7d5 f1g2 c7c6" not in lines(conn)
@@ -122,7 +122,75 @@ def test_pruning_goes_all_the_way_down(conn):
 
 def test_pruning_twice_changes_nothing(conn):
     old_g3_tree(conn)
-    prune.prune_black_only(conn)
+    prune.prune(conn)
     before = lines(conn)
-    assert prune.prune_black_only(conn) == 0
+    assert prune.prune(conn) == 0
     assert lines(conn) == before
+
+
+def old_e4_tree(conn):
+    """1.e4 grown the old way: every 5% move for both colours."""
+    t = {}
+    t["e4"] = add(conn, "e2e4", answer="c7c5", expanded=True)
+    t["c5"] = add(conn, "e2e4 c7c5", parent=t["e4"], answer="g1f3", expanded=True)
+    t["c5 Nf3"] = add(conn, "e2e4 c7c5 g1f3", parent=t["c5"], answer="d7d6", expanded=True)
+    t["c5 Nf3 d6"] = add(conn, "e2e4 c7c5 g1f3 d7d6", parent=t["c5 Nf3"], answer="d2d4")
+    t["c5 Nf3 Nc6"] = add(conn, "e2e4 c7c5 g1f3 b8c6", parent=t["c5 Nf3"], answer="d2d4")
+    t["c5 Nc3"] = add(conn, "e2e4 c7c5 b1c3", parent=t["c5"], answer="b8c6", expanded=True)
+    t["c5 Nc3 Nc6"] = add(
+        conn, "e2e4 c7c5 b1c3 b8c6", parent=t["c5 Nc3"], answer="g2g3", expanded=True
+    )
+    t["c5 Nc3 Nc6 g3"] = add(conn, "e2e4 c7c5 b1c3 b8c6 g2g3", parent=t["c5 Nc3 Nc6"])
+    t["c5 Nc3 e6"] = add(conn, "e2e4 c7c5 b1c3 e7e6", parent=t["c5 Nc3"])
+    t["e5"] = add(conn, "e2e4 e7e5", parent=t["e4"], answer="g1f3", expanded=True)
+    t["e5 Nf3"] = add(conn, "e2e4 e7e5 g1f3", parent=t["e5"], answer="b8c6", expanded=True)
+    t["e5 Nf3 Nc6"] = add(conn, "e2e4 e7e5 g1f3 b8c6", parent=t["e5 Nf3"])
+    t["e5 Nf3 d6"] = add(conn, "e2e4 e7e5 g1f3 d7d6", parent=t["e5 Nf3"])
+    t["e5 Bc4"] = add(conn, "e2e4 e7e5 f1c4", parent=t["e5"], answer="g8f6", expanded=True)
+    t["e5 Bc4 Nf6"] = add(conn, "e2e4 e7e5 f1c4 g8f6", parent=t["e5 Bc4"])
+    return t
+
+
+def parent_line(conn, card) -> str | None:
+    row = cards_repo.get(conn, card.id)
+    parent = cards_repo.get(conn, row.parent_card_id) if row.parent_card_id else None
+    return parent.line_uci if parent else None
+
+
+def test_my_white_first_move_keeps_both_sides_main_lines_only(conn):
+    old_e4_tree(conn)
+    prune.prune(conn)
+    assert lines(conn) == {
+        "e2e4",  # Black side: find 1...c5
+        "e2e4 c7c5", "e2e4 e7e5",  # White side: Black's replies
+        "e2e4 c7c5 g1f3", "e2e4 c7c5 b1c3",  # Black side: White's replies to c5
+        "e2e4 c7c5 g1f3 d7d6", "e2e4 c7c5 g1f3 b8c6",  # White side, after my 2.Nf3
+        "e2e4 c7c5 b1c3 b8c6 g2g3",  # Black side, after my 2...Nc6
+        "e2e4 e7e5 g1f3 b8c6", "e2e4 e7e5 g1f3 d7d6",  # White side, after my 2.Nf3
+    }
+
+
+def test_both_sides_hang_under_the_card_that_asked_my_move(conn):
+    t = old_e4_tree(conn)
+    prune.prune(conn)
+    assert parent_line(conn, t["c5"]) == "e2e4"
+    assert parent_line(conn, t["c5 Nf3"]) == "e2e4"
+    assert parent_line(conn, t["c5 Nf3 d6"]) == "e2e4 c7c5"
+    assert parent_line(conn, t["c5 Nc3 Nc6 g3"]) == "e2e4 c7c5 b1c3"
+    assert parent_line(conn, t["e5 Nf3 Nc6"]) == "e2e4 e7e5"
+
+
+def test_a_card_whose_answer_was_never_grown_grows_again(conn):
+    t = old_e4_tree(conn)
+    prune.prune(conn)
+    # 2...d6's position was a card, but never expanded: nothing to lift.
+    assert not cards_repo.get(conn, t["c5 Nf3"].id).is_expanded
+    assert cards_repo.get(conn, t["c5"].id).is_expanded
+
+
+def test_pruning_both_sides_twice_changes_nothing(conn):
+    old_e4_tree(conn)
+    prune.prune(conn)
+    before = {(r[0], r[1]) for r in conn.execute("SELECT line_uci, parent_card_id FROM cards")}
+    assert prune.prune(conn) == 0
+    assert {(r[0], r[1]) for r in conn.execute("SELECT line_uci, parent_card_id FROM cards")} == before

@@ -16,11 +16,16 @@ request is spent per card actually drilled, not per card created.
 The root is the exception the spec calls for: not a card itself, but every one
 of White's first moves branches from it with no 5% filter.
 
-Lines that start with a first move I never play as White are grown for Black
-only (``repertoire``): a card branches only through its answer, and the
-White-to-move position after it is not a card -- White's replies branch from
-it straight to the next Black-to-move cards. That position's own record is
-needed for those replies, so such an expansion costs one request.
+Every card asks *my* move, so it branches only through its answer: the
+position after it is the opponent's to move and is never asked from this side.
+The opponent's replies from it (every move with 5% when there are 20+ games,
+else the engine's move) are the next cards, two plies down. Deciding those
+replies needs that position's own record, so an expansion costs one request.
+
+Which sides I study comes from ``repertoire``: every first move is a card for
+my Black side, and each of my own White first moves (1.e4, 1.d4, 1.Nf3, 1.c4)
+also branches on every Black reply when it is first passed -- those replies
+are the roots of my White side, which then grows by the same rule.
 """
 
 from __future__ import annotations
@@ -206,10 +211,10 @@ def engine_best_move(
 def opening_before(conn: sqlite3.Connection, card: CardRow) -> str | None:
     """The opening name of the position the arrow move is played from.
 
-    Usually the parent card's position (its name already inherited if Lichess
-    gives it none); a first move starts from the unnamed start position. In a
-    Black-only line the parent is two moves back, and the arrow is played from
-    the position after the parent's answer.
+    The parent is usually two moves back, and the arrow is played from the
+    position after the parent's answer. A root of my White side hangs right
+    under its first-move card, whose position it is played from; a first move
+    starts from the unnamed start position.
     """
     if card.parent_card_id is None:
         return None
@@ -292,7 +297,8 @@ def expand_card(
 ) -> ExpansionResult:
     """Create a card's branches. Called on its first correct answer.
 
-    Uses the card's cached record, so no request is needed for the children.
+    The replies after the answer need that position's record (one request);
+    the White-side roots under a first move come from the card's own record.
     """
     if card.is_expanded:
         return ExpansionResult(already_expanded=True)
@@ -301,25 +307,16 @@ def expand_card(
 
     stats = stats_for_card(conn, source, card)
     plan = tree_rules.plan_position(stats)
-
-    if repertoire.black_only(card.ucis):
-        return _expand_black_only(
-            conn, source, engine, card, stats, plan, engine_depth=engine_depth
-        )
-
-    if plan.mode is CardMode.ENGINE:
-        # One branch only: the position after the engine's move, which is this
-        # card's answer.
-        answer = card.answer_uci or _resolve_answer(
-            conn, engine, card, stats, plan, engine_depth=engine_depth
-        )[0]
-        branches = tree_rules.engine_branch(answer, stats)
-    else:
-        branches = plan.branches
-
     position = line_module.position_of(card.ucis)
-    created = _create_children(
-        conn, parent=card, parent_position=position, plan=plan, stats=stats, branches=branches
+
+    created: list[CardRow] = []
+    if card.depth == 1 and not repertoire.black_only(card.ucis):
+        # One of my White first moves: Black's replies start my White side.
+        created += _create_children(
+            conn, parent=card, parent_position=position, plan=plan, stats=stats
+        )
+    created += _expand_through_answer(
+        conn, source, engine, card, stats, plan, engine_depth=engine_depth
     )
     cards_repo.mark_expanded(conn, card.id or 0)
 
@@ -329,7 +326,7 @@ def expand_card(
     )
 
 
-def _expand_black_only(
+def _expand_through_answer(
     conn: sqlite3.Connection,
     source: MastersSource,
     engine: Analyser,
@@ -338,13 +335,14 @@ def _expand_black_only(
     plan: CardPlan,
     *,
     engine_depth: int,
-) -> ExpansionResult:
-    """Branch a Black-only card through its answer and White's replies.
+) -> list[CardRow]:
+    """Branch a card through its answer and the opponent's replies.
 
-    The answer's position is White to move and never a card. If too few games
-    reach it, it is kept as a dead end ("max depth reached"); otherwise its own
-    record decides White's replies by the usual rules (every move with 5% when
-    there are 20+ games, else the engine's move), and each reply is a new card.
+    The answer's position is the opponent's to move and is not asked from this
+    side. If too few games reach it, it is kept as a dead end ("max depth
+    reached"); otherwise its own record decides the replies by the usual rules
+    (every move with 5% when there are 20+ games, else the engine's move), and
+    each reply is a new card.
     """
     answer = card.answer_uci or _resolve_answer(
         conn, engine, card, stats, plan, engine_depth=engine_depth
@@ -382,12 +380,7 @@ def _expand_black_only(
                 conn, parent=card, parent_position=after, plan=after_plan,
                 stats=after_stats, branches=replies, inherited=inherited,
             )
-
-    cards_repo.mark_expanded(conn, card.id or 0)
-    return ExpansionResult(
-        new_cards=[c for c in created if c.status == STATUS_ACTIVE],
-        dead_ends=[c for c in created if c.status == STATUS_DEAD_END],
-    )
+    return created
 
 
 def _create_children(

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from tests.conftest import explorer_record
+
 
 @pytest.fixture(autouse=True)
 def canned_explorer(fake_explorer, explorer_root, explorer_e4, explorer_deep, explorer_thin):
@@ -17,13 +19,17 @@ def canned_explorer(fake_explorer, explorer_root, explorer_e4, explorer_deep, ex
     fake_explorer.load(["e2e4"], explorer_e4)
     fake_explorer.load(deep, explorer_deep)
     fake_explorer.load([*deep, "h2h3"], explorer_thin)
-    # Children of 1.e4 are created without a request, but serving one needs its
-    # own record; reuse the e4 response shape so those cards can be prepared.
+    # Black's replies to 1.e4 (my White side) and the position after my answer
+    # 1...c5: White to move in each, so a record of White moves.
     for reply in ("c7c5", "e7e5", "e7e6", "c7c6"):
-        fake_explorer.load(["e2e4", reply], explorer_e4)
+        fake_explorer.load(["e2e4", reply], WHITE_REPLIES)
     for first in ("d2d4", "g1f3", "c2c4", "g2g3"):
         fake_explorer.load([first], explorer_e4)
     return fake_explorer
+
+
+#: Nf3, Nc3 and d4 have 5% or more; h3 does not.
+WHITE_REPLIES = explorer_record({"g1f3": 700, "b1c3": 150, "d2d4": 100, "h2h3": 10})
 
 
 def start_cards(client):
@@ -415,8 +421,9 @@ def _serve_card_for_line(client, ucis: list[str]):
 def test_answering_correctly_unlocks_the_branches(client):
     start_cards(client)
     payload = client.post("/api/cards/attempt", json={"from": "c7", "to": "c5"}).json()
-    assert payload["branches_created"] == 4
-    assert payload["counts"]["new"] == 23  # 20 - 1 answered + 4 new
+    # Black's four replies (my White side) and White's three to 1...c5 (my Black side).
+    assert payload["branches_created"] == 7
+    assert payload["counts"]["new"] == 26  # 20 - 1 answered + 7 new
 
 
 def test_failing_does_not_unlock_the_branches(client):
@@ -434,7 +441,7 @@ def test_branches_are_not_created_twice(client):
     from chess_trainer.db.connection import connect
 
     conn = connect(client.app.state.ctx.config.db_path)
-    assert cards_repo.count(conn) == 24
+    assert cards_repo.count(conn) == 27
     conn.close()
 
 

@@ -174,20 +174,29 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
     the engine's move.
   - **<5** (or no recorded continuation): not a card — show **"Max depth
     reached"** with that line's stats.
-- **My White repertoire** (`openings/repertoire.py`, `WHITE_FIRST_MOVES`):
-  1.e4, 1.d4, 1.Nf3, 1.c4 — those trees are studied from both sides as below.
-  Any other first move is **Black-only**: a card branches only through its
-  answer (Black's main move by the rules below), the White-to-move position
-  after it is **never a card**, and White's replies from it (by the same rules,
-  from that position's own record — one request per expansion) are the next
-  Black-to-move cards, parented to the card two plies up, down to the dead ends.
-  `openings/prune.py` runs at startup and brings older trees into line
-  (other Black moves deleted with their subtrees, White-to-move cards deleted
-  and their replies moved up with their history); idempotent. The user will
-  set rules for their Black side of 1.e4/1.d4/1.Nf3/1.c4 later — not decided.
+- **My moves: main line only; the opponent's: every reply the rules allow**
+  (`openings/repertoire.py`, `card_builder.py`). A card always asks my move and
+  branches **only through its answer**; the position after it (opponent to
+  move) is not a card from that side, and the opponent's replies from it (by
+  the rules above, from that position's own record — one request per
+  expansion) are the next cards, parented two plies up.
+  - **Black side**: every first move is a card (1.e4 → find 1...c5, then 2.Nf3,
+    2.Nc3, 2.c3 each ask my Black move, …).
+  - **White side**: only my `WHITE_FIRST_MOVES` 1.e4, 1.d4, 1.Nf3, 1.c4. When
+    such a first-move card is first passed it also branches on every Black
+    reply (5%+, one ply down) — those ask my White move, and grow the same way.
+    Any other first move is Black-only.
+  - The two sides share the tree but never a position (Black-to-move cards are
+    my Black side, White-to-move my White side); a transposition keeps the
+    card where it was first reached.
+  - `openings/prune.py` runs at startup and reshapes trees grown under older
+    rules: walks the new tree from the roots over existing rows, re-parents
+    what belongs (history kept), deletes the rest (schedules and reviews with
+    it), marks cards whose answer position was never grown unexpanded so they
+    grow again. Idempotent.
 - Tree is lazy: children are created when a card is first **passed** (q≥3)
-  (from the cached record, no extra request); a position's explorer record is
-  fetched only when the card is first served. Cache keyed by EPD (transpositions
+  (one request, for the answer position's record); a card's own explorer
+  record is fetched only when it is first served. Cache keyed by EPD (transpositions
   share a card). New cards arrive breadth-first. Lichess calls are throttled; a
   429 waits 60 s and retries once.
 - Opening names come from the explorer, which names only exact book positions;
