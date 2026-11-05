@@ -23,6 +23,7 @@ from chess_trainer.api.routers import (
 )
 from chess_trainer.config import Config, load_config
 from chess_trainer.db import schema
+from chess_trainer.openings import prune
 
 ROUTERS = (
     health.router,
@@ -45,6 +46,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         state = AppState(cfg)
         app.state.ctx = state
         schema.migrate(state.conn)
+        prune.prune_black_only(state.conn)
         try:
             yield
         finally:

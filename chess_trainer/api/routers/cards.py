@@ -27,6 +27,7 @@ from chess_trainer.config import Config
 from chess_trainer.db import cards_repo, schedule_repo
 from chess_trainer.db.cards_repo import CardRow
 from chess_trainer.engine import analysis
+from chess_trainer.explorer import cache as explorer_cache
 from chess_trainer.explorer.explorer_types import PositionStats
 from chess_trainer.explorer.lichess_client import ExplorerError
 from chess_trainer.openings import card_builder, line as line_module, stats_table
@@ -333,6 +334,22 @@ async def _finish_card(
         response.streak = StreakOut.of(streak)
 
 
+def _branch_stats(
+    conn: sqlite3.Connection, card: CardRow, child: CardRow, stats: PositionStats
+) -> PositionStats:
+    """The record a branch move was counted in.
+
+    The card's own, except in a Black-only line, where a White reply two moves
+    on was counted in the record of the position after the answer (cached when
+    the card was expanded).
+    """
+    if child.depth <= card.depth + 1:
+        return stats
+    before = line_module.position_of(child.ucis[:-1])
+    payload = explorer_cache.cached_only(conn, before.epd)
+    return PositionStats.of(payload) if payload is not None else stats
+
+
 def _dead_ends_out(
     conn: sqlite3.Connection, card: CardRow, stats: PositionStats
 ) -> list[DeadEndOut]:
@@ -343,7 +360,7 @@ def _dead_ends_out(
     """
     out: list[DeadEndOut] = []
     for child in cards_repo.dead_end_children(conn, card.id or 0):
-        move = stats.move(child.given_move_uci)
+        move = _branch_stats(conn, card, child, stats).move(child.given_move_uci)
         out.append(
             DeadEndOut(
                 line_label=line_module.line_label(child.ucis),

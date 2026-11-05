@@ -15,6 +15,12 @@ request is spent per card actually drilled, not per card created.
 
 The root is the exception the spec calls for: not a card itself, but every one
 of White's first moves branches from it with no 5% filter.
+
+Lines that start with a first move I never play as White are grown for Black
+only (``repertoire``): a card branches only through its answer, and the
+White-to-move position after it is not a card -- White's replies branch from
+it straight to the next Black-to-move cards. That position's own record is
+needed for those replies, so such an expansion costs one request.
 """
 
 from __future__ import annotations
@@ -35,7 +41,7 @@ from chess_trainer.explorer import cache as explorer_cache
 from chess_trainer.explorer.cache import MastersSource
 from chess_trainer.explorer.explorer_types import Opening, PositionStats
 from chess_trainer.openings import line as line_module
-from chess_trainer.openings import queue_order, tree_rules
+from chess_trainer.openings import queue_order, repertoire, tree_rules
 from chess_trainer.openings.card_types import Branch, CardMode, CardPlan
 from chess_trainer.openings.line import LinePosition
 
@@ -200,13 +206,20 @@ def engine_best_move(
 def opening_before(conn: sqlite3.Connection, card: CardRow) -> str | None:
     """The opening name of the position the arrow move is played from.
 
-    That is the parent card's position (its name already inherited if Lichess
-    gives it none); a first move starts from the unnamed start position.
+    Usually the parent card's position (its name already inherited if Lichess
+    gives it none); a first move starts from the unnamed start position. In a
+    Black-only line the parent is two moves back, and the arrow is played from
+    the position after the parent's answer.
     """
     if card.parent_card_id is None:
         return None
     parent = cards_repo.get(conn, card.parent_card_id)
-    return parent.opening_label if parent is not None else None
+    if parent is None:
+        return None
+    if card.depth > parent.depth + 1:
+        stats = cached_stats_for_card(conn, parent)
+        return opening_after(stats, parent) if stats is not None else parent.opening_label
+    return parent.opening_label
 
 
 def opening_after(stats: PositionStats, card: CardRow) -> str | None:
@@ -289,6 +302,11 @@ def expand_card(
     stats = stats_for_card(conn, source, card)
     plan = tree_rules.plan_position(stats)
 
+    if repertoire.black_only(card.ucis):
+        return _expand_black_only(
+            conn, source, engine, card, stats, plan, engine_depth=engine_depth
+        )
+
     if plan.mode is CardMode.ENGINE:
         # One branch only: the position after the engine's move, which is this
         # card's answer.
@@ -311,6 +329,67 @@ def expand_card(
     )
 
 
+def _expand_black_only(
+    conn: sqlite3.Connection,
+    source: MastersSource,
+    engine: Analyser,
+    card: CardRow,
+    stats: PositionStats,
+    plan: CardPlan,
+    *,
+    engine_depth: int,
+) -> ExpansionResult:
+    """Branch a Black-only card through its answer and White's replies.
+
+    The answer's position is White to move and never a card. If too few games
+    reach it, it is kept as a dead end ("max depth reached"); otherwise its own
+    record decides White's replies by the usual rules (every move with 5% when
+    there are 20+ games, else the engine's move), and each reply is a new card.
+    """
+    answer = card.answer_uci or _resolve_answer(
+        conn, engine, card, stats, plan, engine_depth=engine_depth
+    )[0]
+    position = line_module.position_of(card.ucis)
+    answer_branch = tree_rules.engine_branch(answer, stats)
+
+    if answer_branch[0].games < tree_rules.MIN_GAMES:
+        created = _create_children(
+            conn, parent=card, parent_position=position, plan=plan, stats=stats,
+            branches=answer_branch,
+        )
+    else:
+        after = line_module.extend(position, answer)
+        after_stats = stats_for_position(conn, source, after)
+        after_plan = tree_rules.plan_position(after_stats)
+        if not after_plan.is_card:
+            dead = Branch(
+                uci=answer, games=after_plan.total_games, share=answer_branch[0].share
+            )
+            created = _create_children(
+                conn, parent=card, parent_position=position, plan=plan, stats=stats,
+                branches=(dead,), dead_ends=True,
+            )
+        else:
+            if after_plan.mode is CardMode.ENGINE:
+                best = best_move_module.best_move(conn, engine, after.fen, engine_depth)
+                replies = tree_rules.engine_branch(best, after_stats) if best else ()
+            else:
+                replies = after_plan.branches
+            inherited = (
+                after_stats.opening or _child_opening(stats, answer) or _opening_of(card)
+            )
+            created = _create_children(
+                conn, parent=card, parent_position=after, plan=after_plan,
+                stats=after_stats, branches=replies, inherited=inherited,
+            )
+
+    cards_repo.mark_expanded(conn, card.id or 0)
+    return ExpansionResult(
+        new_cards=[c for c in created if c.status == STATUS_ACTIVE],
+        dead_ends=[c for c in created if c.status == STATUS_DEAD_END],
+    )
+
+
 def _create_children(
     conn: sqlite3.Connection,
     *,
@@ -319,11 +398,15 @@ def _create_children(
     plan: CardPlan,
     stats: PositionStats,
     branches: tuple[Branch, ...] | None = None,
+    inherited: Opening | None = None,
+    dead_ends: bool = False,
 ) -> list[CardRow]:
     """Create one row per branch, in game-count order.
 
     A branch's game count is its child position's total, so a dead end is
-    recognised here without fetching the child.
+    recognised here without fetching the child. ``inherited`` is the name a
+    child the record does not name takes (the parent's, unless given);
+    ``dead_ends`` makes every row a dead end whatever its count.
     """
     chosen = plan.branches if branches is None else branches
     if not chosen:
@@ -334,9 +417,11 @@ def _create_children(
 
     for branch, sequence in queue_order.assign_sequences(chosen, start=start):
         child_position = line_module.extend(parent_position, branch.uci)
-        opening = _child_opening(stats, branch.uci) or _opening_of(parent)
+        opening = _child_opening(stats, branch.uci) or inherited or _opening_of(parent)
         status = (
-            STATUS_ACTIVE if branch.games >= tree_rules.MIN_GAMES else STATUS_DEAD_END
+            STATUS_ACTIVE
+            if branch.games >= tree_rules.MIN_GAMES and not dead_ends
+            else STATUS_DEAD_END
         )
         created.append(
             cards_repo.insert(

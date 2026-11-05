@@ -174,6 +174,17 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
     the engine's move.
   - **<5** (or no recorded continuation): not a card — show **"Max depth
     reached"** with that line's stats.
+- **My White repertoire** (`openings/repertoire.py`, `WHITE_FIRST_MOVES`):
+  1.e4, 1.d4, 1.Nf3, 1.c4 — those trees are studied from both sides as below.
+  Any other first move is **Black-only**: a card branches only through its
+  answer (Black's main move by the rules below), the White-to-move position
+  after it is **never a card**, and White's replies from it (by the same rules,
+  from that position's own record — one request per expansion) are the next
+  Black-to-move cards, parented to the card two plies up, down to the dead ends.
+  `openings/prune.py` runs at startup and brings older trees into line
+  (other Black moves deleted with their subtrees, White-to-move cards deleted
+  and their replies moved up with their history); idempotent. The user will
+  set rules for their Black side of 1.e4/1.d4/1.Nf3/1.c4 later — not decided.
 - Tree is lazy: children are created when a card is first **passed** (q≥3)
   (from the cached record, no extra request); a position's explorer record is
   fetched only when the card is first served. Cache keyed by EPD (transpositions

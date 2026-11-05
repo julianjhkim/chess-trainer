@@ -111,6 +111,14 @@ A new card is first due the next day. The first card you save completes the step
 database, grown lazily as you go. The first card is 1.e4; the tree expands only
 when you pass a card (right on the first or second try).
 
+Only 1.e4, 1.d4, 1.Nf3 and 1.c4 are studied as White (`openings/repertoire.py`).
+Every other first move you only meet as Black, so its tree asks Black's moves
+only, and only the main one: after 1.g3 you learn 1...d5 (the most played, or
+the engine's move when there are few games), and nothing asks you what White
+plays next. Instead each of White's usual replies (2.Bg2, …) is the next card,
+again asking only Black's main move, all the way down the tree. Cards grown
+before this rule are pruned to it when the app starts.
+
 Each card runs the same way: the earlier moves of the line auto-play, then the
 branch move appears as an **arrow** for you to play — only that move is draggable —
 and the **opening name** follows the board as on Lichess: with the arrow it

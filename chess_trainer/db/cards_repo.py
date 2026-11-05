@@ -183,6 +183,52 @@ def mark_expanded(conn: sqlite3.Connection, card_id: int) -> None:
         )
 
 
+def clear_expanded(conn: sqlite3.Connection, card_id: int) -> None:
+    """Let a card's branches be created again on its next pass."""
+    with transaction(conn):
+        conn.execute("UPDATE cards SET expanded_at = NULL WHERE id = ?", (card_id,))
+
+
+def reparent(conn: sqlite3.Connection, card_id: int, parent_card_id: int) -> None:
+    with transaction(conn):
+        conn.execute(
+            "UPDATE cards SET parent_card_id = ? WHERE id = ?", (parent_card_id, card_id)
+        )
+
+
+def delete(conn: sqlite3.Connection, card_id: int) -> int:
+    """Delete a card with everything under it, schedules and reviews included.
+
+    The foreign keys cascade, so children go too: re-parent any to keep first.
+    Returns how many cards went.
+    """
+    with transaction(conn):
+        doomed = int(
+            query_value(
+                conn,
+                """
+                WITH RECURSIVE sub(id) AS (
+                    SELECT ? UNION ALL
+                    SELECT c.id FROM cards c JOIN sub ON c.parent_card_id = sub.id
+                )
+                SELECT COUNT(*) FROM sub
+                """,
+                (card_id,),
+                default=0,
+            )
+        )
+        conn.execute("DELETE FROM cards WHERE id = ?", (card_id,))
+    return doomed
+
+
+def roots(conn: sqlite3.Connection) -> list[CardRow]:
+    """The depth-1 cards, one per White first move."""
+    rows = query_all(
+        conn, "SELECT * FROM cards WHERE parent_card_id IS NULL ORDER BY queue_seq"
+    )
+    return [_row(r) for r in rows]
+
+
 def max_queue_seq(conn: sqlite3.Connection) -> int:
     return int(query_value(conn, "SELECT COALESCE(MAX(queue_seq), 0) FROM cards", default=0))
 
