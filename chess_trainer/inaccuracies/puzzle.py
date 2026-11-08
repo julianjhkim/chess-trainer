@@ -1,4 +1,4 @@
-"""Turning a revision card into a puzzle, the way Lichess builds its own.
+"""The puzzle line of a slip, the way Lichess builds its puzzles.
 
 From the card's position, Stockfish plays the line out. The first move is the
 card's answer, the engine's top move, whether or not it is the only good one

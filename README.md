@@ -1,13 +1,14 @@
 # chess-trainer
 
-A local-only web app for a daily chess routine: drill the slips you picked from your
-own games (revision cards), then drill openings as spaced-repetition cards.
+A local-only web app for a daily chess routine: solve puzzles made from your own
+games — paste a game and the engine finds them, Lichess-style — then drill
+openings as spaced-repetition cards.
 
 Runs entirely on `localhost`. Stockfish does the analysis, the Lichess masters
 database supplies the opening lines, and all frontend libraries are vendored into
 the repo so the app works offline.
 
-**Status: complete** — all three steps work: making revision cards, drilling them,
+**Status: complete** — all three steps work: solving puzzles, making them,
 and opening cards. (Playing
 and reviewing a game used to be steps too; they were removed — review your games on
 chess.com or Lichess, and make cards from the slips worth drilling.)
@@ -37,7 +38,7 @@ cp .env.example .env
 Then, in the app, click **👤 Add your name** at the right of the top bar and add
 the names you play under — your chess.com name, your Lichess name, a new account
 later. They stay in your local database, never in the repo. A pasted game is
-yours if either player has one of them, which is how a new revision card knows
+yours if either player has one of them, which is how a scanned game knows
 which side you played; otherwise you pick White or Black. (An optional
 `CHESS_TRAINER_CHESSCOM_USERNAME` in `.env` pre-fills the list the first time.)
 
@@ -71,8 +72,8 @@ The start screen has one button per step: click the one you want and the session
 starts there. When a step is done the next one follows, and the step bar jumps
 anywhere at any time.
 
-**Step 1 — Revision cards.** A warm-up on the slips you picked from your own games
-(cards are made in step 2).
+**Step 1 — Puzzles.** A warm-up on the puzzles found in your own games (made in
+step 2).
 
 Drilling a card: the position before your slip, from your side of the board, with
 the move you played named and drawn as a red arrow, so you know what not to play.
@@ -111,19 +112,18 @@ the moves (no names), in the URL itself; nothing is sent to Lichess unless you
 click it. It is not offered while you are solving, since Lichess's engine would
 give the answer away.
 
-**Step 2 — Make a revision card.** Pick the slips worth drilling from your own
-games: paste a game's PGN and type the number of the move you got wrong — "9" for your
-ninth move, whether you were White or Black. Your side is read from your names
-(top right) in the PGN; if neither player has one, pick White or Black. *Show position* puts the
-board on the position before that move, with the move you played as a red arrow,
-and ← / → (or the buttons and the move list) step through the moves leading there.
-*Save card* asks Stockfish (at the analysis depth) for its top move there, which
-becomes the answer — it is never shown while you make the card — and plays the
-line on to see whether it makes a puzzle (a few seconds, up to half a minute).
-Cards made before puzzles existed are worked out the first time they come up. If the engine's
-top move *is* the move you played, the card is refused (check the move number).
-A new card is first due the next day. The first card you save completes the step
-(and counts the day); the form stays for more. Use the step bar to move on.
+**Step 2 — Make puzzles.** Paste one of your games' PGN and press *Find puzzles*.
+Your side is read from your names (top right) in the PGN; if neither player has
+one, pick White or Black. Stockfish then checks every move you made, at the
+analysis depth, with a progress bar (a 30-move game takes about a minute; *Stop*
+gives up and saves nothing). Each slip — a move that cost you at least an
+inaccuracy's worth of win % — whose best reply starts a **forced line of at
+least two of your moves** becomes a puzzle, due the next day. The list shows
+each puzzle's slip and how many moves it asks, never the solution; clicking one
+puts the board on its position with your move as a red arrow, and ← / → step
+through the game. Slips with nothing forced after the best move are named too,
+as not puzzles. Saving the first puzzles completes the step (and counts the
+day); the form stays for the next game. Use the step bar to move on.
 
 **Step 3 — Opening cards.** Anki-style drills built from the Lichess masters
 database, grown lazily as you go. The first card is 1.e4; the tree expands only
@@ -202,7 +202,7 @@ Other things worth poking at:
   any time.
 - **Your names** — the 👤 button at the right of the top bar lists the names you
   play under; click it to add or remove one (saved straight away).
-- **Board orientation** — a revision card puts your colour at the bottom; opening
+- **Board orientation** — a puzzle puts your colour at the bottom; opening
   cards keep White there. *Flip board* turns it round.
 - **Eval bar** — always visible, always from White's perspective
   (`+0.45`, `−1.20`, `M3`).
@@ -210,7 +210,7 @@ Other things worth poking at:
   the boundary is midnight in Asia/Seoul, and a second step the same day does not
   double-count.
 - **Answer history** — every card answer is logged (`card_reviews` for opening
-  cards, `inaccuracy_reviews` for revision cards): the Seoul date, the grade, the
+  cards, `inaccuracy_reviews` for puzzles): the Seoul date, the grade, the
   attempt count and whether you revealed the answer.
 - **Scheduling** — cards use a modified SM-2 (see below). There is no daily limit:
   due reviews come first, oldest first, then new cards one at a time, until you
@@ -275,8 +275,8 @@ question screen and what its stats table marks afterwards:
 npm run cards
 ```
 
-And a third over revision cards: an empty deck, an all-caught-up deck, making a card
-from a PGN and a move number, one card solved with a hint after a wrong try (stepping
+And a third over puzzles: an empty deck, an all-caught-up deck, scanning a pasted
+game (progress, the puzzles found, no solutions shown), one card solved with a hint after a wrong try (stepping
 back through the moves before it, then through the whole game, and the Lichess link),
 and deleting a card:
 
@@ -322,7 +322,8 @@ chess_trainer/
   engine/    stockfish.py (process), analysis.py (cached), eval_format.py,
              winpct.py, classify.py, best_move.py, eval_types.py
   pgn/       parse.py, positions.py, my_moves.py
-  inaccuracies/  (revision cards) slip.py (move number → position), deck.py
+  inaccuracies/  (puzzles) scan.py (finding them in a game), puzzle.py (the
+             forcing line), slip.py (move number → position), deck.py
              (adding, serving, grading), hint.py, puzzle.py (the forcing line)
   explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
              explorer_types.py
@@ -337,7 +338,7 @@ frontend/
 ```
 The frontend has one module per concern: `api.js`, `state.js`, `router.js`,
 `board.js`, `evalbar.js`, `stepbar.js`, `streak_view.js`, `start_screen.js`,
-`inaccuracy_cards_view.js` (revision cards), `move_nav.js`, `move_list.js`,
+`inaccuracy_cards_view.js` (puzzles), `make_card_view.js` (making them), `move_nav.js`, `move_list.js`,
 `cards_view.js`, `stats_table.js`, `arrows.js`, `animate.js`.
 
 `rules.py` is the single authority on move legality: the browser carries no rules
@@ -431,14 +432,17 @@ Interactive docs at <http://127.0.0.1:8787/docs> while the server runs.
 | `POST /api/cards/next` | serve the next card (due first, then new) |
 | `POST /api/cards/attempt` | try a move on the current card |
 | `POST /api/cards/show-answer` | reveal the answer, grading it as a failure |
-| `GET /api/inaccuracy-cards/state` | the revision card on screen and the deck's counts |
-| `POST /api/inaccuracy-cards/next` | serve the next due revision card (or say the deck is done) |
-| `POST /api/inaccuracy-cards/attempt` | try a move; correct only if it is the recorded engine move |
+| `GET /api/inaccuracy-cards/state` | the puzzle on screen and the deck's counts |
+| `POST /api/inaccuracy-cards/next` | serve the next due puzzle (or say the deck is done) |
+| `POST /api/inaccuracy-cards/attempt` | try a move at the current step; a right one brings the opponent's reply |
 | `POST /api/inaccuracy-cards/hint` | the square and piece the answer moves (caps the grade at q=3) |
-| `POST /api/inaccuracy-cards/show-answer` | reveal the answer, grading it as a failure |
-| `POST /api/inaccuracy-cards/preview` | the position a new revision card would drill (PGN + my move number) |
-| `POST /api/inaccuracy-cards` | make a revision card; the engine finds the answer |
-| `DELETE /api/inaccuracy-cards/{id}` | delete a revision card |
+| `POST /api/inaccuracy-cards/show-answer` | play out the rest of the puzzle, grading it as a failure |
+| `POST /api/inaccuracy-cards/scan` | scan a pasted game for puzzles, in the background |
+| `GET /api/inaccuracy-cards/scan` | the scan's progress; once done, the puzzles it saved (never their solutions) |
+| `DELETE /api/inaccuracy-cards/scan` | stop the scan; nothing is saved |
+| `POST /api/inaccuracy-cards/preview` | (API only) the position a puzzle at my move number would start from |
+| `POST /api/inaccuracy-cards` | (API only) make a puzzle from my move number |
+| `DELETE /api/inaccuracy-cards/{id}` | delete a puzzle |
 | `GET /api/me` / `PUT /api/me` | the names I play under (read / replace the list) |
 
 ## Troubleshooting
@@ -466,7 +470,7 @@ this should be rare.
 
 **Starting over** — delete the database
 (`~/.local/share/chess-trainer/chess_trainer.db`). It holds the streak, the engine
-and explorer caches, the games your revision cards came from and the whole card
+and explorer caches, the games your puzzles came from and the whole card
 tree with its scheduling; schema migrations run automatically on startup.
 
 ## Licence

@@ -1,6 +1,6 @@
 /**
- * Revision cards (step 1; internally "inaccuracy cards"): slips I picked from
- * my own games, drilled again. Cards are made in step 2 (`make_card_view.js`).
+ * Puzzles (step 1; internally "inaccuracy cards"): the puzzles found in my own
+ * games, drilled again. They are made in step 2 (`make_card_view.js`).
  *
  * Each card is the position before the slip, from my side of the board: the
  * opponent's last move plays in, and my move is drawn as a red arrow. Find the
@@ -132,7 +132,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     hideNav();
     resultCard.root.hidden = true;
     controls.replaceChildren();
-    promptCard.setBody(paragraph('Finding your next card…', 'choice-note'));
+    promptCard.setBody(paragraph('Finding your next puzzle…', 'choice-note'));
 
     let state;
     try {
@@ -194,15 +194,15 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     const body = document.createElement('div');
     if (!counts?.total) {
       body.append(
-        paragraph('No revision cards yet.', 'empty-headline'),
+        paragraph('No puzzles yet.', 'empty-headline'),
         paragraph(
-          'Make one in step 2, “Make a revision card”: paste a game and give the number of the move you got wrong.',
+          'Make some in step 2, “Make puzzles”: paste one of your games and the engine finds the puzzles in it.',
           'choice-note',
         ),
       );
     } else {
       body.append(
-        paragraph('All caught up — no revision cards due.', 'empty-headline'),
+        paragraph('All caught up — no puzzles due.', 'empty-headline'),
         paragraph(
           counts.next_due_on
             ? `The next one is due ${counts.next_due_on}.`
@@ -213,7 +213,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     }
     promptCard.setBody(body);
     buildControls();
-    setStatus(counts?.total ? 'No revision cards due.' : 'No revision cards yet.');
+    setStatus(counts?.total ? 'No puzzles due.' : 'No puzzles yet.');
   }
 
   // -- answering ---------------------------------------------------------
@@ -333,7 +333,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     counts = await withStatus('Deleting…', () => api.deleteInaccuracyCard(card.id));
     renderDeck();
     await serveNext();
-    if (phase !== 'empty') setStatus(`Deleted the card for ${label}. Your move.`);
+    if (phase !== 'empty') setStatus(`Deleted the puzzle for ${label}. Your move.`);
   }
 
   // -- panels ------------------------------------------------------------
@@ -362,7 +362,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       paragraph(`From ${from}: move ${card.move_number}, ${side} to play.`, ''),
       playedLine(card.move_label, card.classification),
       paragraph(
-        'Find the engine’s move — only its top choice counts. Where the line is forcing, your opponent replies and you go on until it ends. Unlimited retries.',
+        'Find the best move — only Stockfish’s top choice counts. Your opponent replies, and you go on until the puzzle ends. Unlimited retries.',
         'choice-note',
       ),
     );
@@ -435,7 +435,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (confirmingDelete && (phase === 'solving' || phase === 'finished')) {
       const question = document.createElement('span');
       question.className = 'delete-question';
-      question.textContent = 'Delete this card? It leaves the deck (making it again brings it back).';
+      question.textContent = 'Delete this puzzle? It leaves the deck (scanning the game again brings it back).';
       controls.append(question, button('Delete', deleteCard, 'danger'), button('Keep', keepCard));
       panelChanged();
       return;
@@ -444,14 +444,14 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       controls.append(button('Hint', showHint), button('Show answer', showAnswer));
     }
     if (phase === 'finished') {
-      controls.append(button('Next card', serveNext, 'primary'));
+      controls.append(button('Next puzzle', serveNext, 'primary'));
       if (result?.lichess_url) controls.append(lichessButton(result.lichess_url));
     }
     if (phase === 'solving' || phase === 'finished') {
       controls.append(button('Flip board', () => board?.flip()));
     }
     if (phase === 'solving' || phase === 'finished') {
-      controls.append(button('Delete card', askDelete, 'subtle-danger'));
+      controls.append(button('Delete puzzle', askDelete, 'subtle-danger'));
     }
     panelChanged();
   }

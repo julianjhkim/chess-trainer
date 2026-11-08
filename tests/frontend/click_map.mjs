@@ -25,7 +25,7 @@ const MAX_DRIFT_PX = 0.75;
 
 const WHITE_SQUARES = squares(['1', '2']);
 const BLACK_SQUARES = squares(['7', '8']);
-/** White's pieces after 1.e4 e5, the revision card's position. */
+/** White's pieces after 1.e4 e5, the puzzle's position. */
 const CARD_SQUARES = [...WHITE_SQUARES.filter((sq) => sq !== 'e2'), 'e4'];
 
 function squares(ranks) {
@@ -214,13 +214,13 @@ async function testCardsView(page, base) {
   await checkClicks(page, 'cards/next-card', WHITE_SQUARES);
 }
 
-async function testRevisionCardView(page, base) {
-  console.log('\nRevision card view');
+async function testPuzzleView(page, base) {
+  console.log('\nPuzzle view');
   await page.request.post(`${base}/__scenario`, { data: { step: 'inaccuracy_cards', inaccuracy: 'one' } });
   await page.goto(base, { waitUntil: 'load' });
 
-  // 1. The card is up: deck, prompt and move list all just rendered.
-  await waitForText(page, 'Find the engine');
+  // 1. The puzzle is up: deck, prompt and move list all just rendered.
+  await waitForText(page, 'Find the best move');
   await waitForInteractive(page);
   await checkBounds(page, 'revision/card');
   await checkClicks(page, 'revision/card', CARD_SQUARES);
@@ -302,7 +302,7 @@ page.on('console', (message) => {
 
 for (const [name, run] of [
   ['opening cards', testCardsView],
-  ['revision card', testRevisionCardView],
+  ['puzzle', testPuzzleView],
   ['layout shift', testLayoutShift],
   ['window resize', testWindowResize],
 ]) {

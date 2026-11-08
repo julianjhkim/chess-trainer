@@ -1,4 +1,4 @@
-"""Revision cards as puzzles: the opponent replies, and I go on to the end."""
+"""Playing a puzzle: the opponent replies, and I go on to the end."""
 
 from __future__ import annotations
 

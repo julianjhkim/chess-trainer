@@ -10,7 +10,7 @@ def test_session_starts_unstarted(client):
 def test_session_always_lists_every_step(client):
     steps = client.get("/api/session").json()["steps"]
     assert [s["step"] for s in steps] == ["inaccuracy_cards", "make_card", "cards"]
-    assert [s["title"] for s in steps] == ["Revision cards", "Make a revision card", "Opening cards"]
+    assert [s["title"] for s in steps] == ["Puzzles", "Make puzzles", "Opening cards"]
     assert all(s["enabled"] for s in steps)
 
 

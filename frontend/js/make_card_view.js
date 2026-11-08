@@ -1,32 +1,42 @@
 /**
- * Make a revision card (step 2): pick a slip from one of my games.
+ * Make puzzles (step 2; internally `make_card`): paste one of my games and
+ * the engine finds the puzzles in it.
  *
- * Paste a game's PGN and type the number of my move that went wrong ("9" for
- * my ninth move, White or Black). *Show position* puts the board on the
- * position before it, with that move as a red arrow; ← / → (or the buttons
- * and the move list) step through the moves leading there. *Save card* asks
- * Stockfish for the answer -- never shown here -- and schedules the card for
- * the next day. The first card saved completes the step (and counts the day);
- * the step stays open for more, and the step bar moves on.
+ * *Find puzzles* starts a scan in the background: Stockfish checks every move
+ * I made, and each slip whose answer starts a forced line becomes a puzzle,
+ * due the next day. The page polls the scan for its progress (it can be
+ * stopped) and then lists what was found -- the slips only, never a solution.
+ * Clicking one puts the board on its position, with the move I played as a
+ * red arrow; ← / → step through the game. Slips with no forced line are listed
+ * too, as not puzzles. Saving the first puzzles completes the step (and counts
+ * the day); the form stays for the next game.
  */
 
 import * as api from './api.js';
+import { sleep } from './animate.js';
 import { createBoard } from './board.js';
-import { createEvalBar } from './evalbar.js';
 import { createMoveList } from './move_list.js';
 import { bindArrowKeys, createMoveNav } from './move_nav.js';
-import { set, setStatus, withStatus } from './state.js';
+import { set, setStatus } from './state.js';
+
+const POLL_MS = 700;
+
+const CLASSIFICATION_LABEL = {
+  inaccuracy: 'an inaccuracy',
+  mistake: 'a mistake',
+  blunder: 'a blunder',
+};
 
 export function renderMakeCardView(container, { step, onCompleted }) {
   container.replaceChildren();
 
   let destroyed = false;
   /** What was typed, kept across re-renders of the form. */
-  const draft = { pgn: '', moveNumber: '', colour: '' };
-  /** The position the typed move gives, once shown. */
-  let preview = null;
-  /** The last card saved, for the confirmation line. */
-  let saved = null;
+  const draft = { pgn: '', colour: '' };
+  /** The latest scan as the server reports it. */
+  let scan = { status: 'idle' };
+  /** The puzzle picked in the list, by ply. */
+  let selected = null;
 
   // -- layout ------------------------------------------------------------
   const layout = document.createElement('div');
@@ -46,16 +56,17 @@ export function renderMakeCardView(container, { step, onCompleted }) {
   const side = document.createElement('div');
   side.className = 'side-panel';
   const formCard = card_(step.title, panelChanged);
+  const resultCard = card_('Puzzles found', panelChanged);
   const movesCard = card_('Moves', panelChanged);
+  resultCard.root.hidden = true;
   movesCard.root.hidden = true;
-  side.append(formCard.root, movesCard.root);
+  side.append(formCard.root, resultCard.root, movesCard.root);
 
   layout.append(boardColumn, side);
   container.append(layout);
 
-  const evalBar = createEvalBar();
   const board = createBoard({ orientation: 'white', interactive: false });
-  boardAndBar.append(board.element, evalBar.element);
+  boardAndBar.append(board.element);
   board.refresh();
 
   // -- move navigation ---------------------------------------------------
@@ -79,26 +90,94 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 
   renderForm();
   buildControls();
-  setStatus('Paste a game and give the move you got wrong.');
+  setStatus('Paste one of your games to find the puzzles in it.');
+  void resume();
 
-  // -- the form ----------------------------------------------------------
+  // -- the scan ----------------------------------------------------------
+  /** Coming back to the step: pick up a scan still running, or its outcome. */
+  async function resume() {
+    try {
+      const state = await api.scanState();
+      if (destroyed) return;
+      if (state.status !== 'idle') show(state);
+      if (state.status === 'running') void poll();
+    } catch {
+      // Nothing to pick up: the form is already there.
+    }
+  }
+
+  async function findPuzzles() {
+    if (!draft.pgn.trim()) return renderForm({ error: 'Paste a game first.' });
+    try {
+      show(await api.startScan({ pgn: draft.pgn, colour: draft.colour || null }));
+    } catch (error) {
+      renderForm({ error: error.message });
+      setStatus(error.message, 'error');
+      return;
+    }
+    await poll();
+  }
+
+  async function poll() {
+    while (!destroyed && scan.status === 'running') {
+      await sleep(POLL_MS);
+      if (destroyed) return;
+      try {
+        show(await api.scanState());
+      } catch (error) {
+        setStatus(error.message, 'error');
+        return;
+      }
+    }
+  }
+
+  async function stopScan() {
+    show(await api.cancelScan());
+  }
+
+  /** Draw a scan state: progress while running, the outcome once done. */
+  function show(state) {
+    const wasRunning = scan.status === 'running';
+    scan = state;
+    renderForm();
+    buildControls();
+    if (state.status === 'running') {
+      setStatus(`Checking your moves… ${state.done} of ${state.total}`);
+      return;
+    }
+    if (state.status === 'done') {
+      if (state.session) set({ session: state.session });
+      if (state.streak) set({ streak: state.streak });
+      if (state.session && onCompleted) onCompleted(state.session, { rerender: false });
+      if (wasRunning || selected === null) selected = state.found[0]?.ply ?? null;
+      renderResult();
+      showGame();
+      setStatus(summaryText(state));
+    } else if (state.status === 'failed') {
+      setStatus(`The scan failed: ${state.error}`, 'error');
+    } else if (state.status === 'cancelled') {
+      setStatus('Stopped. Nothing was saved.');
+    }
+  }
+
+  // -- panels ------------------------------------------------------------
   function renderForm({ error = null } = {}) {
+    const running = scan.status === 'running';
     const body = document.createElement('div');
     body.className = 'new-card';
-
-    if (saved) body.append(paragraph(savedText(saved), 'card-added'));
-
     body.append(
       paragraph(
-        'Paste the game, then type the number of the move you got wrong — "9" for your 9th move, as White or Black.',
+        'Paste one of your games. Stockfish checks every move you made; each slip where the best move starts a forced line becomes a puzzle.',
         'choice-note',
       ),
     );
+
     const textarea = document.createElement('textarea');
     textarea.rows = 6;
     textarea.spellcheck = false;
     textarea.placeholder = '[White "..."]\n[Black "..."]\n\n1. e4 e5 2. Nf3 ...';
     textarea.value = draft.pgn;
+    textarea.disabled = running;
     textarea.setAttribute('aria-label', 'PGN');
     textarea.addEventListener('input', () => {
       draft.pgn = textarea.value;
@@ -106,25 +185,11 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 
     const fields = document.createElement('div');
     fields.className = 'new-card-fields';
-    const numberLabel = document.createElement('label');
-    numberLabel.append('Your move number');
-    const number = document.createElement('input');
-    number.type = 'number';
-    number.min = '1';
-    number.value = draft.moveNumber;
-    number.setAttribute('aria-label', 'Move number');
-    number.addEventListener('input', () => {
-      draft.moveNumber = number.value;
-    });
-    number.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') void runPreview();
-    });
-    numberLabel.append(number);
-
     const colourLabel = document.createElement('label');
     colourLabel.append('You played');
     const colour = document.createElement('select');
     colour.setAttribute('aria-label', 'Your colour');
+    colour.disabled = running;
     for (const [value, text] of [['', 'Auto (from your names)'], ['white', 'White'], ['black', 'Black']]) {
       const option = document.createElement('option');
       option.value = value;
@@ -136,117 +201,84 @@ export function renderMakeCardView(container, { step, onCompleted }) {
       draft.colour = colour.value;
     });
     colourLabel.append(colour);
-    fields.append(numberLabel, colourLabel);
+    fields.append(colourLabel);
 
     const row = document.createElement('div');
     row.className = 'button-row';
-    row.append(button('Show position', runPreview));
+    if (running) {
+      row.append(button('Stop', stopScan));
+    } else {
+      row.append(button('Find puzzles', findPuzzles, 'primary'));
+    }
     body.append(textarea, fields, row);
 
+    if (running) body.append(progressBar(scan.done, scan.total));
     if (error) body.append(paragraph(error, 'paste-error'));
-    if (preview) body.append(previewNote(preview));
+    if (scan.status === 'failed') body.append(paragraph(`The scan failed: ${scan.error}`, 'paste-error'));
     formCard.setBody(body);
   }
 
-  function request() {
-    return {
-      pgn: draft.pgn,
-      move_number: Number.parseInt(draft.moveNumber, 10),
-      colour: draft.colour || null,
-    };
-  }
-
-  async function runPreview() {
-    const payload = request();
-    if (!draft.pgn.trim()) return renderForm({ error: 'Paste a game first.' });
-    if (!(payload.move_number >= 1)) return renderForm({ error: 'Type the number of your move.' });
-    try {
-      preview = await withStatus('Finding the position…', () => api.previewInaccuracyCard(payload));
-    } catch (error) {
-      preview = null;
-      hideNav();
-      buildControls();
-      renderForm({ error: error.message });
-      setStatus(error.message, 'error');
-      return;
+  function renderResult() {
+    const body = document.createElement('div');
+    body.append(paragraph(summaryText(scan), 'result-headline'));
+    if (scan.found.length) {
+      const list = document.createElement('ul');
+      list.className = 'found-list';
+      for (const found of scan.found) {
+        const item = document.createElement('li');
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'found-puzzle';
+        if (found.ply === selected) pick.classList.add('selected');
+        const kind = CLASSIFICATION_LABEL[found.classification] ?? found.classification;
+        pick.textContent = `${found.move_label} — ${kind} (−${found.win_percent_drop.toFixed(1)}%): ${found.my_moves} moves to find`;
+        pick.addEventListener('click', () => {
+          selected = found.ply;
+          renderResult();
+          nav.go(found.ply);
+        });
+        const note = document.createElement('span');
+        note.className = 'choice-note';
+        note.textContent = found.created
+          ? ` · first due ${found.due_on}`
+          : found.restored
+            ? ' · restored'
+            : ' · already a puzzle';
+        item.append(pick, note);
+        list.append(item);
+      }
+      body.append(list);
     }
-    if (destroyed) return;
-    saved = null;
-    board.setOrientation(preview.colour);
-    renderForm();
-    buildControls();
-    showNav(preview.moves);
-    setStatus(`You played ${preview.move_label} here — the red arrow. Save the card to drill it.`);
-  }
-
-  async function saveCard() {
-    if (!preview) return;
-    const made = await withStatus('Stockfish is working out the puzzle — this can take a little while…', () =>
-      api.createInaccuracyCard(request()),
-    );
-    if (made.session) set({ session: made.session });
-    if (made.streak) set({ streak: made.streak });
-    if (made.session && onCompleted) onCompleted(made.session, { rerender: false });
-    saved = made;
-    preview = null;
-    draft.moveNumber = '';
-    hideNav();
-    buildControls();
-    renderForm();
-    setStatus(savedText(made));
-  }
-
-  function savedText(made) {
-    if (made.restored) return `Restored the card for ${made.move_label} you had deleted — due ${made.due_on}.`;
-    if (!made.created) return `You already had a card for ${made.move_label} — it is now due ${made.due_on}.`;
-    return `Card saved for ${made.move_label} — first due ${made.due_on}.`;
-  }
-
-  function previewNote(shown) {
-    const box = document.createElement('div');
-    const sideName = shown.colour === 'white' ? 'White' : 'Black';
-    box.append(
-      playedLine(shown.move_label),
-      paragraph(
-        `You had ${sideName}${shown.opponent ? ` against ${shown.opponent}` : ''}. ← → step through the moves before it.`,
-        'choice-note',
-      ),
-    );
-    if (shown.existing === 'active') {
-      box.append(paragraph('You already have a card for this position: saving brings it back to tomorrow.', 'choice-note'));
-    } else if (shown.existing === 'deleted') {
-      box.append(paragraph('You deleted a card for this position before: saving restores it.', 'choice-note'));
+    if (scan.skipped.length) {
+      body.append(
+        paragraph(
+          `Not puzzles (no forced line after the best move): ${scan.skipped.join(', ')}.`,
+          'choice-note',
+        ),
+      );
     }
-    return box;
+    resultCard.setBody(body);
+    resultCard.root.hidden = false;
+    panelChanged();
   }
 
   function buildControls() {
     controls.replaceChildren();
-    if (preview) controls.append(button('Save card', saveCard, 'primary'));
-    controls.append(button('Flip board', () => board.flip()));
+    if (scan.status === 'done') controls.append(button('Flip board', () => board.flip()));
     panelChanged();
   }
 
-  // -- drawing -----------------------------------------------------------
-  function showNav(moves) {
-    nav.setMoves(moves, { index: moves.length });
-    moveList.setMoves(moves);
-    moveList.setCurrent(moves.length);
+  // -- the board ---------------------------------------------------------
+  function showGame() {
+    const moves = scan.moves ?? [];
+    board.setOrientation(scan.colour ?? 'white');
+    nav.setMoves(moves, { index: selected ?? moves.length });
+    moveList.setMoves(moves, { marked: selected });
     movesCard.root.hidden = false;
     navRow.hidden = false;
     navReady = true;
     panelChanged();
     onNavChange(nav.view());
-  }
-
-  function hideNav() {
-    navReady = false;
-    nav.setMoves([], { index: 0 });
-    movesCard.root.hidden = true;
-    navRow.hidden = true;
-    board.setShapes([]);
-    board.setHighlights([]);
-    panelChanged();
   }
 
   function onNavChange(view) {
@@ -257,29 +289,15 @@ export function renderMakeCardView(container, { step, onCompleted }) {
       .catch((error) => setStatus(error.message, 'error'));
   }
 
-  /** At the slip position the move I played is a red arrow; elsewhere nothing. */
+  /** At a puzzle's position, the move I played there is a red arrow. */
   async function drawView(view) {
-    if (!preview || destroyed) return;
-    const atSlip = view.index === nav.length;
-    const fen = atSlip ? preview.fen : (view.fen ?? preview.fen);
-    const lastMove = atSlip ? preview.last_move_uci : view.lastMove;
-    board.setHighlights([]);
-    await board.setFen(fen, { lastMove: squares(lastMove) });
-    if (view !== latestView || destroyed || !preview) return;
-    board.setHighlights(atSlip ? [arrow(preview.my_move_uci, 'red')] : []);
-    void refreshEval(fen);
-  }
-
-  let evalToken = 0;
-  async function refreshEval(fen) {
-    const token = ++evalToken;
-    evalBar.pending();
-    try {
-      const response = await api.evaluate(fen);
-      if (!destroyed && token === evalToken) evalBar.update(response.evaluation);
-    } catch {
-      if (token === evalToken) evalBar.clear();
-    }
+    if (destroyed || !view.fen) return;
+    board.setShapes([]);
+    await board.setFen(view.fen, { lastMove: squares(view.lastMove) });
+    if (view !== latestView || destroyed) return;
+    const puzzle = scan.found?.find((found) => found.ply === view.index);
+    const played = puzzle ? scan.moves[puzzle.ply] : null;
+    board.setShapes(played ? [arrow(played.uci, 'red')] : []);
   }
 
   /** Panels beside and under the board change size; chessground must re-measure. */
@@ -297,14 +315,23 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 }
 
 // -- small DOM helpers ----------------------------------------------------
-/** "You played 2.Nf3 here. The red arrow shows it." */
-function playedLine(moveLabel) {
-  const element = paragraph('', 'played-line');
-  element.append('You played ');
-  const move = document.createElement('strong');
-  move.textContent = moveLabel;
-  element.append(move, ' here. The red arrow shows it.');
-  return element;
+function summaryText(state) {
+  const n = state.found?.length ?? 0;
+  if (!n) return 'No puzzles in this game: none of your slips has a forced line after the best move.';
+  const fresh = state.found.filter((found) => found.created || found.restored).length;
+  const saved = fresh === n ? 'saved' : `${fresh} new`;
+  return `Found ${n} puzzle${n === 1 ? '' : 's'} in this game — ${saved}. Play them in step 1, “Puzzles”, from tomorrow.`;
+}
+
+function progressBar(done, total) {
+  const box = document.createElement('div');
+  box.className = 'scan-progress';
+  const bar = document.createElement('progress');
+  bar.max = Math.max(total, 1);
+  bar.value = done;
+  const text = paragraph(`Checking your moves… ${done} of ${total}`, 'choice-note');
+  box.append(bar, text);
+  return box;
 }
 
 function squares(uci) {

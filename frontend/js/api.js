@@ -64,7 +64,7 @@ export const putMe = (usernames) => request('/api/me', { method: 'PUT', body: { 
 export const evaluate = (fen, depth) =>
   request('/api/engine/eval', { method: 'POST', body: { fen, depth: depth ?? null } });
 
-// -- revision cards (internally inaccuracy cards) --------------------------
+// -- puzzles (internally inaccuracy cards) ---------------------------------
 export const inaccuracyState = () => request('/api/inaccuracy-cards/state');
 export const nextInaccuracyCard = () =>
   request('/api/inaccuracy-cards/next', { method: 'POST' });
@@ -82,6 +82,10 @@ export const createInaccuracyCard = (payload) =>
   request('/api/inaccuracy-cards', { method: 'POST', body: payload });
 export const deleteInaccuracyCard = (id) =>
   request(`/api/inaccuracy-cards/${id}`, { method: 'DELETE' });
+export const startScan = (payload) =>
+  request('/api/inaccuracy-cards/scan', { method: 'POST', body: payload });
+export const scanState = () => request('/api/inaccuracy-cards/scan');
+export const cancelScan = () => request('/api/inaccuracy-cards/scan', { method: 'DELETE' });
 
 
 // -- opening cards --------------------------------------------------------

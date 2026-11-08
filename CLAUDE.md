@@ -9,9 +9,9 @@ convention changes, update the matching section here in the same commit.
 
 ## What this is
 
-A local-only web app for a daily chess routine in three steps: make revision
-cards from slips I pick in my own games, drill them, then drill openings as
-spaced-repetition cards. (Play-a-game and game-review steps existed and were
+A local-only web app for a daily chess routine in three steps: solve the
+puzzles found in my own games (Lichess-style), make more by pasting a game for
+the engine to scan, then drill openings as spaced-repetition cards. (Play-a-game and game-review steps existed and were
 **removed on purpose** — the user reviews games elsewhere. Don't bring back
 chess.com fetching, a review step or an in-app analysis board without being asked.)
 FastAPI + python-chess (Stockfish over UCI) + SQLite on the backend; plain HTML
@@ -68,7 +68,7 @@ Frontend (Node is dev-only; `npm install` and `npx playwright install chromium` 
 npm run smoke    # jsdom run of the real ES modules — needs a live server on :8791 (see above)
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
-npm run inaccuracy  # Chromium: revision cards (empty, caught up, making one, one card, delete)
+npm run inaccuracy  # Chromium: puzzles (empty, caught up, scanning a game, one card, a puzzle, delete)
 npm run me       # Chromium: the names editor in the top bar
 ```
 `clicks`, `cards`, `inaccuracy` and `me` use `tests/frontend/stub_server.mjs` (real frontend, canned
@@ -80,7 +80,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 
 ### Session flow
 - Three steps, in order: `inaccuracy_cards` → `make_card` → `cards` (titles:
-  Revision cards, Make a revision card, Opening cards — the drill comes first,
+  Puzzles, Make puzzles, Opening cards — the drill comes first,
   as a warm-up, by the user's choice; `session/steps.py`,
   `session/flow.py`). Making cards and drilling them are separate steps on
   purpose — the drill screen has **no** card-making button (the user found two
@@ -99,7 +99,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
 - Classification by win% drop for the mover (`engine/classify.py`):
   ≥10 inaccuracy, ≥20 mistake, ≥30 blunder (else `good`).
 - **Only Stockfish's top-1 move at the analysis depth (default 20) is accepted**
-  as a revision card's answer — strict string match, judged server-side.
+  as a puzzle's answer — strict string match, judged server-side.
 - Analysis is cached by `(fen, depth)` (`analysis_cache`, which also stores the PV).
 - **Hint** (`inaccuracies/hint.py`): only the from-square and piece type of the
   answer (yellow circle via `board.setHighlights` = chessground autoShapes,
@@ -116,13 +116,28 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   are ignored. An "aside" is a position beside the game (the engine's answer
   between the slip position and my move).
 
-### Revision cards (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
-- Step 1 **"Revision cards"** drills them; step 2 **"Make a revision card"**
-  (`make_card`, `make_card_view.js`) makes them. Internally the drill keeps the
-  old name — step `inaccuracy_cards`, `/api/inaccuracy-cards`, tables
-  `inaccuracy_*`, `InaccuracyCard`, `inaccuracy_cards_view.js`. Don't rename one
-  without the others.
-- **Made by hand only**, in step 2: paste PGN + type **my move number**
+### Puzzles (`inaccuracies/`, `db/inaccuracy_cards_repo.py`, `/api/inaccuracy-cards`)
+- Step 1 **"Puzzles"** drills them; step 2 **"Make puzzles"** (`make_card`,
+  `make_card_view.js`) makes them. They used to be "revision cards" — the user
+  had them renamed, and wanted a Lichess-puzzle system from the start: paste a
+  game, the engine finds the puzzles. Internally the old names stay — step
+  `inaccuracy_cards`, `/api/inaccuracy-cards`, tables `inaccuracy_*`,
+  `InaccuracyCard`, `inaccuracy_cards_view.js`. Don't rename one without the
+  others.
+- **Made by scanning a game** (`inaccuracies/scan.py`, `api/scan_job.py`):
+  `POST /api/inaccuracy-cards/scan` {pgn, colour?} starts a background job (one
+  at a time, 409 otherwise) that checks every one of my moves at the analysis
+  depth; `GET /scan` polls it (progress, then what it found), `DELETE /scan`
+  stops it (nothing saved). A move losing ≥ 10 win % (inaccuracy or worse) is a
+  slip; its puzzle line is built from the position before it, and **only a
+  forced line of ≥ 2 of my moves (`MIN_MY_MOVES`) becomes a puzzle** — the user
+  chose "forced lines only"; other slips are listed as not puzzles. Found
+  puzzles are saved (game stored, `add_card`, due tomorrow); the outcome shows
+  the slips but **never a solution**. Saving any completes `make_card` (streak)
+  once. `AppState.shutdown` cancels and joins the job before closing the DB.
+  The page polls every 700 ms and picks a running scan up again on return.
+- The older by-hand endpoints still exist for the API and tests (the UI no
+  longer uses them): paste PGN + **my move number**
   ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:
   the request's `colour`, else my names (top bar) in the PGN, else 422 asking to
   pick. `POST /preview` (no engine) returns the position before the move, my move
@@ -244,7 +259,7 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   Lichess ↗** as a button right of Next card (`lichess_url` on the attempt/show-answer response, only once
   finished): `/analysis/pgn/<line + answer>?color=white#<line length>`, i.e. the
   card's position with the answer one move on (`pgn/lichess_link.py`, shared
-  with revision cards).
+  with puzzles).
 - Frequency cards say, without naming moves, whether the most played move is
   the engine's best (`engine_agrees`); engine-mode cards say nothing. Resolved
   when the card is served, via the analysis cache.

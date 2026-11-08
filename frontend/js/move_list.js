@@ -1,5 +1,5 @@
 /**
- * The game score beside a revision card's board: `1. e4 e5  2. Nf3 …`.
+ * The game score beside a puzzle's board: `1. e4 e5  2. Nf3 …`.
  *
  * Built once per move list and then only re-highlighted, so stepping through
  * the game with the arrow keys never rebuilds the panel (a rebuild can change

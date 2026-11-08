@@ -12,10 +12,10 @@ from enum import Enum
 class Step(str, Enum):
     """The steps of a daily session, in the order they run.
 
-    First drill the revision cards that are due (a warm-up on slips I picked
-    from my own games), then make new ones (from a PGN and a move number),
-    then the opening cards. Internally the revision-card steps keep the original
-    "inaccuracy" naming: ``inaccuracy_cards`` is the drill.
+    First drill the puzzles that are due (a warm-up on slips from my own
+    games), then make new ones (the engine scans a pasted game for them), then
+    the opening cards. Internally the puzzle steps keep the original
+    "inaccuracy" naming: ``inaccuracy_cards`` is the drill, ``make_card`` the scan.
     """
 
     INACCURACY_CARDS = "inaccuracy_cards"
@@ -40,8 +40,8 @@ ORDER: tuple[Step, ...] = (
 )
 
 TITLES: dict[Step, str] = {
-    Step.INACCURACY_CARDS: "Revision cards",
-    Step.MAKE_CARD: "Make a revision card",
+    Step.INACCURACY_CARDS: "Puzzles",
+    Step.MAKE_CARD: "Make puzzles",
     Step.CARDS: "Opening cards",
 }
 

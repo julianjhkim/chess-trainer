@@ -24,8 +24,8 @@ def test_positions_are_one_based():
 
 def test_every_step_has_a_title():
     assert all(s.title for s in ORDER)
-    assert Step.MAKE_CARD.title == "Make a revision card"
-    assert Step.INACCURACY_CARDS.title == "Revision cards"
+    assert Step.MAKE_CARD.title == "Make puzzles"
+    assert Step.INACCURACY_CARDS.title == "Puzzles"
 
 
 def test_all_steps_are_enabled_by_default():

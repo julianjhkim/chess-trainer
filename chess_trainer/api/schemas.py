@@ -554,6 +554,47 @@ class NewCardRequest(BaseModel):
     colour: Literal["white", "black"] | None = None
 
 
+class ScanRequest(BaseModel):
+    """A game to scan for puzzles."""
+
+    pgn: str = Field(min_length=1, description="Full PGN text of the game")
+    #: Which side I had; None reads it from the PGN's player names.
+    colour: Literal["white", "black"] | None = None
+
+
+class FoundPuzzleOut(BaseModel):
+    """A puzzle the scan found and saved. Never its solution."""
+
+    move_label: str
+    ply: int
+    classification: str
+    win_percent_drop: float
+    #: How many of my moves the puzzle asks for.
+    my_moves: int
+    created: bool
+    restored: bool = False
+    due_on: str
+
+
+class ScanOut(BaseModel):
+    """Where the scan of a pasted game has got to, and once done what it found."""
+
+    status: Literal["idle", "running", "done", "failed", "cancelled"]
+    #: My moves checked so far, out of all of them.
+    done: int = 0
+    total: int = 0
+    colour: str | None = None
+    found: list[FoundPuzzleOut] = Field(default_factory=list)
+    #: My slips with no forced line after the answer, so not puzzles.
+    skipped: list[str] = Field(default_factory=list)
+    #: The game, to step through and to show each puzzle's position.
+    moves: list[GameMoveOut] = Field(default_factory=list)
+    error: str | None = None
+    counts: "InaccuracyCountsOut | None" = None
+    session: SessionOut | None = None
+    streak: StreakOut | None = None
+
+
 class NewCardPreviewOut(BaseModel):
     """The position a card would drill, before anything is saved."""
 

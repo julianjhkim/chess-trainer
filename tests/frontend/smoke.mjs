@@ -141,7 +141,7 @@ document.body.append(barHost);
 createStepBar(barHost).render(started);
 check('step bar renders every step', barHost.querySelectorAll('.step').length === 3,
       `${barHost.querySelectorAll('.step').length} rendered`);
-check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Revision cards'));
+check('step bar marks the current step', barHost.querySelector('.step.current')?.textContent.includes('Puzzles'));
 check('step bar dims unselected steps', barHost.querySelectorAll('.step.disabled').length === 2);
 
 const done = await api.completeStep('inaccuracy_cards');
@@ -223,11 +223,22 @@ const deckAfter = await api.nextInaccuracyCard();
 check('the new card is not due until tomorrow', deckAfter.exhausted === true && deckAfter.counts.total >= 1,
       JSON.stringify(deckAfter.counts));
 
+// Scanning the game for puzzles, with the real engine.
+await api.startScan({ pgn: BLUNDER_PGN, colour: 'white' });
+let scanned = await api.scanState();
+for (let i = 0; i < 600 && scanned.status === 'running'; i++) {
+  await sleep(100);
+  scanned = await api.scanState();
+}
+check('a scan of a pasted game finishes', scanned.status === 'done', `${scanned.status} ${scanned.error ?? ''}`);
+check('it checked each of my moves', scanned.total === 2 && scanned.done === 2, `${scanned.done}/${scanned.total}`);
+check('and never shows a solution', !JSON.stringify(scanned).includes(bestHere));
+
 const { renderInaccuracyCardsView } = await import(`${REPO}/js/inaccuracy_cards_view.js`);
 const revisionHost = document.createElement('main');
 document.body.append(revisionHost);
 const revisionView = renderInaccuracyCardsView(revisionHost, {
-  step: { step: 'inaccuracy_cards', position: 1, title: 'Revision cards' },
+  step: { step: 'inaccuracy_cards', position: 1, title: 'Puzzles' },
   onCompleted: () => {},
 });
 for (let i = 0; i < 50 && !revisionHost.textContent.includes('All caught up'); i++) await sleep(50);
@@ -239,11 +250,11 @@ const { renderMakeCardView } = await import(`${REPO}/js/make_card_view.js`);
 const makeHost = document.createElement('main');
 document.body.append(makeHost);
 const makeView = renderMakeCardView(makeHost, {
-  step: { step: 'make_card', position: 2, title: 'Make a revision card' },
+  step: { step: 'make_card', position: 2, title: 'Make puzzles' },
   onCompleted: () => {},
 });
-check('the make-card view asks for a PGN and a move number',
-      makeHost.querySelector('textarea') !== null && makeHost.querySelector('input[type=number]') !== null);
+check('the make-puzzles view asks for a PGN only',
+      makeHost.querySelector('textarea') !== null && makeHost.querySelector('input[type=number]') === null);
 check('the make-card view renders a board', realPieces(makeHost).length > 0, `${realPieces(makeHost).length} pieces`);
 makeView.destroy();
 await api.resetSession();

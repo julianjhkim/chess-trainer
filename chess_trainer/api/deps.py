@@ -19,6 +19,7 @@ from chess_trainer.engine.stockfish import EngineNotAvailable, StockfishEngine
 from chess_trainer.session.flow import SessionFlow
 from chess_trainer.srs.scheduler import CardQueue
 from chess_trainer.inaccuracies.deck import InaccuracyDeck
+from chess_trainer.api.scan_job import ScanJob
 
 T = TypeVar("T")
 
@@ -38,7 +39,7 @@ class AppState:
         self.card_attempts: list[str] = []
         self.card_shown: bool = False
         self.card_finished: bool = False
-        #: The revision ("inaccuracy") deck for this session, and the card on screen.
+        #: The puzzle ("inaccuracy") deck for this session, and the card on screen.
         self.inaccuracy_deck = InaccuracyDeck()
         self.current_inaccuracy_id: int | None = None
         self.inaccuracy_attempts: list[str] = []
@@ -48,6 +49,9 @@ class AppState:
         self.inaccuracy_hinted: bool = False
         self.inaccuracy_shown: bool = False
         self.inaccuracy_finished: bool = False
+        #: The game being scanned for puzzles, if any (the latest one stays
+        #: until the next starts, so the page can show its outcome).
+        self.scan_job: ScanJob | None = None
         self._explorer: LichessExplorerClient | None = None
 
     @property
@@ -82,7 +86,9 @@ class AppState:
         self.inaccuracy_finished = False
 
     def shutdown(self) -> None:
-        """Stop the engine, close the explorer client, then the database."""
+        """Stop any scan, the engine and the explorer client, then the database."""
+        if self.scan_job is not None:
+            self.scan_job.cancel()
         self.engine.close()
         if self._explorer is not None:
             self._explorer.close()

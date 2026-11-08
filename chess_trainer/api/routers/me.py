@@ -1,6 +1,6 @@
 """The names I play under: read and replace the list.
 
-They decide which side I had in a pasted game when a revision card is made.
+They decide which side I had in a pasted game when a game is scanned for puzzles.
 """
 
 from __future__ import annotations

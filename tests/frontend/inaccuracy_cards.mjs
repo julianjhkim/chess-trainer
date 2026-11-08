@@ -4,7 +4,7 @@
  * Step 1 of the session: slips you picked from your own games, drilled again
  * (made in step 2).
  * Covers what it says with nothing to drill (no cards yet, and all caught up);
- * making a card from a PGN and a move number; one card driven by real clicks
+ * finding puzzles in a pasted game; one card driven by real clicks
  * (the prompt, stepping back through the moves, a hint, a wrong try, the
  * right move, the result and the whole game); and deleting a card.
  *
@@ -90,11 +90,11 @@ async function open(page, base, inaccuracy) {
 async function testEmptyDeck(page, base) {
   console.log('\nBefore any card has been made');
   await open(page, base, 'empty');
-  await waitForText(page, 'No revision cards yet.');
+  await waitForText(page, 'No puzzles yet.');
   const text = await page.innerText('.side-panel');
-  check('it points to step 2 for making cards', text.includes('Make one in step 2'));
+  check('it points to step 2 for making puzzles', text.includes('Make some in step 2, “Make puzzles”'));
   check('there is no card-making button here', (await page.locator('button:text-is("Make a card"), button:text-is("New card")').count()) === 0);
-  check('the step is current on the bar', (await page.innerText('.step.current')).includes('Revision cards'));
+  check('the step is current on the bar', (await page.innerText('.step.current')).includes('Puzzles'));
   check('no Continue button', (await page.locator('button:has-text("Continue")').count()) === 0);
 }
 
@@ -110,7 +110,7 @@ async function testCaughtUp(page, base) {
 async function testOneCard(page, base) {
   console.log('\nOne due card');
   await open(page, base, 'one');
-  await waitForText(page, 'Find the engine');
+  await waitForText(page, 'Find the best move');
   await waitFor(page, 'the board to accept a move', () => {
     const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
     return b && b.ground.state.movable.color === 'white';
@@ -170,9 +170,9 @@ async function testOneCard(page, base) {
   check('Analyse at Lichess appears once answered', (await lichess.count()) === 1 && (await lichess.innerText()).includes('Analyse at Lichess'));
   check('it opens the game at the card position, my side down', (await lichess.getAttribute('href')).endsWith('?color=white#2'));
   check('in a new tab', (await lichess.getAttribute('target')) === '_blank');
-  check('it sits right after Next card', await page.evaluate(() => {
+  check('it sits right after Next puzzle', await page.evaluate(() => {
     const link = document.querySelector('a.lichess-link');
-    return link?.previousElementSibling?.textContent === 'Next card';
+    return link?.previousElementSibling?.textContent === 'Next puzzle';
   }));
   check('the whole game is listed now', (await page.innerText('.move-list')).includes('Bb5'));
   await page.keyboard.press('ArrowLeft');
@@ -185,9 +185,9 @@ async function testOneCard(page, base) {
   check('the step counts once a card is answered', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'inaccuracy_cards')?.completed === true));
 
-  await page.click('button:text-is("Next card")');
+  await page.click('button:text-is("Next puzzle")');
   await waitForText(page, 'All caught up');
-  check('Next card ends on the caught-up message', (await page.innerText('.side-panel')).includes('All caught up — no revision cards due.'));
+  check('Next puzzle ends on the caught-up message', (await page.innerText('.side-panel')).includes('All caught up — no puzzles due.'));
 }
 
 // -- a puzzle ---------------------------------------------------------------------
@@ -251,43 +251,45 @@ async function testPuzzle(page, base) {
 const PGN = '[White "test-player"]\n[Black "test-opponent"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *';
 
 async function testMakeCard(page, base) {
-  console.log('\nMaking a card (step 2)');
+  console.log('\nMaking puzzles (step 2)');
   await page.request.post(`${base}/__scenario`, { data: { step: 'make_card', inaccuracy: 'empty' } });
   await page.goto(base, { waitUntil: 'load' });
-  await waitForText(page, 'type the number of the move you got wrong');
-  check('it is the first step', (await page.innerText('.step.current')).includes('Make a revision card'));
+  await waitForText(page, 'Stockfish checks every move you made');
+  check('it is called Make puzzles', (await page.innerText('.step.current')).includes('Make puzzles'));
   check('three steps on the bar', (await page.locator('.step').count()) === 3);
+  check('no move number to type', (await page.locator('input[type=number]').count()) === 0);
+
+  await page.click('button:text-is("Find puzzles")');
+  await waitForText(page, 'Paste a game first.');
+  check('an empty paste is explained', true);
 
   await page.fill('textarea[aria-label="PGN"]', PGN);
-  await page.fill('input[aria-label="Move number"]', '9');
-  await page.click('button:text-is("Show position")');
-  await waitForText(page, 'White has no move 9 in this game');
-  check('a move the game lacks is explained', true);
-  check('nothing to save yet', !(await page.isVisible('button:text-is("Save card")')));
+  await page.click('button:text-is("Find puzzles")');
+  await waitForText(page, 'Checking your moves…');
+  check('the scan shows its progress', (await page.locator('.scan-progress progress').count()) === 1);
+  check('and can be stopped', await page.isVisible('button:text-is("Stop")'));
 
-  await page.fill('input[aria-label="Move number"]', '2');
-  await page.keyboard.press('Enter');
-  await waitForText(page, 'You played 2.Nf3 here.');
-  await waitFor(page, 'the slip position', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, POSITION);
-  const state = await board(page);
-  check('the board shows the position before the move', state.fen === POSITION);
-  check('with the move I played as a red arrow', state.highlights.join() === 'red:g1f3', state.highlights.join());
-  check('and the moves before it listed', (await page.innerText('.move-list')).replace(/\s+/g, ' ').includes('1. e4 e5'));
-  await page.keyboard.press('Home');
-  await waitFor(page, 'the start', () => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen().startsWith('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP'));
-  check('Home goes to the start of the game', (await board(page)).highlights.length === 0);
-  await page.keyboard.press('End');
-  await waitFor(page, 'the slip position', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, POSITION);
-
-  await page.click('button:text-is("Save card")');
-  await waitForText(page, 'Card saved for 2.Nf3 — first due 2026-11-03.');
-  check('saving says when it is due', true);
+  await waitForText(page, 'Found 1 puzzle in this game — saved.');
+  const panel = await page.innerText('.side-panel');
+  check('each puzzle names the slip and how many moves it asks', panel.includes('2.Nf3 — a mistake (−21.4%): 2 moves to find'), panel.replace(/\s+/g, ' ').slice(0, 300));
+  check('and when it is first due', panel.includes('first due 2026-11-03'));
+  check('slips with no forced line are listed as not puzzles', panel.includes('Not puzzles (no forced line after the best move): 3.Bb5.'));
   check('the answer is never shown', !(await page.innerText('body')).includes('Bc4'));
-  check('the first card completes the step', await page.evaluate(() =>
+  await waitFor(page, 'the puzzle position', (fen) => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && b.getFen() === fen && b.ground.state.drawable.shapes.length === 1;
+  }, POSITION);
+  check('the board shows the puzzle position, with my move as a red arrow', (await board(page)).shapes.join() === 'red:g1f3', (await board(page)).shapes.join());
+  await page.keyboard.press('End');
+  await waitFor(page, 'the end of the game', () => [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 0);
+  check('← / → step through the whole game', (await page.innerText('.move-list')).includes('Bb5'));
+  await page.click('button.found-puzzle');
+  await waitFor(page, 'the puzzle position again', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, POSITION);
+  check('clicking a puzzle goes back to its position', true);
+  check('saving puzzles completes the step', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'make_card')?.completed === true));
-  check('the form stays, for another card', await page.isVisible('textarea[aria-label="PGN"]'));
+  check('the form stays, for another game', await page.isVisible('textarea[aria-label="PGN"]'));
   check('no Continue button', (await page.locator('button:has-text("Continue")').count()) === 0);
-  check('Show position is a plain button', !(await page.locator('button:text-is("Show position")').getAttribute('class')));
 }
 
 // -- deleting --------------------------------------------------------------------
@@ -295,11 +297,11 @@ async function testMakeCard(page, base) {
 async function testDelete(page, base) {
   console.log('\nDeleting a card');
   await open(page, base, 'one');
-  await waitForText(page, 'Find the engine');
-  check('Delete card is offered while solving', await page.isVisible('button:text-is("Delete card")'));
+  await waitForText(page, 'Find the best move');
+  check('Delete puzzle is offered while solving', await page.isVisible('button:text-is("Delete puzzle")'));
 
-  await page.click('button:text-is("Delete card")');
-  await waitForText(page, 'Delete this card?');
+  await page.click('button:text-is("Delete puzzle")');
+  await waitForText(page, 'Delete this puzzle?');
   check('it asks before deleting', await page.isVisible('button:text-is("Keep")'));
   check('the solving buttons step aside meanwhile', !(await page.isVisible('button:text-is("Hint")')));
 
@@ -308,11 +310,11 @@ async function testDelete(page, base) {
     [...document.querySelectorAll('button')].some((b) => b.textContent === 'Hint'));
   check('Keep goes back to the card', (await page.innerText('.side-panel')).includes('You played 2.Nf3 here'));
 
-  await page.click('button:text-is("Delete card")');
+  await page.click('button:text-is("Delete puzzle")');
   await page.click('button:text-is("Delete")');
   await waitForText(page, 'All caught up');
   const panel = await page.innerText('.side-panel');
-  check('Delete serves the next card (here: none left)', panel.includes('All caught up — no revision cards due.'));
+  check('Delete serves the next puzzle (here: none left)', panel.includes('All caught up — no puzzles due.'));
   check('the deck shrinks', /In the deck\s*2/.test(panel), panel.split('\n').slice(0, 6).join(' | '));
   check('deleting does not count the step', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'inaccuracy_cards')?.completed !== true));

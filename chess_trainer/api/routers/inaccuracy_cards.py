@@ -1,4 +1,4 @@
-"""Revision cards (internally "inaccuracy cards"): slips I pick, drilled again.
+"""Puzzles (internally "inaccuracy cards"): slips from my games, drilled again.
 
 I make a card by pasting a game and naming the number of my move that went
 wrong; the card is the position before it. The answer is the engine's top
@@ -29,9 +29,12 @@ from chess_trainer.api.schemas import (
     InaccuracyGradeOut,
     InaccuracyResultOut,
     InaccuracyStateOut,
+    FoundPuzzleOut,
     NewCardOut,
     NewCardPreviewOut,
     NewCardRequest,
+    ScanOut,
+    ScanRequest,
     GameMoveOut,
     SessionOut,
     StreakOut,
@@ -44,6 +47,8 @@ from chess_trainer.engine.classify import classify
 from chess_trainer.engine.winpct import win_percent_drop
 from chess_trainer.inaccuracies import deck as deck_module
 from chess_trainer.inaccuracies import puzzle
+from chess_trainer.inaccuracies import scan as scan_module
+from chess_trainer.api.scan_job import ScanJob
 from chess_trainer.inaccuracies import slip as slip_module
 from chess_trainer.inaccuracies.deck import DeckAnswer, DeckItem
 from chess_trainer.pgn.lichess_link import analysis_url
@@ -443,21 +448,7 @@ async def create(
     drop = win_percent_drop(
         before.evaluation, after.evaluation, mover_is_white=slip.mover_is_white
     )
-    game = games_repo.upsert(
-        conn,
-        games_repo.StoredGame(
-            id=games_repo.paste_id(payload.pgn),
-            pgn=payload.pgn,
-            my_color=colour,
-            url=parsed.headers.get("Link"),
-            white_username=parsed.white,
-            black_username=parsed.black,
-            time_class=parsed.headers.get("TimeControl"),
-            rules="chess",
-            end_time=parse.end_time_of(parsed),
-            source=games_repo.SOURCE_PASTE,
-        ),
-    )
+    game = _store_game(conn, payload.pgn, parsed, colour)
     earlier = slip_module.moves_before(positions, slip)
     card = slip_module.card_for(
         slip,
@@ -480,7 +471,7 @@ async def create(
         restored=added.restored,
         counts=_counts(state, conn, config),
     )
-    # Making a card completes the "Make a revision card" step (and counts the
+    # Making a card completes the "Make puzzles" step (and counts the
     # day), but the step stays on screen so more cards can be made.
     if Step.MAKE_CARD not in state.flow.completed:
         state.flow.mark_completed(Step.MAKE_CARD)
@@ -488,6 +479,142 @@ async def create(
         response.session = SessionOut.of(state.flow)
         response.streak = StreakOut.of(streak)
     return response
+
+
+def _store_game(conn: sqlite3.Connection, pgn: str, parsed: ParsedGame, colour: str):
+    """Keep the pasted game, so its cards can show the moves."""
+    return games_repo.upsert(
+        conn,
+        games_repo.StoredGame(
+            id=games_repo.paste_id(pgn),
+            pgn=pgn,
+            my_color=colour,
+            url=parsed.headers.get("Link"),
+            white_username=parsed.white,
+            black_username=parsed.black,
+            time_class=parsed.headers.get("TimeControl"),
+            rules="chess",
+            end_time=parse.end_time_of(parsed),
+            source=games_repo.SOURCE_PASTE,
+        ),
+    )
+
+
+# -- scanning a game for puzzles ---------------------------------------------
+class _ScanOutcome:
+    def __init__(self, colour, positions, result, saved) -> None:
+        self.colour = colour
+        self.positions = positions
+        self.result = result
+        #: (found puzzle, what adding it did), in game order.
+        self.saved = saved
+
+
+@router.post("/scan", response_model=ScanOut)
+def start_scan(
+    payload: ScanRequest, state: State, conn: Conn, engine: Engine, config: Cfg
+) -> ScanOut:
+    """Scan a pasted game for puzzles, in the background; poll ``GET /scan``.
+
+    Every one of my moves is checked; each slip whose answer starts a forced
+    line becomes a puzzle card, due the next day.
+    """
+    if state.scan_job is not None and state.scan_job.running:
+        raise HTTPException(status_code=409, detail="A game is already being scanned.")
+    parsed = _parse(payload)
+    colour = _my_colour(conn, parsed, payload, config)
+    positions = positions_module.from_parsed(parsed)
+    if not positions:
+        raise HTTPException(status_code=422, detail="That game has no moves.")
+    depth = config.engine_depth
+
+    def work(job: ScanJob) -> _ScanOutcome:
+        result = scan_module.scan_game(
+            conn, engine, positions, colour, depth,
+            on_progress=job.progress, cancelled=lambda: job.cancelled,
+        )
+        saved = _save_found(conn, config, payload.pgn, parsed, colour, positions, result)
+        return _ScanOutcome(colour, positions, result, saved)
+
+    job = ScanJob(work)
+    job.progress(0, len(scan_module.my_moves.mine(positions, colour)))
+    state.scan_job = job.start()
+    return _scan_out(state, conn, config)
+
+
+@router.get("/scan", response_model=ScanOut)
+def scan_state(state: State, conn: Conn, config: Cfg) -> ScanOut:
+    """How the latest scan is going; once done, the puzzles it saved."""
+    return _scan_out(state, conn, config)
+
+
+@router.delete("/scan", response_model=ScanOut)
+async def cancel_scan(state: State, conn: Conn, config: Cfg) -> ScanOut:
+    """Stop the scan (after the move being checked). Nothing is saved."""
+    if state.scan_job is not None and state.scan_job.running:
+        await state.in_thread(state.scan_job.cancel)
+    return _scan_out(state, conn, config)
+
+
+def _save_found(conn, config, pgn, parsed, colour, positions, result):
+    if not result.found:
+        return []
+    game = _store_game(conn, pgn, parsed, colour)
+    saved = []
+    for found in result.found:
+        slip = found.slip
+        card = slip_module.card_for(
+            slip,
+            game_id=game.id,
+            my_colour=colour,
+            best_move_uci=found.best_move_uci,
+            classification=found.classification,
+            win_percent_drop=found.win_percent_drop,
+            depth=config.engine_depth,
+            previous=positions[slip.ply - 1] if slip.ply > 0 else None,
+        )
+        added = deck_module.add_card(
+            conn, dataclasses.replace(card, solution=found.line), today=_today(config)
+        )
+        if added.card.solution is None and added.card.best_move_uci == card.best_move_uci:
+            repo.set_solution(conn, added.card.id or 0, found.line)
+        saved.append((found, added))
+    return saved
+
+
+def _scan_out(state: State, conn: sqlite3.Connection, config: Config) -> ScanOut:
+    job = state.scan_job
+    if job is None:
+        return ScanOut(status="idle")
+    out = ScanOut(status=job.status, done=job.done, total=job.total, error=job.error)
+    outcome: _ScanOutcome | None = job.result
+    if job.status != "done" or outcome is None:
+        return out
+    out.colour = outcome.colour
+    out.moves = _moves_out(outcome.positions, outcome.colour)
+    out.skipped = [move.move_label for move in outcome.result.skipped]
+    out.found = [
+        FoundPuzzleOut(
+            move_label=found.slip.move_label,
+            ply=found.slip.ply,
+            classification=found.classification,
+            win_percent_drop=found.win_percent_drop,
+            my_moves=found.my_moves,
+            created=added.created,
+            restored=added.restored,
+            due_on=added.due_on.isoformat(),
+        )
+        for found, added in outcome.saved
+    ]
+    out.counts = _counts(state, conn, config)
+    # Saving puzzles completes "Make puzzles" (and counts the day) -- once.
+    if outcome.saved and not job.reported and Step.MAKE_CARD not in state.flow.completed:
+        state.flow.mark_completed(Step.MAKE_CARD)
+        streak = tracker.record_step(conn, tz_name=config.timezone)
+        out.session = SessionOut.of(state.flow)
+        out.streak = StreakOut.of(streak)
+    job.reported = True
+    return out
 
 
 @router.delete("/{card_id}", response_model=InaccuracyCountsOut)

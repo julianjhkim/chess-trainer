@@ -41,8 +41,8 @@ const MIME = {
 };
 
 const STEPS = [
-  ['inaccuracy_cards', 'Revision cards'],
-  ['make_card', 'Make a revision card'],
+  ['inaccuracy_cards', 'Puzzles'],
+  ['make_card', 'Make puzzles'],
   ['cards', 'Opening cards'],
 ];
 
@@ -132,7 +132,7 @@ const GRADE = {
 const OPPONENT = 'a-very-long-opponent-username';
 
 /**
- * The revision card's game: 1.e4 e5 2.Nf3 Nc6 3.Bb5, where 2.Nf3 is the slip
+ * The puzzle's game: 1.e4 e5 2.Nf3 Nc6 3.Bb5, where 2.Nf3 is the slip
  * and 2.Bc4 the engine's answer.
  */
 const BROWSE_LINE = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5'];
@@ -191,6 +191,9 @@ let inaccuracyDeleted = false;
 let inaccuracyCreated = 0;
 /** Plies of the puzzle line played so far. */
 let inaccuracyStep = 0;
+/** The scan of a pasted game: polls left before it is done, and its state. */
+let scanPolls = 0;
+let scanStatus = 'idle';
 /** The names I play under, as `/api/me` keeps them. */
 let myNames = ['test-player'];
 
@@ -228,6 +231,26 @@ const INACCURACY_PREVIEW = {
 };
 
 const hasDueCard = () => inaccuracyScenario === 'one' || inaccuracyScenario === 'puzzle';
+
+/** The scan as `GET /scan` reports it: one puzzle found, at 2.Nf3. */
+function scanOut({ first = false } = {}) {
+  if (scanStatus !== 'done') return { status: scanStatus, done: 3 - scanPolls - 1, total: 3 };
+  return {
+    status: 'done',
+    done: 3,
+    total: 3,
+    colour: 'white',
+    found: [{
+      move_label: '2.Nf3', ply: BROWSE_TARGET_PLY, classification: 'mistake',
+      win_percent_drop: 21.4, my_moves: 2, created: true, restored: false, due_on: '2026-11-03',
+    }],
+    skipped: ['3.Bb5'],
+    moves: BROWSE_MOVES,
+    counts: inaccuracyCounts(),
+    session: first ? withCompleted(session(currentStep), 'make_card') : null,
+    streak: first ? STREAK : null,
+  };
+}
 
 function inaccuracyCounts() {
   const total = (inaccuracyScenario === 'empty' ? 0 : inaccuracyDeleted ? 2 : 3) + inaccuracyCreated;
@@ -439,6 +462,24 @@ const routes = {
       streak: first ? STREAK : null,
     };
   },
+  'POST /api/inaccuracy-cards/scan': (body) => {
+    if (!String(body.pgn ?? '').includes('1.')) return { error: 'That does not look like a PGN.' };
+    scanStatus = 'running';
+    scanPolls = 2;
+    return scanOut();
+  },
+  'GET /api/inaccuracy-cards/scan': () => {
+    if (scanStatus === 'running' && --scanPolls <= 0) {
+      scanStatus = 'done';
+      inaccuracyCreated += 1;
+      return scanOut({ first: true });
+    }
+    return scanOut();
+  },
+  'DELETE /api/inaccuracy-cards/scan': () => {
+    if (scanStatus === 'running') scanStatus = 'cancelled';
+    return scanOut();
+  },
   [`DELETE /api/inaccuracy-cards/${INACCURACY_CARD.id}`]: () => {
     inaccuracyDeleted = true;
     return inaccuracyCounts();
@@ -463,6 +504,8 @@ const routes = {
     inaccuracyScenario = body.inaccuracy ?? 'empty';
     inaccuracyServed = false;
     inaccuracyStep = 0;
+    scanStatus = 'idle';
+    scanPolls = 0;
     inaccuracyAnswered = false;
     inaccuracyHinted = false;
     inaccuracyAttempts = 0;
