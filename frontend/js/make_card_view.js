@@ -3,12 +3,13 @@
  * the engine finds the puzzles in it.
  *
  * *Find puzzles* starts a scan in the background: Stockfish checks every move
- * I made, and each slip whose answer starts a forced line becomes a puzzle,
- * due the next day. The page polls the scan for its progress (it can be
- * stopped) and then lists what was found -- the slips only, never a solution.
- * Clicking one puts the board on its position, with the move I played as a
- * red arrow; ← / → step through the game. Slips with no forced line are listed
- * too, as not puzzles. Saving the first puzzles completes the step (and counts
+ * of the game, both sides', and after each mistake or blunder whose
+ * punishment is clearly a single best move, the punishment becomes a puzzle,
+ * due the next day -- played as my opponent when the mistake was mine. The
+ * page polls the scan for its progress (it can be stopped) and then lists
+ * what was found -- the mistakes only, never a solution. Clicking one puts the
+ * board on its position; ← / → step through the game. Mistakes with no clear
+ * punishment are listed too, as not puzzles. Saving the first puzzles completes the step (and counts
  * the day); the form stays for the next game.
  */
 
@@ -20,12 +21,6 @@ import { bindArrowKeys, createMoveNav } from './move_nav.js';
 import { set, setStatus } from './state.js';
 
 const POLL_MS = 700;
-
-const CLASSIFICATION_LABEL = {
-  inaccuracy: 'an inaccuracy',
-  mistake: 'a mistake',
-  blunder: 'a blunder',
-};
 
 export function renderMakeCardView(container, { step, onCompleted }) {
   container.replaceChildren();
@@ -167,7 +162,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
     body.className = 'new-card';
     body.append(
       paragraph(
-        'Paste one of your games. Stockfish checks every move you made; each slip where the best move starts a forced line becomes a puzzle.',
+        'Paste one of your games. Stockfish checks every move, yours and your opponent’s; after each mistake or blunder, the punishment becomes a puzzle — played as your opponent when the mistake was yours.',
         'choice-note',
       ),
     );
@@ -230,8 +225,12 @@ export function renderMakeCardView(container, { step, onCompleted }) {
         pick.type = 'button';
         pick.className = 'found-puzzle';
         if (found.ply === selected) pick.classList.add('selected');
-        const kind = CLASSIFICATION_LABEL[found.classification] ?? found.classification;
-        pick.textContent = `${found.move_label} — ${kind} (−${found.win_percent_drop.toFixed(1)}%): ${found.my_moves} moves to find`;
+        const side = found.solver_colour === 'white' ? 'White' : 'Black';
+        const moves = `${found.solver_moves} move${found.solver_moves === 1 ? '' : 's'}`;
+        const cost = `${found.classification} (−${found.win_percent_drop.toFixed(1)}%)`;
+        pick.textContent = found.slip_mine
+          ? `${found.move_label}, your ${cost}: punish it as ${side}, ${moves}`
+          : `${found.move_label}, their ${cost}: punish it, ${moves}`;
         pick.addEventListener('click', () => {
           selected = found.ply;
           renderResult();
@@ -252,7 +251,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
     if (scan.skipped.length) {
       body.append(
         paragraph(
-          `Not puzzles (no forced line after the best move): ${scan.skipped.join(', ')}.`,
+          `Not puzzles (no single clear punishment): ${scan.skipped.join(', ')}.`,
           'choice-note',
         ),
       );
@@ -289,15 +288,10 @@ export function renderMakeCardView(container, { step, onCompleted }) {
       .catch((error) => setStatus(error.message, 'error'));
   }
 
-  /** At a puzzle's position, the move I played there is a red arrow. */
+  /** A puzzle's position is right after the mistake, which is highlighted. */
   async function drawView(view) {
     if (destroyed || !view.fen) return;
-    board.setShapes([]);
     await board.setFen(view.fen, { lastMove: squares(view.lastMove) });
-    if (view !== latestView || destroyed) return;
-    const puzzle = scan.found?.find((found) => found.ply === view.index);
-    const played = puzzle ? scan.moves[puzzle.ply] : null;
-    board.setShapes(played ? [arrow(played.uci, 'red')] : []);
   }
 
   /** Panels beside and under the board change size; chessground must re-measure. */
@@ -317,7 +311,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 // -- small DOM helpers ----------------------------------------------------
 function summaryText(state) {
   const n = state.found?.length ?? 0;
-  if (!n) return 'No puzzles in this game: none of your slips has a forced line after the best move.';
+  if (!n) return 'No puzzles in this game: no mistake had a single clear punishment.';
   const fresh = state.found.filter((found) => found.created || found.restored).length;
   const saved = fresh === n ? 'saved' : `${fresh} new`;
   return `Found ${n} puzzle${n === 1 ? '' : 's'} in this game — ${saved}. Play them in step 1, “Puzzles”, from tomorrow.`;
@@ -336,10 +330,6 @@ function progressBar(done, total) {
 
 function squares(uci) {
   return uci ? [uci.slice(0, 2), uci.slice(2, 4)] : undefined;
-}
-
-function arrow(uci, brush) {
-  return { orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush };
 }
 
 function card_(title, onChange) {

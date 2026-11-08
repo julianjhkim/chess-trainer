@@ -74,10 +74,17 @@ def build_line(
     depth: int,
     *,
     first_move: str,
+    first_must_be_only: bool = False,
 ) -> tuple[str, ...]:
-    """The puzzle from ``fen``: my moves and the replies, starting with
-    ``first_move`` (the card's answer) and ending with one of my moves."""
+    """The puzzle from ``fen``: the solver's moves and the replies, starting
+    with ``first_move`` (the answer) and ending with one of the solver's moves.
+
+    ``first_must_be_only`` holds the first move to the only-move test too, as
+    a punishment puzzle must: if it fails there is no puzzle, ``()``.
+    """
     board = chess.Board(fen)
+    if first_must_be_only and not _only_move(conn, engine, board, first_move, depth):
+        return ()
     line = [first_move]
     board.push_uci(first_move)
 

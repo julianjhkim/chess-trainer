@@ -11,7 +11,7 @@
  * `POST /__scenario {"step": "cards", "engineAgrees": false}` chooses which
  * step the session says is current -- i.e. which view the page renders on the
  * next load -- and what the card says about Stockfish agreeing with the
- * masters. `"inaccuracy": "empty" | "caught-up" | "one" | "puzzle"` picks what the
+ * masters. `"inaccuracy": "empty" | "caught-up" | "one" | "puzzle" | "punish"` picks what the
  * revision-card deck holds.
  */
 
@@ -140,6 +140,9 @@ const BROWSE_TARGET_PLY = 2;
 const BROWSE_ANSWER = 'f1c4';
 /** The same card as a puzzle (scenario 'puzzle'): 2.Bc4! Nc6 3.Nf3!. */
 const PUZZLE_LINE = ['e2e4', 'e7e5', 'f1c4', 'b8c6', 'g1f3'];
+/** Scenario 'punish': after my 2.Nf3, play Black and find 2...Nf6. */
+const PUNISH_LINE = ['e2e4', 'e7e5', 'g1f3', 'g8f6'];
+const PUNISH_PLY = 3;
 
 /** The move list for `line`, shaped like `GameMoveOut`. */
 function movesOf(line, myColour = 'white') {
@@ -215,6 +218,20 @@ const INACCURACY_CARD = {
   moves: BROWSE_MOVES.slice(0, BROWSE_TARGET_PLY),
 };
 
+/** A punishment puzzle: right after my 2.Nf3, played as Black. */
+const PUNISH_CARD = {
+  ...INACCURACY_CARD,
+  id: 8,
+  fen: BROWSE_MOVES[BROWSE_TARGET_PLY].fen_after,
+  orientation: 'black',
+  last_move_uci: 'g1f3',
+  my_move_uci: null,
+  my_move_san: null,
+  kind: 'punish',
+  slip_mine: true,
+  moves: BROWSE_MOVES.slice(0, PUNISH_PLY),
+};
+
 /** What "Show position" finds for move 2 of the stubbed game. */
 const INACCURACY_PREVIEW = {
   colour: 'white',
@@ -230,7 +247,7 @@ const INACCURACY_PREVIEW = {
   existing: 'none',
 };
 
-const hasDueCard = () => inaccuracyScenario === 'one' || inaccuracyScenario === 'puzzle';
+const hasDueCard = () => ['one', 'puzzle', 'punish'].includes(inaccuracyScenario);
 
 /** The scan as `GET /scan` reports it: one puzzle found, at 2.Nf3. */
 function scanOut({ first = false } = {}) {
@@ -241,10 +258,11 @@ function scanOut({ first = false } = {}) {
     total: 3,
     colour: 'white',
     found: [{
-      move_label: '2.Nf3', ply: BROWSE_TARGET_PLY, classification: 'mistake',
-      win_percent_drop: 21.4, my_moves: 2, created: true, restored: false, due_on: '2026-11-03',
+      move_label: '2.Nf3', slip_mine: true, solver_colour: 'black', ply: PUNISH_PLY,
+      classification: 'mistake', win_percent_drop: 21.4, solver_moves: 2,
+      created: true, restored: false, due_on: '2026-11-03',
     }],
-    skipped: ['3.Bb5'],
+    skipped: ['2...Nc6'],
     moves: BROWSE_MOVES,
     counts: inaccuracyCounts(),
     session: first ? withCompleted(session(currentStep), 'make_card') : null,
@@ -261,8 +279,12 @@ function inaccuracyCounts() {
 function inaccuracyAttempt(body) {
   inaccuracyAttempts += 1;
   const uci = `${body.from}${body.to}${body.promotion ?? ''}`;
-  const puzzle = inaccuracyScenario === 'puzzle';
-  const line = puzzle ? movesOf(PUZZLE_LINE).slice(BROWSE_TARGET_PLY) : movesOf(PUZZLE_LINE).slice(2, 3);
+  const punish = inaccuracyScenario === 'punish';
+  const line = punish
+    ? movesOf(PUNISH_LINE).slice(PUNISH_PLY)
+    : inaccuracyScenario === 'puzzle'
+      ? movesOf(PUZZLE_LINE).slice(BROWSE_TARGET_PLY)
+      : movesOf(PUZZLE_LINE).slice(2, 3);
   const step = line[inaccuracyStep];
   const move = boardMove({ ...body, fen: step.fen_before });
   const correct = uci === step.uci;
@@ -283,6 +305,13 @@ function inaccuracyAttempt(body) {
     return { ...base, played, reply_san: played[1].san, fen_after_reply: played[1].fen_after };
   }
   inaccuracyAnswered = true;
+  const punishResult = punish
+    ? {
+        answer_uci: 'g8f6', answer_san: 'Nf6', my_move_uci: 'b8c6', my_move_san: 'Nc6',
+        kind: 'punish', slip_mine: true, played_label: '2...Nc6', ply: PUNISH_PLY,
+        lichess_url: 'https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3%20Nc6%203.Bb5?color=black#3',
+      }
+    : {};
   return {
     ...base,
     result: {
@@ -307,6 +336,7 @@ function inaccuracyAttempt(body) {
       ply: BROWSE_TARGET_PLY,
       solution: line,
       lichess_url: 'https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3%20Nc6%203.Bb5?color=white#2',
+      ...punishResult,
     },
     counts: inaccuracyCounts(),
     session: { ...session(currentStep), steps: session(currentStep).steps.map((st) => st.step === 'inaccuracy_cards' ? { ...st, completed: true } : st) },
@@ -434,7 +464,8 @@ const routes = {
     inaccuracyStep = 0;
     if (hasDueCard() && !inaccuracyServed) {
       inaccuracyServed = true;
-      return { card: INACCURACY_CARD, counts: inaccuracyCounts(), attempts: 0, finished: false, exhausted: false };
+      const card = inaccuracyScenario === 'punish' ? PUNISH_CARD : INACCURACY_CARD;
+      return { card, counts: inaccuracyCounts(), attempts: 0, finished: false, exhausted: false };
     }
     return { card: null, counts: inaccuracyCounts(), attempts: 0, finished: false, exhausted: true };
   },

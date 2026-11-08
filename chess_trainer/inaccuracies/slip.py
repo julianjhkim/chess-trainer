@@ -77,3 +77,47 @@ def card_for(
         win_percent_drop=win_percent_drop,
         depth=depth,
     )
+
+
+def punishment_card_for(
+    slip: PositionMove,
+    *,
+    next_move: PositionMove | None,
+    game_id: str | None,
+    my_colour: str,
+    solver_colour: str,
+    mine: bool,
+    line: tuple[str, ...],
+    classification: str,
+    win_percent_drop: float,
+    depth: int,
+) -> InaccuracyCard:
+    """The card that punishes a mistake: the position right after ``slip``.
+
+    ``next_move`` is how the game went on from there (None if it ended), shown
+    once the puzzle is done; ``line`` is the punishment, starting with the
+    answer.
+    """
+    board = chess.Board(slip.fen_after)
+    answer = chess.Move.from_uci(line[0])
+    return InaccuracyCard(
+        epd=epd_of(slip.fen_after),
+        fen=slip.fen_after,
+        game_id=game_id,
+        ply=slip.ply + 1,
+        move_number=board.fullmove_number,
+        my_colour=my_colour,
+        last_move_uci=slip.uci,
+        my_move_uci=next_move.uci if next_move else "",
+        my_move_san=next_move.san if next_move else "",
+        best_move_uci=line[0],
+        best_move_san=board.san(answer),
+        classification=classification,
+        win_percent_drop=win_percent_drop,
+        depth=depth,
+        solution=line,
+        kind="punish",
+        solver_colour=solver_colour,
+        slip_label=slip.move_label,
+        slip_mine=mine,
+    )

@@ -40,6 +40,16 @@
    "state_fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
    "uci": "b8c6"
   },
+  "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2|g8f6": {
+   "fen": "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+   "game_over": false,
+   "is_capture": false,
+   "outcome": null,
+   "promotion": null,
+   "san": "Nf6",
+   "state_fen": "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+   "uci": "g8f6"
+  },
   "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2|f1c4": {
    "fen": "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2",
    "game_over": false,
@@ -330,6 +340,66 @@
     ]
    },
    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+   "game_over": false,
+   "in_check": false,
+   "outcome": null,
+   "turn": "white"
+  },
+  "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3": {
+   "dests": {
+    "a2": [
+     "a3",
+     "a4"
+    ],
+    "b1": [
+     "c3",
+     "a3"
+    ],
+    "b2": [
+     "b3",
+     "b4"
+    ],
+    "c2": [
+     "c3",
+     "c4"
+    ],
+    "d1": [
+     "e2"
+    ],
+    "d2": [
+     "d3",
+     "d4"
+    ],
+    "e1": [
+     "e2"
+    ],
+    "f1": [
+     "a6",
+     "b5",
+     "c4",
+     "d3",
+     "e2"
+    ],
+    "f3": [
+     "g5",
+     "e5",
+     "h4",
+     "d4",
+     "g1"
+    ],
+    "g2": [
+     "g3",
+     "g4"
+    ],
+    "h1": [
+     "g1"
+    ],
+    "h2": [
+     "h3",
+     "h4"
+    ]
+   },
+   "fen": "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
    "game_over": false,
    "in_check": false,
    "outcome": null,

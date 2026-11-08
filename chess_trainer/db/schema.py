@@ -308,8 +308,24 @@ _M009 = Migration(
     """,
 )
 
+#: Puzzles that punish a mistake, Lichess-style: the position right after a
+#: mistake (mine or my opponent's), solved by the side that can punish it.
+#: ``kind`` is 'prevent' for the older puzzles (find the move instead of my
+#: slip) and 'punish' for these; ``solver_colour`` is the side the puzzle is
+#: played as (NULL: my own); ``slip_label`` and ``slip_mine`` name the mistake.
+_M010 = Migration(
+    version=10,
+    name="punishment_puzzles",
+    sql="""
+    ALTER TABLE inaccuracy_cards ADD COLUMN kind TEXT NOT NULL DEFAULT 'prevent';
+    ALTER TABLE inaccuracy_cards ADD COLUMN solver_colour TEXT;
+    ALTER TABLE inaccuracy_cards ADD COLUMN slip_label TEXT;
+    ALTER TABLE inaccuracy_cards ADD COLUMN slip_mine INTEGER;
+    """,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
-    _M001, _M002, _M003, _M004, _M005, _M006, _M007, _M008, _M009,
+    _M001, _M002, _M003, _M004, _M005, _M006, _M007, _M008, _M009, _M010,
 )
 
 

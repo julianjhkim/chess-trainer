@@ -2,8 +2,10 @@
  * Puzzles (step 1; internally "inaccuracy cards"): the puzzles found in my own
  * games, drilled again. They are made in step 2 (`make_card_view.js`).
  *
- * Each card is the position before the slip, from my side of the board: the
- * opponent's last move plays in, and my move is drawn as a red arrow. Find the
+ * A puzzle is either the position right after a mistake -- mine or my
+ * opponent's -- played by the side that can punish it (the mistake plays in
+ * first), or, for older puzzles, the position before my slip, with my move
+ * drawn as a red arrow. Find the
  * engine's move: retries are unlimited and the eval bar updates on each.
  * Where the line is forcing the card is a puzzle -- a right move brings the
  * opponent's reply, played for me, and I go on until the line ends; the moves
@@ -360,7 +362,9 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     body.append(
       tag,
       paragraph(`From ${from}: move ${card.move_number}, ${side} to play.`, ''),
-      playedLine(card.move_label, card.classification),
+      card.kind === 'punish'
+        ? punishLine(card.move_label, card.classification, card.slip_mine, side)
+        : playedLine(card.move_label, card.classification),
       paragraph(
         'Find the best move — only Stockfish’s top choice counts. Your opponent replies, and you go on until the puzzle ends. Unlimited retries.',
         'choice-note',
@@ -392,7 +396,13 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     const kind = CLASSIFICATION_LABEL[shown.classification];
     const cost = shown.win_percent_drop != null ? `−${shown.win_percent_drop.toFixed(1)}%` : null;
     const detail = [kind, cost].filter(Boolean).join(', ');
-    addRow(list, 'In the game', detail ? `${shown.move_label} (${detail})` : shown.move_label);
+    const slip = detail ? `${shown.move_label} (${detail})` : shown.move_label;
+    if (shown.kind === 'punish') {
+      addRow(list, shown.slip_mine ? 'Your mistake' : 'Their mistake', slip);
+      addRow(list, 'The game went on', shown.played_label ?? 'it ended there');
+    } else {
+      addRow(list, 'In the game', slip);
+    }
     const grade = shown.grade;
     addRow(list, 'Graded', `${grade.description} (q=${grade.quality})`);
     if (grade.interval_days != null) {
@@ -534,7 +544,9 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (view.index !== result.ply) return [];
     return [
       arrow(result.answer_uci, 'green'),
-      result.my_move_uci !== result.answer_uci ? arrow(result.my_move_uci, 'red') : null,
+      result.my_move_uci && result.my_move_uci !== result.answer_uci
+        ? arrow(result.my_move_uci, 'red')
+        : null,
     ].filter(Boolean);
   }
 
@@ -545,7 +557,8 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
   function hintShapes() {
     if (phase !== 'solving' || !card) return [];
     // My game move belongs to the card's own position, not the later steps.
-    const marks = stepPlies === 0 ? [arrow(card.my_move_uci, 'red')] : [];
+    // A punishment puzzle draws nothing: the game's next move may be the answer.
+    const marks = stepPlies === 0 && card.my_move_uci ? [arrow(card.my_move_uci, 'red')] : [];
     if (hint) marks.push({ orig: hint.square, brush: 'yellow' });
     return marks.filter(Boolean);
   }
@@ -595,6 +608,23 @@ function playedLine(moveLabel, classification) {
   move.textContent = moveLabel;
   const kind = CLASSIFICATION_LABEL[classification];
   element.append(move, kind ? ` here — ${kind}. The red arrow shows it.` : ' here. The red arrow shows it.');
+  return element;
+}
+
+/**
+ * "You played 2.Nf3 here — a blunder. Play Black: punish it, as your opponent
+ * should have." / "Your opponent played 2...Nc6 — a blunder. Punish it."
+ */
+function punishLine(moveLabel, classification, mine, side) {
+  const element = paragraph('', 'played-line');
+  const move = document.createElement('strong');
+  move.textContent = moveLabel;
+  const kind = CLASSIFICATION_LABEL[classification] ?? 'a mistake';
+  if (mine) {
+    element.append('You played ', move, ` — ${kind}. Play ${side}: punish it, as your opponent should have.`);
+  } else {
+    element.append('Your opponent played ', move, ` — ${kind}. Punish it.`);
+  }
   return element;
 }
 

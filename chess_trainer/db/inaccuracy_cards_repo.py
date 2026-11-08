@@ -42,14 +42,34 @@ class InaccuracyCard:
     deleted_at: str | None = None
     #: The puzzle line (UCI, starting with the answer), or None until worked out.
     solution: tuple[str, ...] | None = None
+    #: 'prevent': find the move instead of my slip (``my_move_*`` is the slip).
+    #: 'punish': punish the mistake just played (``last_move_uci``, named by
+    #: ``slip_label``, mine if ``slip_mine``); ``my_move_*`` is what the game
+    #: went on with here ('' if it ended), never shown while solving.
+    kind: str = "prevent"
+    solver_colour: str | None = None
+    slip_label: str | None = None
+    slip_mine: bool | None = None
 
     @property
     def deleted(self) -> bool:
         return self.deleted_at is not None
 
     @property
+    def solver(self) -> str:
+        """The side the puzzle is played as."""
+        return self.solver_colour or self.my_colour
+
+    @property
+    def punishes(self) -> bool:
+        return self.kind == "punish"
+
+    @property
     def move_label(self) -> str:
-        """My move as written in the game score, e.g. ``11.f4`` or ``11...Nf6``."""
+        """The slip as written in the game score, e.g. ``11.f4`` or ``11...Nf6``:
+        my move for a 'prevent' puzzle, the mistake punished for a 'punish' one."""
+        if self.punishes and self.slip_label:
+            return self.slip_label
         separator = "." if self.my_colour == "white" else "..."
         return f"{self.move_number}{separator}{self.my_move_san}"
 
@@ -92,6 +112,10 @@ def _card(row: sqlite3.Row) -> InaccuracyCard:
         created_at=row["created_at"],
         deleted_at=row["deleted_at"],
         solution=tuple(row["solution_uci"].split()) if row["solution_uci"] else None,
+        kind=row["kind"],
+        solver_colour=row["solver_colour"],
+        slip_label=row["slip_label"],
+        slip_mine=None if row["slip_mine"] is None else bool(row["slip_mine"]),
     )
 
 
@@ -128,8 +152,9 @@ def insert(conn: sqlite3.Connection, card: InaccuracyCard) -> InaccuracyCard:
             INSERT INTO inaccuracy_cards (
                 epd, fen, game_id, ply, move_number, my_colour, last_move_uci,
                 my_move_uci, my_move_san, best_move_uci, best_move_san,
-                classification, win_percent_drop, depth, created_at, solution_uci
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                classification, win_percent_drop, depth, created_at, solution_uci,
+                kind, solver_colour, slip_label, slip_mine
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 card.epd,
@@ -148,6 +173,10 @@ def insert(conn: sqlite3.Connection, card: InaccuracyCard) -> InaccuracyCard:
                 card.depth,
                 card.created_at or _now(),
                 " ".join(card.solution) if card.solution else None,
+                card.kind,
+                card.solver_colour,
+                card.slip_label,
+                None if card.slip_mine is None else int(card.slip_mine),
             ),
         )
         new_id = int(cursor.lastrowid)

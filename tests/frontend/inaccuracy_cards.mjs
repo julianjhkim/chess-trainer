@@ -32,6 +32,8 @@ const POSITION = fixture.moves[`${AFTER_E4}|e7e5`].fen;
 const ANSWERED = fixture.moves[`${POSITION}|f1c4`].fen;
 const REPLIED = fixture.moves[`${ANSWERED}|b8c6`].fen;
 const SOLVED = fixture.moves[`${REPLIED}|g1f3`].fen;
+const AFTER_NF3 = fixture.moves[`${POSITION}|g1f3`].fen;
+const PUNISHED = fixture.moves[`${AFTER_NF3}|g8f6`].fen;
 
 let failures = 0;
 const check = (name, condition, extra = '') => {
@@ -246,6 +248,36 @@ async function testPuzzle(page, base) {
   check('→ from the slip goes on to the move I played', JSON.stringify(state.lastMove) === '["g1","f3"]', JSON.stringify(state.lastMove));
 }
 
+// -- a punishment puzzle -----------------------------------------------------------
+
+async function testPunish(page, base) {
+  console.log('\nPunishing my own mistake');
+  await open(page, base, 'punish');
+  await waitFor(page, 'the board to accept a move', () => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && b.ground.state.movable.color === 'black';
+  });
+  let state = await board(page);
+  check('it is played as my opponent', state.orientation === 'black');
+  check('right after my mistake, which played in', state.fen === AFTER_NF3 && JSON.stringify(state.lastMove) === '["g1","f3"]');
+  check('nothing is drawn: the game’s next move could be the answer', state.highlights.length === 0, state.highlights.join());
+  const prompt = await page.innerText('.side-panel');
+  check('the prompt names my mistake and the side to play', prompt.includes('You played 2.Nf3 — a mistake. Play Black: punish it, as your opponent should have.'));
+
+  await clickSquare(page, 'g8');
+  await clickSquare(page, 'f6');
+  await waitForText(page, 'Correct — 2...Nf6, no wrong moves.');
+  const result = await page.innerText('.side-panel');
+  check('the result names my mistake', result.includes('Your mistake') && result.includes('2.Nf3 (a mistake, −21.4%)'));
+  check('and how the game went on', result.includes('The game went on') && result.includes('2...Nc6'));
+  await waitFor(page, 'the answer on the board', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, PUNISHED);
+  await page.keyboard.press('ArrowLeft');
+  await waitFor(page, 'the arrows', () => [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 2);
+  state = await board(page);
+  check('← shows the answer in green and the game’s move in red', state.shapes.join() === 'green:g8f6,red:b8c6', state.shapes.join());
+  check('Lichess opens it from Black’s side', (await page.locator('a.lichess-link').getAttribute('href')).includes('color=black'));
+}
+
 // -- making a card ----------------------------------------------------------------
 
 const PGN = '[White "test-player"]\n[Black "test-opponent"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *';
@@ -254,7 +286,7 @@ async function testMakeCard(page, base) {
   console.log('\nMaking puzzles (step 2)');
   await page.request.post(`${base}/__scenario`, { data: { step: 'make_card', inaccuracy: 'empty' } });
   await page.goto(base, { waitUntil: 'load' });
-  await waitForText(page, 'Stockfish checks every move you made');
+  await waitForText(page, 'Stockfish checks every move, yours and your opponent');
   check('it is called Make puzzles', (await page.innerText('.step.current')).includes('Make puzzles'));
   check('three steps on the bar', (await page.locator('.step').count()) === 3);
   check('no move number to type', (await page.locator('input[type=number]').count()) === 0);
@@ -271,20 +303,20 @@ async function testMakeCard(page, base) {
 
   await waitForText(page, 'Found 1 puzzle in this game — saved.');
   const panel = await page.innerText('.side-panel');
-  check('each puzzle names the slip and how many moves it asks', panel.includes('2.Nf3 — a mistake (−21.4%): 2 moves to find'), panel.replace(/\s+/g, ' ').slice(0, 300));
+  check('each puzzle names the mistake, the side to punish it and its length', panel.includes('2.Nf3, your mistake (−21.4%): punish it as Black, 2 moves'), panel.replace(/\s+/g, ' ').slice(0, 300));
   check('and when it is first due', panel.includes('first due 2026-11-03'));
-  check('slips with no forced line are listed as not puzzles', panel.includes('Not puzzles (no forced line after the best move): 3.Bb5.'));
-  check('the answer is never shown', !(await page.innerText('body')).includes('Bc4'));
+  check('mistakes with no clear punishment are listed as not puzzles', panel.includes('Not puzzles (no single clear punishment): 2...Nc6.'));
+  check('the answer is never shown', !(await page.innerText('body')).includes('Nf6'));
   await waitFor(page, 'the puzzle position', (fen) => {
     const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
-    return b && b.getFen() === fen && b.ground.state.drawable.shapes.length === 1;
-  }, POSITION);
-  check('the board shows the puzzle position, with my move as a red arrow', (await board(page)).shapes.join() === 'red:g1f3', (await board(page)).shapes.join());
+    return b && b.getFen() === fen && (b.ground.state.lastMove ?? []).join('') === 'g1f3';
+  }, AFTER_NF3);
+  check('the board shows the position right after the mistake', (await board(page)).shapes.length === 0);
   await page.keyboard.press('End');
-  await waitFor(page, 'the end of the game', () => [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 0);
+  await waitFor(page, 'the end of the game', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() !== fen, AFTER_NF3);
   check('← / → step through the whole game', (await page.innerText('.move-list')).includes('Bb5'));
   await page.click('button.found-puzzle');
-  await waitFor(page, 'the puzzle position again', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, POSITION);
+  await waitFor(page, 'the puzzle position again', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, AFTER_NF3);
   check('clicking a puzzle goes back to its position', true);
   check('saving puzzles completes the step', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'make_card')?.completed === true));
@@ -340,6 +372,7 @@ for (const [name, run] of [
   ['make a card', testMakeCard],
   ['one card', testOneCard],
   ['puzzle', testPuzzle],
+  ['punish', testPunish],
   ['delete', testDelete],
 ]) {
   try {

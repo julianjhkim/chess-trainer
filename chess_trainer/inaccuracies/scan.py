@@ -1,11 +1,16 @@
-"""Finding the puzzles in one of my games.
+"""Finding the puzzles in one of my games, the way Lichess finds its own.
 
-The engine walks every move I made. A move that cost me at least an
-inaccuracy's worth of win % (``classify``) is a slip; from the position before
-it, the engine's top move is the answer and ``puzzle.build_line`` plays the
-line on. Only a slip whose answer starts a forced line of at least
-``MIN_MY_MOVES`` of my moves becomes a puzzle -- the user chose "forced lines
-only", so a slip with nothing forced after the answer is reported but skipped.
+The engine walks every move of the game, both sides'. A move that cost its
+player at least a mistake's worth of win % (``classify``: 20 points) is a
+mistake to punish. The puzzle starts right after it, played by the side that
+can punish it: my opponent's side when the mistake was mine (that is how I
+learn why my move was bad, whether or not they found the punishment), my own
+side when it was theirs (whether or not I found it).
+
+The punishing move must be clearly the only good one (``puzzle.is_only_move``)
+-- then even a single move is a puzzle; otherwise there is nothing fair to
+ask, and the mistake is reported but skipped. The line goes on while each
+next move is an only move too (``puzzle.build_line``).
 
 ``scan_game`` asks the engine (through the analysis cache) and reports progress
 through a callback; it can be cancelled between moves.
@@ -18,36 +23,42 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from chess_trainer.engine import analysis
-from chess_trainer.engine.classify import Classification, classify
+from chess_trainer.engine.classify import classify
 from chess_trainer.engine.stockfish import Analyser
 from chess_trainer.engine.winpct import win_percent_drop
 from chess_trainer.inaccuracies import puzzle
 from chess_trainer.pgn import my_moves
 from chess_trainer.pgn.positions import PositionMove
 
-#: A puzzle asks at least this many of my moves (the answer and a forced one).
-MIN_MY_MOVES = 2
+#: A move losing at least this much win % for its player is worth punishing:
+#: mistakes and blunders (the user's choice), not inaccuracies.
+MIN_DROP = 20.0
 
 
 @dataclass(frozen=True, slots=True)
 class FoundPuzzle:
-    """A slip of mine with a forced line after the engine's answer."""
+    """A mistake, and the forced punishment that starts right after it."""
 
     slip: PositionMove
-    best_move_uci: str
+    #: Whether the mistake was mine (then the puzzle is played as my opponent).
+    mine: bool
     win_percent_drop: float
     classification: str
     line: tuple[str, ...]
 
     @property
-    def my_moves(self) -> int:
+    def solver_colour(self) -> str:
+        return "black" if self.slip.mover_is_white else "white"
+
+    @property
+    def solver_moves(self) -> int:
         return (len(self.line) + 1) // 2
 
 
 @dataclass(slots=True)
 class ScanResult:
     found: list[FoundPuzzle] = field(default_factory=list)
-    #: Slips with no forced line after the answer: not puzzles.
+    #: Mistakes with no single clear punishment: not puzzles.
     skipped: list[PositionMove] = field(default_factory=list)
 
 
@@ -66,39 +77,30 @@ def scan_game(
     cancelled: Callable[[], bool] = lambda: False,
 ) -> ScanResult:
     """Every puzzle in a game, in game order. ``on_progress(done, total)``
-    is called after each of my moves is checked."""
-    mine = my_moves.mine(positions, my_colour)
+    is called after each move is checked."""
     result = ScanResult()
-    for done, move in enumerate(mine, start=1):
+    for done, move in enumerate(positions, start=1):
         if cancelled():
             raise ScanCancelled
-        slip = _slip(conn, engine, move, depth)
-        if slip is not None:
-            line = puzzle.build_line(
-                conn, engine, move.fen_before, depth, first_move=slip[0]
-            )
-            if (len(line) + 1) // 2 >= MIN_MY_MOVES:
-                result.found.append(
-                    FoundPuzzle(
-                        slip=move,
-                        best_move_uci=slip[0],
-                        win_percent_drop=slip[1],
-                        classification=slip[2],
-                        line=line,
-                    )
-                )
-            else:
-                result.skipped.append(move)
+        found = _punishment(conn, engine, move, depth, my_colour)
+        if isinstance(found, FoundPuzzle):
+            result.found.append(found)
+        elif found is not None:
+            result.skipped.append(move)
         if on_progress is not None:
-            on_progress(done, len(mine))
+            on_progress(done, len(positions))
     return result
 
 
-def _slip(
-    conn: sqlite3.Connection, engine: Analyser, move: PositionMove, depth: int
-) -> tuple[str, float, str] | None:
-    """For a slip: the engine's move, the win % it cost, and what kind of slip
-    it was. ``None`` for a move that was fine."""
+def _punishment(
+    conn: sqlite3.Connection,
+    engine: Analyser,
+    move: PositionMove,
+    depth: int,
+    my_colour: str,
+) -> FoundPuzzle | bool | None:
+    """The puzzle after a mistake; ``False`` for a mistake with no clear
+    punishment; ``None`` for a move that was not a mistake."""
     before = analysis.analyse(conn, engine, move.fen_before, depth)
     if before.best_move is None or before.best_move == move.uci:
         return None
@@ -106,7 +108,20 @@ def _slip(
     drop = win_percent_drop(
         before.evaluation, after.evaluation, mover_is_white=move.mover_is_white
     )
-    kind = classify(drop)
-    if kind is Classification.GOOD:
+    if drop < MIN_DROP:
         return None
-    return before.best_move, drop, kind.value
+    if after.best_move is None:  # the mistake ended the game
+        return None
+    line = puzzle.build_line(
+        conn, engine, move.fen_after, depth,
+        first_move=after.best_move, first_must_be_only=True,
+    )
+    if not line:
+        return False
+    return FoundPuzzle(
+        slip=move,
+        mine=my_moves.is_mine(move, my_colour),
+        win_percent_drop=drop,
+        classification=classify(drop).value,
+        line=line,
+    )

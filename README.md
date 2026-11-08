@@ -75,10 +75,12 @@ anywhere at any time.
 **Step 1 — Puzzles.** A warm-up on the puzzles found in your own games (made in
 step 2).
 
-Drilling a card: the position before your slip, from your side of the board, with
-the move you played named and drawn as a red arrow, so you know what not to play.
-← / → step back through the moves that led there (only the position itself takes
-a move; End comes back). Find the engine's move: only its top choice counts,
+Drilling a puzzle: the position right after a mistake, from the side that can
+punish it, with the mistake played in first and named ("You played 8.Bb3 — a
+mistake. Play Black: punish it, as your opponent should have."). Puzzles from
+before scanning start from the position before your slip instead, with the move
+you played drawn as a red arrow. ← / → step back through the moves that led
+there (only the position itself takes a move; End comes back). Find the engine's move: only its top choice counts,
 retries are unlimited and the eval bar updates on each. *Hint* circles the piece
 to move; *Show answer* gives up.
 
@@ -114,16 +116,25 @@ give the answer away.
 
 **Step 2 — Make puzzles.** Paste one of your games' PGN and press *Find puzzles*.
 Your side is read from your names (top right) in the PGN; if neither player has
-one, pick White or Black. Stockfish then checks every move you made, at the
-analysis depth, with a progress bar (a 30-move game takes about a minute; *Stop*
-gives up and saves nothing). Each slip — a move that cost you at least an
-inaccuracy's worth of win % — whose best reply starts a **forced line of at
-least two of your moves** becomes a puzzle, due the next day. The list shows
-each puzzle's slip and how many moves it asks, never the solution; clicking one
-puts the board on its position with your move as a red arrow, and ← / → step
-through the game. Slips with nothing forced after the best move are named too,
-as not puzzles. Saving the first puzzles completes the step (and counts the
-day); the form stays for the next game. Use the step bar to move on.
+one, pick White or Black. Stockfish then checks **every move of the game, yours
+and your opponent's**, with a progress bar (a 30-move game takes a minute or
+two; *Stop* gives up and saves nothing). It works like Lichess's own puzzles:
+after each **mistake or blunder** (a move losing 20% or more of its player's win
+chance), the puzzle is to **punish it**:
+
+- after *your* mistake you play your opponent's side, and find what they should
+  have done — that is how you learn why your move was bad, even if they missed it;
+- after your opponent's mistake you play your own side, and find the punishment,
+  whether or not you found it in the game.
+
+The punishing move has to be clearly the only good one (10 points of win %
+better than anything else); then even a single move is a puzzle, and when more
+only-moves follow, the puzzle goes on. Mistakes with no single clear punishment
+are listed as not puzzles. Each puzzle is due the next day. The list names each
+mistake, the side you'll play and how many moves it asks — never the solution;
+clicking one shows its position, and ← / → step through the game. Saving the
+first puzzles completes the step (and counts the day); the form stays for the
+next game. Use the step bar to move on.
 
 **Step 3 — Opening cards.** Anki-style drills built from the Lichess masters
 database, grown lazily as you go. The first card is 1.e4; the tree expands only

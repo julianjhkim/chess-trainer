@@ -25,6 +25,8 @@ LINES = [
     ["e2e4", "e7e5", "f1c4"],
     # The revision card as a puzzle: 2.Bc4 Nc6 3.Nf3.
     ["e2e4", "e7e5", "f1c4", "b8c6", "g1f3"],
+    # A punishment puzzle after 2.Nf3, played as Black: 2...Nf6.
+    ["e2e4", "e7e5", "g1f3", "g8f6"],
 ]
 
 OUT = Path(__file__).with_name("board.json")

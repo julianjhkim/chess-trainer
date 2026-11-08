@@ -68,7 +68,7 @@ Frontend (Node is dev-only; `npm install` and `npx playwright install chromium` 
 npm run smoke    # jsdom run of the real ES modules — needs a live server on :8791 (see above)
 npm run clicks   # Chromium: clicks square centres, asserts the right square is picked
 npm run cards    # Chromium: card question text + stats-table marks
-npm run inaccuracy  # Chromium: puzzles (empty, caught up, scanning a game, one card, a puzzle, delete)
+npm run inaccuracy  # Chromium: puzzles (empty, caught up, scanning a game, one card, a puzzle, a punishment, delete)
 npm run me       # Chromium: the names editor in the top bar
 ```
 `clicks`, `cards`, `inaccuracy` and `me` use `tests/frontend/stub_server.mjs` (real frontend, canned
@@ -124,18 +124,31 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   `inaccuracy_cards`, `/api/inaccuracy-cards`, tables `inaccuracy_*`,
   `InaccuracyCard`, `inaccuracy_cards_view.js`. Don't rename one without the
   others.
-- **Made by scanning a game** (`inaccuracies/scan.py`, `api/scan_job.py`):
-  `POST /api/inaccuracy-cards/scan` {pgn, colour?} starts a background job (one
-  at a time, 409 otherwise) that checks every one of my moves at the analysis
-  depth; `GET /scan` polls it (progress, then what it found), `DELETE /scan`
-  stops it (nothing saved). A move losing ≥ 10 win % (inaccuracy or worse) is a
-  slip; its puzzle line is built from the position before it, and **only a
-  forced line of ≥ 2 of my moves (`MIN_MY_MOVES`) becomes a puzzle** — the user
-  chose "forced lines only"; other slips are listed as not puzzles. Found
-  puzzles are saved (game stored, `add_card`, due tomorrow); the outcome shows
-  the slips but **never a solution**. Saving any completes `make_card` (streak)
-  once. `AppState.shutdown` cancels and joins the job before closing the DB.
-  The page polls every 700 ms and picks a running scan up again on return.
+- **Made by scanning a game, Lichess-style** (`inaccuracies/scan.py`,
+  `api/scan_job.py`): `POST /api/inaccuracy-cards/scan` {pgn, colour?} starts
+  a background job (one at a time, 409 otherwise) that checks **every move of
+  the game, both sides'**, at the analysis depth; `GET /scan` polls it
+  (progress, then what it found), `DELETE /scan` stops it (nothing saved).
+  A move losing **≥ 20 win %** (`MIN_DROP`: mistakes and blunders, not
+  inaccuracies — the user's choice) is a mistake to punish. The puzzle is the
+  position **right after it** (`kind='punish'`), played by the side that can
+  punish it: **my opponent's side when the mistake was mine** (that is how I
+  learn why it was bad, whether or not they found it), mine when it was
+  theirs. The punishing first move must pass the only-move test
+  (`build_line(first_must_be_only=True)`); then **even one move is a puzzle**
+  (the user's choice). Mistakes without one are listed as not puzzles. Found
+  puzzles are saved (game stored, `slip.punishment_card_for`, due tomorrow);
+  the outcome names the mistakes but **never a solution**. Saving any
+  completes `make_card` (streak) once. `AppState.shutdown` cancels and joins
+  the job before closing the DB. The page polls every 700 ms and picks a
+  running scan up again on return.
+- Card fields for `punish` (migration 10): `solver_colour` (orientation,
+  Lichess colour), `slip_label`/`slip_mine` (the mistake: `move_label`),
+  `last_move_uci` = the mistake, `ply` = the position after it (may equal the
+  game's length), `my_move_*` = how the game went on ('' if it ended) — **not
+  sent while solving** (it may be the answer), shown in red afterwards with
+  `played_label`. `my_colour` stays the game owner's. Older puzzles are
+  `kind='prevent'` (the position before my slip, my move as a red arrow).
 - The older by-hand endpoints still exist for the API and tests (the UI no
   longer uses them): paste PGN + **my move number**
   ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:

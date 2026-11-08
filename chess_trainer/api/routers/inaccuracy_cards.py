@@ -87,9 +87,11 @@ def _game_moves(conn: sqlite3.Connection, card: InaccuracyCard) -> list[Position
         positions = positions_module.from_parsed(parse.parse_pgn(game.pgn))
     except (PgnParseError, ValueError):
         return []
-    if card.ply >= len(positions):
+    if card.ply > len(positions) or not positions:
         return []
-    if slip_module.epd_of(positions[card.ply].fen_before) != card.epd:
+    # A punishment can start after the game's last move (a mistake that lost).
+    fen = positions[card.ply].fen_before if card.ply < len(positions) else positions[-1].fen_after
+    if slip_module.epd_of(fen) != card.epd:
         return []
     return positions
 
@@ -105,13 +107,15 @@ def _card_out(conn: sqlite3.Connection, card: InaccuracyCard, source: CardSource
     return InaccuracyCardOut(
         id=card.id or 0,
         fen=card.fen,
-        orientation=card.my_colour,
+        orientation=card.solver,
         last_move_uci=card.last_move_uci,
         move_number=card.move_number,
         classification=card.classification,
-        my_move_uci=card.my_move_uci,
-        my_move_san=card.my_move_san,
+        my_move_uci=None if card.punishes else card.my_move_uci,
+        my_move_san=None if card.punishes else card.my_move_san,
         move_label=card.move_label,
+        kind=card.kind,
+        slip_mine=card.slip_mine,
         source=source.value,
         opponent=game.opponent if game else None,
         played_on=game.end_time if game else None,
@@ -192,12 +196,19 @@ def _result_out(
     return InaccuracyResultOut(
         answer_uci=card.best_move_uci,
         answer_san=card.best_move_san,
-        my_move_uci=card.my_move_uci,
-        my_move_san=card.my_move_san,
+        my_move_uci=card.my_move_uci or None,
+        my_move_san=card.my_move_san or None,
         move_label=card.move_label,
         classification=card.classification,
         win_percent_drop=card.win_percent_drop,
         revealed=revealed,
+        kind=card.kind,
+        slip_mine=card.slip_mine,
+        played_label=(
+            positions[card.ply].move_label
+            if card.punishes and card.ply < len(positions)
+            else None
+        ),
         grade=InaccuracyGradeOut(
             quality=answer.quality,
             description=answer.description,
@@ -214,7 +225,7 @@ def _result_out(
             positions,
             start_fen=positions[0].fen_before if positions else card.fen,
             ply=card.ply if positions else 0,
-            my_colour=card.my_colour,
+            my_colour=card.solver,
         ),
     )
 
@@ -516,8 +527,8 @@ def start_scan(
 ) -> ScanOut:
     """Scan a pasted game for puzzles, in the background; poll ``GET /scan``.
 
-    Every one of my moves is checked; each slip whose answer starts a forced
-    line becomes a puzzle card, due the next day.
+    Every move is checked, both sides'; each mistake with a single clear
+    punishment becomes a puzzle, due the next day.
     """
     if state.scan_job is not None and state.scan_job.running:
         raise HTTPException(status_code=409, detail="A game is already being scanned.")
@@ -537,7 +548,7 @@ def start_scan(
         return _ScanOutcome(colour, positions, result, saved)
 
     job = ScanJob(work)
-    job.progress(0, len(scan_module.my_moves.mine(positions, colour)))
+    job.progress(0, len(positions))
     state.scan_job = job.start()
     return _scan_out(state, conn, config)
 
@@ -563,21 +574,19 @@ def _save_found(conn, config, pgn, parsed, colour, positions, result):
     saved = []
     for found in result.found:
         slip = found.slip
-        card = slip_module.card_for(
+        card = slip_module.punishment_card_for(
             slip,
+            next_move=positions[slip.ply + 1] if slip.ply + 1 < len(positions) else None,
             game_id=game.id,
             my_colour=colour,
-            best_move_uci=found.best_move_uci,
+            solver_colour=found.solver_colour,
+            mine=found.mine,
+            line=found.line,
             classification=found.classification,
             win_percent_drop=found.win_percent_drop,
             depth=config.engine_depth,
-            previous=positions[slip.ply - 1] if slip.ply > 0 else None,
         )
-        added = deck_module.add_card(
-            conn, dataclasses.replace(card, solution=found.line), today=_today(config)
-        )
-        if added.card.solution is None and added.card.best_move_uci == card.best_move_uci:
-            repo.set_solution(conn, added.card.id or 0, found.line)
+        added = deck_module.add_card(conn, card, today=_today(config))
         saved.append((found, added))
     return saved
 
@@ -596,10 +605,12 @@ def _scan_out(state: State, conn: sqlite3.Connection, config: Config) -> ScanOut
     out.found = [
         FoundPuzzleOut(
             move_label=found.slip.move_label,
-            ply=found.slip.ply,
+            slip_mine=found.mine,
+            solver_colour=found.solver_colour,
+            ply=found.slip.ply + 1,
             classification=found.classification,
             win_percent_drop=found.win_percent_drop,
-            my_moves=found.my_moves,
+            solver_moves=found.solver_moves,
             created=added.created,
             restored=added.restored,
             due_on=added.due_on.isoformat(),

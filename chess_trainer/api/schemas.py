@@ -466,9 +466,15 @@ class InaccuracyCardOut(BaseModel):
     move_number: int
     classification: str
     #: What I played here in the game, shown while solving (not the answer).
-    my_move_uci: str
-    my_move_san: str
+    #: Only for a 'prevent' puzzle: in a 'punish' one the game's next move
+    #: may well be the answer, so it waits for the result.
+    my_move_uci: str | None = None
+    my_move_san: str | None = None
     move_label: str
+    #: 'prevent' (find the move instead of my slip) or 'punish' (punish the
+    #: mistake just played, ``move_label``; mine if ``slip_mine``).
+    kind: str = "prevent"
+    slip_mine: bool | None = None
     source: str
     #: Where the slip came from, for the prompt.
     opponent: str | None = None
@@ -495,12 +501,18 @@ class InaccuracyResultOut(BaseModel):
 
     answer_uci: str
     answer_san: str
-    my_move_uci: str
-    my_move_san: str
+    #: What the game did here: my slip ('prevent'), or how the game went on
+    #: after the mistake ('punish'; None if it ended there).
+    my_move_uci: str | None = None
+    my_move_san: str | None = None
     move_label: str
     classification: str
     win_percent_drop: float | None = None
     revealed: bool = False
+    kind: str = "prevent"
+    slip_mine: bool | None = None
+    #: 'punish': the game's next move, as written in the score.
+    played_label: str | None = None
     grade: InaccuracyGradeOut
     #: The whole game, to step through once the card is answered; the slip is
     #: move ``ply`` (0-based), so position ``ply`` is the card's position.
@@ -565,12 +577,17 @@ class ScanRequest(BaseModel):
 class FoundPuzzleOut(BaseModel):
     """A puzzle the scan found and saved. Never its solution."""
 
+    #: The mistake punished, as written in the score.
     move_label: str
+    #: Whether the mistake was mine (the puzzle is then played as my opponent).
+    slip_mine: bool
+    solver_colour: str
+    #: The puzzle's position in the game (right after the mistake).
     ply: int
     classification: str
     win_percent_drop: float
-    #: How many of my moves the puzzle asks for.
-    my_moves: int
+    #: How many moves the puzzle asks of the solver.
+    solver_moves: int
     created: bool
     restored: bool = False
     due_on: str
@@ -585,7 +602,7 @@ class ScanOut(BaseModel):
     total: int = 0
     colour: str | None = None
     found: list[FoundPuzzleOut] = Field(default_factory=list)
-    #: My slips with no forced line after the answer, so not puzzles.
+    #: Mistakes with no single clear punishment, so not puzzles.
     skipped: list[str] = Field(default_factory=list)
     #: The game, to step through and to show each puzzle's position.
     moves: list[GameMoveOut] = Field(default_factory=list)
