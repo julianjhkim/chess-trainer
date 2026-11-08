@@ -475,6 +475,9 @@ class InaccuracyCardOut(BaseModel):
     #: mistake just played, ``move_label``; mine if ``slip_mine``).
     kind: str = "prevent"
     slip_mine: bool | None = None
+    #: The side I had in the game (``orientation`` is the side the puzzle is
+    #: played as: my opponent's when it punishes my own mistake).
+    my_colour: str = "white"
     source: str
     #: Where the slip came from, for the prompt.
     opponent: str | None = None

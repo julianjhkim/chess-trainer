@@ -135,8 +135,11 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   punish it: **my opponent's side when the mistake was mine** (that is how I
   learn why it was bad, whether or not they found it), mine when it was
   theirs. The punishing first move must pass the only-move test
-  (`build_line(first_must_be_only=True)`); then **even one move is a puzzle**
-  (the user's choice). Mistakes without one are listed as not puzzles. Found
+  (`build_line(first_must_be_only=True)`), and the line must ask **at least 2
+  of the solver's moves** (`MIN_SOLVER_MOVES`): a mistake punished in one move
+  (a piece left to an unseen bishop) is too crude to learn from — the user's
+  call, reversing an earlier "one move is fine". Mistakes without such a line
+  are listed as not puzzles. Found
   puzzles are saved (game stored, `slip.punishment_card_for`, due tomorrow);
   the outcome names the mistakes but **never a solution**. Saving any
   completes `make_card` (streak) once. `AppState.shutdown` cancels and joins
@@ -146,9 +149,11 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   Lichess colour), `slip_label`/`slip_mine` (the mistake: `move_label`),
   `last_move_uci` = the mistake, `ply` = the position after it (may equal the
   game's length), `my_move_*` = how the game went on ('' if it ended) — **not
-  sent while solving** (it may be the answer), shown in red afterwards with
-  `played_label`. `my_colour` stays the game owner's. Older puzzles are
-  `kind='prevent'` (the position before my slip, my move as a red arrow).
+  sent while solving** (it may be the answer), named afterwards
+  (`played_label`). `my_colour` stays the game owner's and is sent
+  (`InaccuracyCardOut.my_colour`) so the prompt can say which side I had
+  ("you had White") apart from the side I play. Older puzzles are
+  `kind='prevent'` (the position before my slip).
 - The older by-hand endpoints still exist for the API and tests (the UI no
   longer uses them): paste PGN + **my move number**
   ("9" = my 9th move, White or Black; `inaccuracies/slip.py: find_slip`). Colour:
@@ -184,8 +189,10 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   (`attempts = wrong + 1`): 0 wrong q=4, 1 wrong q=3, 2+ q=2 (fail), Show
   answer (plays out the rest) q=1; Hint is for the current step and caps q=3.
   In the drill the opponent's last move plays in first, puzzle moves join the
-  move list as played, my game move (red) is drawn on the first step only, and
-  once finished the whole line is the nav aside (← walks it back to the slip).
+  move list as played, and once finished the whole line is the nav aside (←
+  walks it back to the slip). **No red arrows anywhere** (the user asked): the
+  prompt names whose mistake it was ("Your mistake: 8.Bb3 … You play Black
+  now: punish it" / "Their mistake: …") and which side I had.
 - One card per position (unique EPD). A new card is scheduled as if passed once:
   `n=1, I=1, EF=2.5`, **due the next day**. Making an existing card again brings
   its due date forward to tomorrow (never later); making a deleted one restores it.
@@ -193,8 +200,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   `solution_uci` migration 8),
   `inaccuracy_schedule` (same `ScheduleRow` shape as `card_schedule`),
   `inaccuracy_reviews`.
-- Drill: card position (my colour at the bottom, opponent's last move
-  highlighted), my game move as a red arrow. ← / → / Home / End and the move list
+- Drill: card position (the solver's colour at the bottom, the last move
+  highlighted; no arrow). ← / → / Home / End and the move list
   step through the moves *before* the slip (`InaccuracyCardOut.moves`, read from
   the stored game; empty if it is missing); only the live position takes a move.
   Unlimited retries with eval; Hint (from-square + piece) **caps the grade at
@@ -202,8 +209,8 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   attempt-based grading and SM-2 as opening cards; a failed card is requeued
   later in the session; the first answer in a session decides the schedule.
   Once answered the whole game is browsable (`InaccuracyResultOut.moves/ply`):
-  the board sits on the answer as a nav "aside"; ← from it = slip position with
-  green answer + red mine arrows.
+  the board sits on the end of the line as a nav "aside"; ← walks back to the
+  puzzle position, where the answer is a green arrow.
 - **Analyse at Lichess ↗** (`InaccuracyResultOut.lichess_url`; a button right
   of Next card, `lichess_button.js`): only once the
   card is answered (never while solving — Lichess's engine would give it away),

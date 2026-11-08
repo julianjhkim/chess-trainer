@@ -119,11 +119,11 @@ async function testOneCard(page, base) {
   });
 
   const prompt = await page.innerText('.side-panel');
-  check('the prompt names the game and the move', prompt.includes('From your game vs a-very-long-opponent-username') && prompt.includes('move 2, White to play'));
+  check('the prompt names the game and the side I had', prompt.includes('Your game vs a-very-long-opponent-username') && prompt.includes('you had White'));
   check('the answer is not on screen', !prompt.includes('Bc4'));
   check('no Lichess link while solving', (await page.locator('a.lichess-link').count()) === 0);
-  check('the move I played is, with what kind of slip it was', prompt.includes('You played 2.Nf3 here — a mistake.'));
-  check('and drawn as a red arrow', (await board(page)).highlights.join() === 'red:g1f3', (await board(page)).highlights.join());
+  check('whose mistake it was, and what kind', prompt.includes('Your mistake: 2.Nf3 (a mistake). Find what you should have played instead — White to play.'));
+  check('and no arrow on the board', (await board(page)).highlights.length === 0, (await board(page)).highlights.join());
   let state = await board(page);
   check('the board shows the position', state.fen === POSITION);
   check('from my side', state.orientation === 'white');
@@ -135,17 +135,17 @@ async function testOneCard(page, base) {
   state = await board(page);
   check('← steps back a move', state.fen === AFTER_E4);
   check('and the board takes no move there', state.movable !== 'white', String(state.movable));
-  check('the red arrow is only on the slip position', state.highlights.length === 0, state.highlights.join());
+  check('nothing drawn back there either', state.highlights.length === 0, state.highlights.join());
   await page.keyboard.press('End');
   await waitFor(page, 'the slip position again', (fen) => {
     const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
     return b && b.getFen() === fen && b.ground.state.movable.color === 'white';
   }, POSITION);
-  check('End comes back to the position, with the arrow', (await board(page)).highlights.join() === 'red:g1f3');
+  check('End comes back to the position', (await board(page)).fen === POSITION);
 
   await page.click('button:text-is("Hint")');
   await waitForText(page, 'Hint: Move your bishop on f1.');
-  check('Hint circles the piece', (await board(page)).highlights.join() === 'red:g1f3,yellow:f1');
+  check('Hint circles the piece', (await board(page)).highlights.join() === 'yellow:f1');
 
   await clickSquare(page, 'g1');
   await clickSquare(page, 'f3');
@@ -155,7 +155,7 @@ async function testOneCard(page, base) {
     return b && b.getFen() === fen && b.ground.state.movable.color === 'white';
   }, POSITION);
   check('a wrong try goes into the attempts', (await page.innerText('.attempt-list')).includes('Nf3'));
-  check('the marks survive a wrong try', (await board(page)).highlights.join() === 'red:g1f3,yellow:f1');
+  check('the hint survives a wrong try', (await board(page)).highlights.join() === 'yellow:f1');
 
   await clickSquare(page, 'f1');
   await clickSquare(page, 'c4');
@@ -178,12 +178,12 @@ async function testOneCard(page, base) {
   }));
   check('the whole game is listed now', (await page.innerText('.move-list')).includes('Bb5'));
   await page.keyboard.press('ArrowLeft');
-  await waitFor(page, 'the slip position with arrows', (fen) => {
+  await waitFor(page, 'the slip position with the answer', (fen) => {
     const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
     return b && b.getFen() === fen && b.ground.state.drawable.shapes.length > 0;
   }, POSITION);
   state = await board(page);
-  check('← from the answer: the slip, answer in green and game move in red', state.shapes.join() === 'green:f1c4,red:g1f3', state.shapes.join());
+  check('← from the answer: the slip, with the answer in green and no red arrow', state.shapes.join() === 'green:f1c4', state.shapes.join());
   check('the step counts once a card is answered', await page.evaluate(() =>
     window.chessTrainer.state().session?.steps.find((s) => s.step === 'inaccuracy_cards')?.completed === true));
 
@@ -212,7 +212,7 @@ async function testPuzzle(page, base) {
   let state = await board(page);
   check('a right move brings the opponent’s reply', state.fen === REPLIED);
   check('with the reply highlighted', JSON.stringify(state.lastMove) === '["b8","c6"]', JSON.stringify(state.lastMove));
-  check('my game move is no longer drawn', !state.highlights.includes('red:g1f3'), state.highlights.join());
+  check('nothing is drawn at the next step', state.highlights.length === 0, state.highlights.join());
   check('the moves join the move list', (await page.innerText('.move-list')).replace(/\s+/g, ' ').includes('Bc4 Nc6'));
   check('the prompt says how far it has gone', (await page.innerText('.side-panel')).includes('So far: 2.Bc4 Nc6 — your move.'));
   check('no result yet', (await page.locator('.result-headline').count()) === 0);
@@ -236,9 +236,9 @@ async function testPuzzle(page, base) {
     await waitFor(page, `back to ${fen}`, (f) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === f, fen);
   }
   check('← walks back along the line to the slip position', (await board(page)).fen === POSITION);
-  await waitFor(page, 'the arrows at the slip', () =>
-    [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 2);
-  check('where the answer and the game move are drawn', (await board(page)).shapes.join() === 'green:f1c4,red:g1f3', (await board(page)).shapes.join());
+  await waitFor(page, 'the answer at the slip', () =>
+    [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 1);
+  check('where the answer is drawn in green, nothing in red', (await board(page)).shapes.join() === 'green:f1c4', (await board(page)).shapes.join());
   await page.keyboard.press('ArrowRight');
   await waitFor(page, 'the game move', () => {
     const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
@@ -262,7 +262,7 @@ async function testPunish(page, base) {
   check('right after my mistake, which played in', state.fen === AFTER_NF3 && JSON.stringify(state.lastMove) === '["g1","f3"]');
   check('nothing is drawn: the game’s next move could be the answer', state.highlights.length === 0, state.highlights.join());
   const prompt = await page.innerText('.side-panel');
-  check('the prompt names my mistake and the side to play', prompt.includes('You played 2.Nf3 — a mistake. Play Black: punish it, as your opponent should have.'));
+  check('the prompt says I had White and the mistake was mine', prompt.includes('you had White') && prompt.includes('Your mistake: 2.Nf3 (a mistake). You play Black now: punish it, as your opponent should have.'));
 
   await clickSquare(page, 'g8');
   await clickSquare(page, 'f6');
@@ -272,9 +272,9 @@ async function testPunish(page, base) {
   check('and how the game went on', result.includes('The game went on') && result.includes('2...Nc6'));
   await waitFor(page, 'the answer on the board', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, PUNISHED);
   await page.keyboard.press('ArrowLeft');
-  await waitFor(page, 'the arrows', () => [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 2);
+  await waitFor(page, 'the answer arrow', () => [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 1);
   state = await board(page);
-  check('← shows the answer in green and the game’s move in red', state.shapes.join() === 'green:g8f6,red:b8c6', state.shapes.join());
+  check('← shows the answer in green, no red arrow', state.shapes.join() === 'green:g8f6', state.shapes.join());
   check('Lichess opens it from Black’s side', (await page.locator('a.lichess-link').getAttribute('href')).includes('color=black'));
 }
 
@@ -305,7 +305,7 @@ async function testMakeCard(page, base) {
   const panel = await page.innerText('.side-panel');
   check('each puzzle names the mistake, the side to punish it and its length', panel.includes('2.Nf3, your mistake (−21.4%): punish it as Black, 2 moves'), panel.replace(/\s+/g, ' ').slice(0, 300));
   check('and when it is first due', panel.includes('first due 2026-11-03'));
-  check('mistakes with no clear punishment are listed as not puzzles', panel.includes('Not puzzles (no single clear punishment): 2...Nc6.'));
+  check('mistakes with no clear punishment are listed as not puzzles', panel.includes('Not puzzles (no clear punishment, or only a one-move one): 2...Nc6.'));
   check('the answer is never shown', !(await page.innerText('body')).includes('Nf6'));
   await waitFor(page, 'the puzzle position', (fen) => {
     const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
@@ -340,7 +340,7 @@ async function testDelete(page, base) {
   await page.click('button:text-is("Keep")');
   await waitFor(page, 'the solving buttons', () =>
     [...document.querySelectorAll('button')].some((b) => b.textContent === 'Hint'));
-  check('Keep goes back to the card', (await page.innerText('.side-panel')).includes('You played 2.Nf3 here'));
+  check('Keep goes back to the card', (await page.innerText('.side-panel')).includes('Your mistake: 2.Nf3'));
 
   await page.click('button:text-is("Delete puzzle")');
   await page.click('button:text-is("Delete")');

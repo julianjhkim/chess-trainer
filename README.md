@@ -77,9 +77,11 @@ step 2).
 
 Drilling a puzzle: the position right after a mistake, from the side that can
 punish it, with the mistake played in first and named ("You played 8.Bb3 — a
-mistake. Play Black: punish it, as your opponent should have."). Puzzles from
-before scanning start from the position before your slip instead, with the move
-you played drawn as a red arrow. ← / → step back through the moves that led
+mistake. You play Black now: punish it, as your opponent should have."), and the
+side you had in the game, so you always know whether it was your mistake or one
+of your opponent's you didn't punish. Nothing is drawn on the board while you
+solve. Puzzles from before scanning start from the position before your slip
+instead. ← / → step back through the moves that led
 there (only the position itself takes a move; End comes back). Find the engine's move: only its top choice counts,
 retries are unlimited and the eval bar updates on each. *Hint* circles the piece
 to move; *Show answer* gives up.
@@ -98,8 +100,8 @@ you're on, and *Show answer* plays out the rest.
 
 The result shows the grade and the next due date, and the whole game opens up:
 the board shows the end of the engine's line, ← walks back along it to the
-position with the answer in green and your move in red, and → from there goes on
-with your game. Cards are graded and scheduled like the opening cards (see *The
+puzzle's position with the answer in green, and → from there goes on with your
+game. Cards are graded and scheduled like the opening cards (see *The
 SM-2 variant*), counting wrong moves over the whole puzzle: none is q=4, one is
 q=3 (still a pass), two or more q=2 (a fail), *Show answer* q=1; a hint caps the
 grade at "right with a hint" (q=3, still a pass). One position is only ever one card: making it again brings the
@@ -128,9 +130,10 @@ chance), the puzzle is to **punish it**:
   whether or not you found it in the game.
 
 The punishing move has to be clearly the only good one (10 points of win %
-better than anything else); then even a single move is a puzzle, and when more
-only-moves follow, the puzzle goes on. Mistakes with no single clear punishment
-are listed as not puzzles. Each puzzle is due the next day. The list names each
+better than anything else), and the punishment has to take at least two of your
+moves: a mistake punished in a single move — a piece left hanging to a bishop
+you didn't see — is too crude to be worth drilling. While more only-moves follow,
+the puzzle goes on. Mistakes without such a punishment are listed as not puzzles. Each puzzle is due the next day. The list names each
 mistake, the side you'll play and how many moves it asks — never the solution;
 clicking one shows its position, and ← / → step through the game. Saving the
 first puzzles completes the step (and counts the day); the form stays for the

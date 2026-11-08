@@ -204,6 +204,7 @@ const INACCURACY_CARD = {
   id: 7,
   fen: BROWSE_TARGET.fen_before,
   orientation: 'white',
+  my_colour: 'white',
   last_move_uci: 'e7e5',
   move_number: 2,
   classification: 'mistake',

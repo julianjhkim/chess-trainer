@@ -116,6 +116,7 @@ def _card_out(conn: sqlite3.Connection, card: InaccuracyCard, source: CardSource
         move_label=card.move_label,
         kind=card.kind,
         slip_mine=card.slip_mine,
+        my_colour=card.my_colour,
         source=source.value,
         opponent=game.opponent if game else None,
         played_on=game.end_time if game else None,

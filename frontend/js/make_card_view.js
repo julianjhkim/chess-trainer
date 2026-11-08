@@ -4,7 +4,7 @@
  *
  * *Find puzzles* starts a scan in the background: Stockfish checks every move
  * of the game, both sides', and after each mistake or blunder whose
- * punishment is clearly a single best move, the punishment becomes a puzzle,
+ * punishment is a forced line of two moves or more, it becomes a puzzle,
  * due the next day -- played as my opponent when the mistake was mine. The
  * page polls the scan for its progress (it can be stopped) and then lists
  * what was found -- the mistakes only, never a solution. Clicking one puts the
@@ -251,7 +251,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
     if (scan.skipped.length) {
       body.append(
         paragraph(
-          `Not puzzles (no single clear punishment): ${scan.skipped.join(', ')}.`,
+          `Not puzzles (no clear punishment, or only a one-move one): ${scan.skipped.join(', ')}.`,
           'choice-note',
         ),
       );
@@ -311,7 +311,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 // -- small DOM helpers ----------------------------------------------------
 function summaryText(state) {
   const n = state.found?.length ?? 0;
-  if (!n) return 'No puzzles in this game: no mistake had a single clear punishment.';
+  if (!n) return 'No puzzles in this game: no mistake had a clear punishment of two moves or more.';
   const fresh = state.found.filter((found) => found.created || found.restored).length;
   const saved = fresh === n ? 'saved' : `${fresh} new`;
   return `Found ${n} puzzle${n === 1 ? '' : 's'} in this game — ${saved}. Play them in step 1, “Puzzles”, from tomorrow.`;

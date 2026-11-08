@@ -4,8 +4,8 @@
  *
  * A puzzle is either the position right after a mistake -- mine or my
  * opponent's -- played by the side that can punish it (the mistake plays in
- * first), or, for older puzzles, the position before my slip, with my move
- * drawn as a red arrow. Find the
+ * first), or, for older puzzles, the position before my slip. The prompt says
+ * whose mistake it was and which side I had; no arrow marks the game's move. Find the
  * engine's move: retries are unlimited and the eval bar updates on each.
  * Where the line is forcing the card is a puzzle -- a right move brings the
  * opponent's reply, played for me, and I go on until the line ends; the moves
@@ -354,17 +354,15 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     tag.className = 'choice-note';
     tag.style.margin = '0 0 6px';
     tag.textContent = SOURCE_LABEL[card.source] ?? 'Review';
-    const side = card.orientation === 'white' ? 'White' : 'Black';
+    const side = colourName(card.orientation);
     const from = [
-      card.opponent ? `your game vs ${card.opponent}` : 'one of your games',
+      card.opponent ? `Your game vs ${card.opponent}` : 'One of your games',
       card.played_on ? new Date(card.played_on * 1000).toISOString().slice(0, 10) : null,
     ].filter(Boolean).join(', ');
     body.append(
       tag,
-      paragraph(`From ${from}: move ${card.move_number}, ${side} to play.`, ''),
-      card.kind === 'punish'
-        ? punishLine(card.move_label, card.classification, card.slip_mine, side)
-        : playedLine(card.move_label, card.classification),
+      paragraph(`${from} — you had ${colourName(card.my_colour ?? card.orientation)}.`, ''),
+      mistakeLine(card, side),
       paragraph(
         'Find the best move — only Stockfish’s top choice counts. Your opponent replies, and you go on until the puzzle ends. Unlimited retries.',
         'choice-note',
@@ -537,30 +535,18 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     void refreshEval(fen);
   }
 
-  /** Once answered: the engine's move (green) and mine (red) at the slip. */
+  /** Once answered: the engine's move (green) at the puzzle's position. */
   function shapesFor(view) {
     if (phase !== 'finished' || !result) return [];
     if (view.aside) return view.shapes ?? [];
     if (view.index !== result.ply) return [];
-    return [
-      arrow(result.answer_uci, 'green'),
-      result.my_move_uci && result.my_move_uci !== result.answer_uci
-        ? arrow(result.my_move_uci, 'red')
-        : null,
-    ].filter(Boolean);
+    return [arrow(result.answer_uci, 'green')].filter(Boolean);
   }
 
-  /**
-   * While solving: the move played in the game (red, what not to play)
-   * and the hint's circle, as highlights a click on the board does not wipe.
-   */
+  /** While solving: the hint's circle, as a highlight a click does not wipe. */
   function hintShapes() {
-    if (phase !== 'solving' || !card) return [];
-    // My game move belongs to the card's own position, not the later steps.
-    // A punishment puzzle draws nothing: the game's next move may be the answer.
-    const marks = stepPlies === 0 && card.my_move_uci ? [arrow(card.my_move_uci, 'red')] : [];
-    if (hint) marks.push({ orig: hint.square, brush: 'yellow' });
-    return marks.filter(Boolean);
+    if (phase !== 'solving' || !card || !hint) return [];
+    return [{ orig: hint.square, brush: 'yellow' }];
   }
 
   // -- helpers -----------------------------------------------------------
@@ -600,32 +586,32 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
 }
 
 // -- small DOM helpers ----------------------------------------------------
-/** "You played 2.Nf3 here — a mistake. The red arrow shows it." */
-function playedLine(moveLabel, classification) {
+/**
+ * Whose mistake the puzzle is about, and what to do, e.g. "Your mistake:
+ * 8.Bb3 (a mistake). You play Black now: punish it, as your opponent should
+ * have." -- so the side you play never hides which side you had.
+ */
+function mistakeLine(card, side) {
   const element = paragraph('', 'played-line');
-  element.append('You played ');
+  const label = document.createElement('strong');
   const move = document.createElement('strong');
-  move.textContent = moveLabel;
-  const kind = CLASSIFICATION_LABEL[classification];
-  element.append(move, kind ? ` here — ${kind}. The red arrow shows it.` : ' here. The red arrow shows it.');
+  move.textContent = card.move_label;
+  const kind = CLASSIFICATION_LABEL[card.classification] ?? 'a mistake';
+  if (card.kind !== 'punish') {
+    label.textContent = 'Your mistake: ';
+    element.append(label, move, ` (${kind}). Find what you should have played instead — ${side} to play.`);
+  } else if (card.slip_mine) {
+    label.textContent = 'Your mistake: ';
+    element.append(label, move, ` (${kind}). You play ${side} now: punish it, as your opponent should have.`);
+  } else {
+    label.textContent = 'Their mistake: ';
+    element.append(label, move, ` (${kind}). You play ${side}: punish it.`);
+  }
   return element;
 }
 
-/**
- * "You played 2.Nf3 here — a blunder. Play Black: punish it, as your opponent
- * should have." / "Your opponent played 2...Nc6 — a blunder. Punish it."
- */
-function punishLine(moveLabel, classification, mine, side) {
-  const element = paragraph('', 'played-line');
-  const move = document.createElement('strong');
-  move.textContent = moveLabel;
-  const kind = CLASSIFICATION_LABEL[classification] ?? 'a mistake';
-  if (mine) {
-    element.append('You played ', move, ` — ${kind}. Play ${side}: punish it, as your opponent should have.`);
-  } else {
-    element.append('Your opponent played ', move, ` — ${kind}. Punish it.`);
-  }
-  return element;
+function colourName(colour) {
+  return colour === 'black' ? 'Black' : 'White';
 }
 
 /** Moves as written in a score, numbered: "2.d4 exd4 3.Qxd4", "2...Nc6 3.d4". */

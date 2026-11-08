@@ -7,10 +7,12 @@ can punish it: my opponent's side when the mistake was mine (that is how I
 learn why my move was bad, whether or not they found the punishment), my own
 side when it was theirs (whether or not I found it).
 
-The punishing move must be clearly the only good one (``puzzle.is_only_move``)
--- then even a single move is a puzzle; otherwise there is nothing fair to
-ask, and the mistake is reported but skipped. The line goes on while each
-next move is an only move too (``puzzle.build_line``).
+The punishing move must be clearly the only good one (``puzzle.is_only_move``),
+and the line goes on while each next move is an only move too
+(``puzzle.build_line``). It must ask at least ``MIN_SOLVER_MOVES`` moves: a
+mistake punished in a single move -- a piece left to a bishop I didn't see --
+is too crude to learn from (the user's call). Mistakes with no such line are
+reported but skipped.
 
 ``scan_game`` asks the engine (through the analysis cache) and reports progress
 through a callback; it can be cancelled between moves.
@@ -33,6 +35,9 @@ from chess_trainer.pgn.positions import PositionMove
 #: A move losing at least this much win % for its player is worth punishing:
 #: mistakes and blunders (the user's choice), not inaccuracies.
 MIN_DROP = 20.0
+
+#: A punishment asks at least this many moves of the solver.
+MIN_SOLVER_MOVES = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +63,7 @@ class FoundPuzzle:
 @dataclass(slots=True)
 class ScanResult:
     found: list[FoundPuzzle] = field(default_factory=list)
-    #: Mistakes with no single clear punishment: not puzzles.
+    #: Mistakes with no clear punishment of two moves or more: not puzzles.
     skipped: list[PositionMove] = field(default_factory=list)
 
 
@@ -100,7 +105,8 @@ def _punishment(
     my_colour: str,
 ) -> FoundPuzzle | bool | None:
     """The puzzle after a mistake; ``False`` for a mistake with no clear
-    punishment; ``None`` for a move that was not a mistake."""
+    punishment of two moves or more; ``None`` for a move that was not a
+    mistake."""
     before = analysis.analyse(conn, engine, move.fen_before, depth)
     if before.best_move is None or before.best_move == move.uci:
         return None
@@ -116,7 +122,7 @@ def _punishment(
         conn, engine, move.fen_after, depth,
         first_move=after.best_move, first_must_be_only=True,
     )
-    if not line:
+    if (len(line) + 1) // 2 < MIN_SOLVER_MOVES:
         return False
     return FoundPuzzle(
         slip=move,
