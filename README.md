@@ -83,12 +83,13 @@ to move; *Show answer* gives up.
 
 **Where the line is forcing, the card is a puzzle**, as on Lichess or chess.com:
 the opponent's last move plays in first, and each right move brings the
-opponent's reply (Stockfish's best), played for you, until the line ends. A move
+opponent's reply (Stockfish's best), played for you, until the line ends. The
+first move is the card's answer, Stockfish's top move as always. After it, a move
 of yours belongs in the puzzle only if it is the *only* good one — Stockfish's
 best beats its second best by at least 10 points of win % (or mates when nothing
 else does) — so the puzzle never asks you to guess between equally good moves.
 It ends at mate or at the first move that is no longer forced, however long that
-takes. When your first move isn't forced either, the card is a single move, as
+takes. When nothing after the first move is forced, the card is a single move, as
 before. The moves join the move list as you play them; *Hint* is for the move
 you're on, and *Show answer* plays out the rest.
 

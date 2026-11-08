@@ -1,15 +1,16 @@
 """Turning a revision card into a puzzle, the way Lichess builds its own.
 
-From the card's position, Stockfish plays the line out. Each of my moves
-must be an *only move*: the engine's best has to beat its second best by at
-least ``ONLY_MOVE_MARGIN`` points of win % for me (or mate when nothing else
-does, or be the only legal move). The opponent's replies are the engine's
-best, played for me. The line ends on one of my moves -- at mate, or at the
-first point where my next move is no longer the only one -- with no length
-limit beyond a safety guard against endless lines.
+From the card's position, Stockfish plays the line out. The first move is the
+card's answer, the engine's top move, whether or not it is the only good one
+(it is already judged strictly). Each of my moves after it must be an *only
+move*: the engine's best has to beat its second best by at least
+``ONLY_MOVE_MARGIN`` points of win % for me (or mate when nothing else does,
+or be the only legal move). The opponent's replies are the engine's best,
+played for me. The line ends on one of my moves -- at mate, or at the first
+point where my next move is no longer the only one -- with no length limit
+beyond a safety guard against endless lines.
 
-The card's answer is always the first move, so a slip with no forced follow-up
-stays a one-move card, as before.
+A slip with no forced follow-up stays a one-move card, as before.
 
 ``is_only_move`` and ``accepts`` are pure; ``build_line`` asks the engine.
 """
@@ -77,8 +78,6 @@ def build_line(
     """The puzzle from ``fen``: my moves and the replies, starting with
     ``first_move`` (the card's answer) and ending with one of my moves."""
     board = chess.Board(fen)
-    if not _only_move(conn, engine, board, first_move, depth):
-        return (first_move,)
     line = [first_move]
     board.push_uci(first_move)
 

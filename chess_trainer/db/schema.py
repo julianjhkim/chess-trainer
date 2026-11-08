@@ -296,8 +296,20 @@ _M008 = Migration(
     """,
 )
 
+#: The first move of a puzzle no longer has to be an only move, so one-move
+#: puzzles may now go on: forget them, and they are worked out again when next
+#: served (mostly from the analysis cache).
+_M009 = Migration(
+    version=9,
+    name="recheck_one_move_puzzles",
+    sql="""
+    UPDATE inaccuracy_cards SET solution_uci = NULL
+    WHERE solution_uci IS NOT NULL AND solution_uci NOT LIKE '% %';
+    """,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
-    _M001, _M002, _M003, _M004, _M005, _M006, _M007, _M008,
+    _M001, _M002, _M003, _M004, _M005, _M006, _M007, _M008, _M009,
 )
 
 

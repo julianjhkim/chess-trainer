@@ -77,7 +77,7 @@ def test_a_version_3_database_upgrades_in_place():
         " VALUES ('x', 20, 10, NULL, 'e2e4', 'now')"
     )
     applied = schema.migrate(conn)
-    assert [m.version for m in applied] == [4, 5, 6, 7, 8]
+    assert [m.version for m in applied] == [4, 5, 6, 7, 8, 9]
     row = conn.execute("SELECT pv FROM analysis_cache WHERE fen = 'x'").fetchone()
     assert row[0] is None
     conn.close()
@@ -113,4 +113,23 @@ def test_unnamed_opening_cards_take_the_nearest_named_ancestors_name():
         4: "A13 Named Here",
         5: None,
     }
+    conn.close()
+
+
+def test_one_move_puzzles_are_worked_out_again():
+    conn = open_memory_db()
+    for migration in schema.MIGRATIONS[:8]:
+        conn.executescript(migration.sql)
+    conn.execute("PRAGMA user_version = 8")
+    for epd, line in (("a", "b3f7"), ("b", "b3f7 e8f7 d4e5"), ("c", None)):
+        conn.execute(
+            "INSERT INTO inaccuracy_cards (epd, fen, ply, move_number, my_colour,"
+            " my_move_uci, my_move_san, best_move_uci, best_move_san, classification,"
+            " depth, created_at, solution_uci) VALUES (?, 'fen', 1, 1, 'white', 'a2a3',"
+            " 'a3', 'b3f7', 'Bxf7+', 'mistake', 20, 'now', ?)",
+            (epd, line),
+        )
+    schema.migrate(conn)
+    lines = dict(conn.execute("SELECT epd, solution_uci FROM inaccuracy_cards"))
+    assert lines == {"a": None, "b": "b3f7 e8f7 d4e5", "c": None}
     conn.close()

@@ -81,11 +81,12 @@ def test_the_line_ends_before_a_move_that_is_not_the_only_one(conn):
     assert line == ("e2e4",)  # ends on my move, not on the opponent's reply
 
 
-def test_a_first_move_that_is_not_the_only_one_is_a_one_move_card(conn):
+def test_the_first_move_need_not_be_the_only_one(conn):
+    """It is the card's answer, judged strictly anyway; what follows is forced."""
     engine = forcing_engine()
     engine.restricted_results[chess.STARTING_FEN] = Eval(cp=290)
     line = puzzle.build_line(conn, engine, chess.STARTING_FEN, 10, first_move="e2e4")
-    assert line == ("e2e4",)
+    assert line == ("e2e4", "e7e5", "g1f3")
 
 
 def test_a_mate_ends_the_line(conn):

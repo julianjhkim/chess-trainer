@@ -137,16 +137,19 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   step stays open for more. There are **no "Continue to …" buttons** anywhere
   (the user asked to remove them): the step bar is how you move on.
 - **Puzzles** (`inaccuracies/puzzle.py`, Lichess-style): when a card is made,
-  Stockfish plays the line out from its position. Each of my moves must be an
+  Stockfish plays the line out from its position. The first move is the
+  card's answer and needs no test (the user chose this: it is judged strictly
+  anyway). Each of my later moves must be an
   **only move** — best beats second best (a search with every other move,
   `best_move.second_best`, cached as `fen|without:<move>`) by
   **≥ 10 points of win %** for me, or mates when the second doesn't, or is the
   only legal move. Opponent replies are the engine's best, played for me. The
   line ends on my move: at mate or the first non-only move, **no length limit**
-  (the user's choice; `MAX_PLIES` is only a runaway guard). The answer is always
-  the first move, so a non-forcing slip stays a one-move card. Stored as
-  `inaccuracy_cards.solution_uci` (migration 8); cards made before get theirs
-  the first time they are served (`/next`). On a mating step any mate counts.
+  (the user's choice; `MAX_PLIES` is only a runaway guard). A slip with no
+  forced follow-up stays a one-move card. Stored as
+  `inaccuracy_cards.solution_uci` (migration 8; migration 9 cleared one-move
+  lines so they are re-checked under the first-move rule); a card without one
+  gets it the first time it is served (`/next`). On a mating step any mate counts.
   The line is never sent before the card is finished; each right move returns
   `played` (my move + reply) and the next move is mine (`AppState.
   inaccuracy_progress`). **Grading counts wrong tries over the whole puzzle**
