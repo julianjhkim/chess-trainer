@@ -11,7 +11,7 @@
  * `POST /__scenario {"step": "cards", "engineAgrees": false}` chooses which
  * step the session says is current -- i.e. which view the page renders on the
  * next load -- and what the card says about Stockfish agreeing with the
- * masters. `"inaccuracy": "empty" | "caught-up" | "one"` picks what the
+ * masters. `"inaccuracy": "empty" | "caught-up" | "one" | "puzzle"` picks what the
  * revision-card deck holds.
  */
 
@@ -138,6 +138,8 @@ const OPPONENT = 'a-very-long-opponent-username';
 const BROWSE_LINE = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5'];
 const BROWSE_TARGET_PLY = 2;
 const BROWSE_ANSWER = 'f1c4';
+/** The same card as a puzzle (scenario 'puzzle'): 2.Bc4! Nc6 3.Nf3!. */
+const PUZZLE_LINE = ['e2e4', 'e7e5', 'f1c4', 'b8c6', 'g1f3'];
 
 /** The move list for `line`, shaped like `GameMoveOut`. */
 function movesOf(line, myColour = 'white') {
@@ -187,6 +189,8 @@ let inaccuracyHinted = false;
 let inaccuracyAttempts = 0;
 let inaccuracyDeleted = false;
 let inaccuracyCreated = 0;
+/** Plies of the puzzle line played so far. */
+let inaccuracyStep = 0;
 /** The names I play under, as `/api/me` keeps them. */
 let myNames = ['test-player'];
 
@@ -223,27 +227,38 @@ const INACCURACY_PREVIEW = {
   existing: 'none',
 };
 
+const hasDueCard = () => inaccuracyScenario === 'one' || inaccuracyScenario === 'puzzle';
+
 function inaccuracyCounts() {
   const total = (inaccuracyScenario === 'empty' ? 0 : inaccuracyDeleted ? 2 : 3) + inaccuracyCreated;
-  const due = inaccuracyScenario === 'one' && !inaccuracyAnswered && !inaccuracyDeleted ? 1 : 0;
+  const due = hasDueCard() && !inaccuracyAnswered && !inaccuracyDeleted ? 1 : 0;
   return { due, relearning: 0, total, next_due_on: total ? '2026-11-03' : null };
 }
 
 function inaccuracyAttempt(body) {
   inaccuracyAttempts += 1;
   const uci = `${body.from}${body.to}${body.promotion ?? ''}`;
-  const move = boardMove({ ...body, fen: INACCURACY_CARD.fen });
-  const correct = uci === BROWSE_ANSWER;
+  const puzzle = inaccuracyScenario === 'puzzle';
+  const line = puzzle ? movesOf(PUZZLE_LINE).slice(BROWSE_TARGET_PLY) : movesOf(PUZZLE_LINE).slice(2, 3);
+  const step = line[inaccuracyStep];
+  const move = boardMove({ ...body, fen: step.fen_before });
+  const correct = uci === step.uci;
+  const finished = correct && inaccuracyStep + 1 >= line.length;
   const base = {
     correct,
     uci,
     san: move?.san ?? uci,
     evaluation: EVALUATION,
-    fen_after: move?.fen ?? INACCURACY_CARD.fen,
+    fen_after: move?.fen ?? step.fen_before,
     attempts: inaccuracyAttempts,
-    finished: correct,
+    finished,
   };
   if (!correct) return base;
+  if (!finished) {
+    const played = line.slice(inaccuracyStep, inaccuracyStep + 2);
+    inaccuracyStep += 2;
+    return { ...base, played, reply_san: played[1].san, fen_after_reply: played[1].fen_after };
+  }
   inaccuracyAnswered = true;
   return {
     ...base,
@@ -267,6 +282,7 @@ function inaccuracyAttempt(body) {
       },
       moves: BROWSE_MOVES,
       ply: BROWSE_TARGET_PLY,
+      solution: line,
       lichess_url: 'https://lichess.org/analysis/pgn/1.e4%20e5%202.Nf3%20Nc6%203.Bb5?color=white#2',
     },
     counts: inaccuracyCounts(),
@@ -392,7 +408,8 @@ const routes = {
   'POST /api/inaccuracy-cards/next': () => {
     inaccuracyAttempts = 0;
     inaccuracyHinted = false;
-    if (inaccuracyScenario === 'one' && !inaccuracyServed) {
+    inaccuracyStep = 0;
+    if (hasDueCard() && !inaccuracyServed) {
       inaccuracyServed = true;
       return { card: INACCURACY_CARD, counts: inaccuracyCounts(), attempts: 0, finished: false, exhausted: false };
     }
@@ -445,6 +462,7 @@ const routes = {
     engineAgrees = body.engineAgrees ?? null;
     inaccuracyScenario = body.inaccuracy ?? 'empty';
     inaccuracyServed = false;
+    inaccuracyStep = 0;
     inaccuracyAnswered = false;
     inaccuracyHinted = false;
     inaccuracyAttempts = 0;

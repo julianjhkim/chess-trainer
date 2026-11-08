@@ -30,6 +30,8 @@ const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const AFTER_E4 = fixture.moves[`${START}|e2e4`].fen;
 const POSITION = fixture.moves[`${AFTER_E4}|e7e5`].fen;
 const ANSWERED = fixture.moves[`${POSITION}|f1c4`].fen;
+const REPLIED = fixture.moves[`${ANSWERED}|b8c6`].fen;
+const SOLVED = fixture.moves[`${REPLIED}|g1f3`].fen;
 
 let failures = 0;
 const check = (name, condition, extra = '') => {
@@ -155,7 +157,7 @@ async function testOneCard(page, base) {
 
   await clickSquare(page, 'f1');
   await clickSquare(page, 'c4');
-  await waitForText(page, 'Correct — Bc4, after 2 tries.');
+  await waitForText(page, 'Correct — 2.Bc4, after 1 wrong move.');
   const result = await page.innerText('.side-panel');
   check('the result recalls the game move', result.includes('2.Nf3 (a mistake, −21.4%)'));
   check('and the grade', result.includes('right with a hint (q=3)'));
@@ -186,6 +188,62 @@ async function testOneCard(page, base) {
   await page.click('button:text-is("Next card")');
   await waitForText(page, 'All caught up');
   check('Next card ends on the caught-up message', (await page.innerText('.side-panel')).includes('All caught up — no revision cards due.'));
+}
+
+// -- a puzzle ---------------------------------------------------------------------
+
+async function testPuzzle(page, base) {
+  console.log('\nA card that is a puzzle');
+  await open(page, base, 'puzzle');
+  await waitFor(page, 'the board to accept a move', () => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && b.ground.state.movable.color === 'white';
+  });
+  check('the opponent’s last move has played in', (await board(page)).fen === POSITION);
+
+  await clickSquare(page, 'f1');
+  await clickSquare(page, 'c4');
+  await waitFor(page, 'the reply and my turn again', (fen) => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && b.getFen() === fen && b.ground.state.movable.color === 'white';
+  }, REPLIED);
+  let state = await board(page);
+  check('a right move brings the opponent’s reply', state.fen === REPLIED);
+  check('with the reply highlighted', JSON.stringify(state.lastMove) === '["b8","c6"]', JSON.stringify(state.lastMove));
+  check('my game move is no longer drawn', !state.highlights.includes('red:g1f3'), state.highlights.join());
+  check('the moves join the move list', (await page.innerText('.move-list')).replace(/\s+/g, ' ').includes('Bc4 Nc6'));
+  check('the prompt says how far it has gone', (await page.innerText('.side-panel')).includes('So far: 2.Bc4 Nc6 — your move.'));
+  check('no result yet', (await page.locator('.result-headline').count()) === 0);
+
+  await page.keyboard.press('ArrowLeft');
+  await waitFor(page, 'a step back', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, ANSWERED);
+  check('← steps back through the puzzle moves too', (await board(page)).movable !== 'white');
+  await page.keyboard.press('End');
+  await waitFor(page, 'the live position again', (fen) => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && b.getFen() === fen && b.ground.state.movable.color === 'white';
+  }, REPLIED);
+
+  await clickSquare(page, 'g1');
+  await clickSquare(page, 'f3');
+  await waitForText(page, 'Correct — 2.Bc4 Nc6 3.Nf3, no wrong moves.');
+  await waitFor(page, 'the end of the line on the board', (fen) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === fen, SOLVED);
+  check('the board ends on the puzzle’s last move', (await board(page)).fen === SOLVED);
+  for (const [key, fen] of [['ArrowLeft', REPLIED], ['ArrowLeft', ANSWERED], ['ArrowLeft', POSITION]]) {
+    await page.keyboard.press(key);
+    await waitFor(page, `back to ${fen}`, (f) => [...(window.chessTrainer?.boards ?? [])].at(-1)?.getFen() === f, fen);
+  }
+  check('← walks back along the line to the slip position', (await board(page)).fen === POSITION);
+  await waitFor(page, 'the arrows at the slip', () =>
+    [...(window.chessTrainer?.boards ?? [])].at(-1)?.ground.state.drawable.shapes.length === 2);
+  check('where the answer and the game move are drawn', (await board(page)).shapes.join() === 'green:f1c4,red:g1f3', (await board(page)).shapes.join());
+  await page.keyboard.press('ArrowRight');
+  await waitFor(page, 'the game move', () => {
+    const b = [...(window.chessTrainer?.boards ?? [])].at(-1);
+    return b && (b.ground.state.lastMove ?? []).join('') === 'g1f3';
+  });
+  state = await board(page);
+  check('→ from the slip goes on to the move I played', JSON.stringify(state.lastMove) === '["g1","f3"]', JSON.stringify(state.lastMove));
 }
 
 // -- making a card ----------------------------------------------------------------
@@ -279,6 +337,7 @@ for (const [name, run] of [
   ['caught up', testCaughtUp],
   ['make a card', testMakeCard],
   ['one card', testOneCard],
+  ['puzzle', testPuzzle],
   ['delete', testDelete],
 ]) {
   try {

@@ -42,6 +42,9 @@ class AppState:
         self.inaccuracy_deck = InaccuracyDeck()
         self.current_inaccuracy_id: int | None = None
         self.inaccuracy_attempts: list[str] = []
+        #: Plies of the card's puzzle line played so far, and wrong tries in it.
+        self.inaccuracy_progress: int = 0
+        self.inaccuracy_wrong: int = 0
         self.inaccuracy_hinted: bool = False
         self.inaccuracy_shown: bool = False
         self.inaccuracy_finished: bool = False
@@ -72,6 +75,8 @@ class AppState:
         """Forget the inaccuracy card on screen."""
         self.current_inaccuracy_id = None
         self.inaccuracy_attempts = []
+        self.inaccuracy_progress = 0
+        self.inaccuracy_wrong = 0
         self.inaccuracy_hinted = False
         self.inaccuracy_shown = False
         self.inaccuracy_finished = False

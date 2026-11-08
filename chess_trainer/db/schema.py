@@ -285,8 +285,19 @@ _M007 = Migration(
     """,
 )
 
+#: A revision card's puzzle: the line from its position (my moves and the
+#: replies, space-separated UCI, starting with the answer). NULL until it is
+#: worked out -- cards from before puzzles get theirs when first served.
+_M008 = Migration(
+    version=8,
+    name="revision_card_puzzles",
+    sql="""
+    ALTER TABLE inaccuracy_cards ADD COLUMN solution_uci TEXT;
+    """,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
-    _M001, _M002, _M003, _M004, _M005, _M006, _M007,
+    _M001, _M002, _M003, _M004, _M005, _M006, _M007, _M008,
 )
 
 

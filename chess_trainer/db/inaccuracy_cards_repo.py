@@ -40,6 +40,8 @@ class InaccuracyCard:
     id: int | None = None
     created_at: str | None = None
     deleted_at: str | None = None
+    #: The puzzle line (UCI, starting with the answer), or None until worked out.
+    solution: tuple[str, ...] | None = None
 
     @property
     def deleted(self) -> bool:
@@ -89,6 +91,7 @@ def _card(row: sqlite3.Row) -> InaccuracyCard:
         depth=row["depth"],
         created_at=row["created_at"],
         deleted_at=row["deleted_at"],
+        solution=tuple(row["solution_uci"].split()) if row["solution_uci"] else None,
     )
 
 
@@ -125,8 +128,8 @@ def insert(conn: sqlite3.Connection, card: InaccuracyCard) -> InaccuracyCard:
             INSERT INTO inaccuracy_cards (
                 epd, fen, game_id, ply, move_number, my_colour, last_move_uci,
                 my_move_uci, my_move_san, best_move_uci, best_move_san,
-                classification, win_percent_drop, depth, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                classification, win_percent_drop, depth, created_at, solution_uci
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 card.epd,
@@ -144,11 +147,26 @@ def insert(conn: sqlite3.Connection, card: InaccuracyCard) -> InaccuracyCard:
                 card.win_percent_drop,
                 card.depth,
                 card.created_at or _now(),
+                " ".join(card.solution) if card.solution else None,
             ),
         )
         new_id = int(cursor.lastrowid)
     stored = get(conn, new_id)
     assert stored is not None  # just inserted
+    return stored
+
+
+def set_solution(
+    conn: sqlite3.Connection, card_id: int, solution: tuple[str, ...]
+) -> InaccuracyCard:
+    """Store a card's puzzle line."""
+    with transaction(conn):
+        conn.execute(
+            "UPDATE inaccuracy_cards SET solution_uci = ? WHERE id = ?",
+            (" ".join(solution), card_id),
+        )
+    stored = get(conn, card_id)
+    assert stored is not None
     return stored
 
 

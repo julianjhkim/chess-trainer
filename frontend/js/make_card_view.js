@@ -181,7 +181,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 
   async function saveCard() {
     if (!preview) return;
-    const made = await withStatus('Asking Stockfish for the answer…', () =>
+    const made = await withStatus('Stockfish is working out the puzzle — this can take a little while…', () =>
       api.createInaccuracyCard(request()),
     );
     if (made.session) set({ session: made.session });

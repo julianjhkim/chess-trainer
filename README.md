@@ -79,11 +79,26 @@ the move you played named and drawn as a red arrow, so you know what not to play
 ← / → step back through the moves that led there (only the position itself takes
 a move; End comes back). Find the engine's move: only its top choice counts,
 retries are unlimited and the eval bar updates on each. *Hint* circles the piece
-to move; *Show answer* gives up. The result shows the grade and the next due date,
-and the whole game opens up: the board shows the answer played, and ← from it
-shows the position with the answer in green and your move in red. Cards are graded and scheduled exactly like the opening cards (see *The
-SM-2 variant*), except that a hint caps the grade at "right with a hint" (q=3,
-still a pass). One position is only ever one card: making it again brings the
+to move; *Show answer* gives up.
+
+**Where the line is forcing, the card is a puzzle**, as on Lichess or chess.com:
+the opponent's last move plays in first, and each right move brings the
+opponent's reply (Stockfish's best), played for you, until the line ends. A move
+of yours belongs in the puzzle only if it is the *only* good one — Stockfish's
+best beats its second best by at least 10 points of win % (or mates when nothing
+else does) — so the puzzle never asks you to guess between equally good moves.
+It ends at mate or at the first move that is no longer forced, however long that
+takes. When your first move isn't forced either, the card is a single move, as
+before. The moves join the move list as you play them; *Hint* is for the move
+you're on, and *Show answer* plays out the rest.
+
+The result shows the grade and the next due date, and the whole game opens up:
+the board shows the end of the engine's line, ← walks back along it to the
+position with the answer in green and your move in red, and → from there goes on
+with your game. Cards are graded and scheduled like the opening cards (see *The
+SM-2 variant*), counting wrong moves over the whole puzzle: none is q=4, one is
+q=3 (still a pass), two or more q=2 (a fail), *Show answer* q=1; a hint caps the
+grade at "right with a hint" (q=3, still a pass). One position is only ever one card: making it again brings the
 card back to the next day. *Delete card* (it asks first) takes a card out of the
 deck; making that card again restores it. With nothing due the step says so; an
 empty deck never counts towards the streak.
@@ -102,7 +117,9 @@ ninth move, whether you were White or Black. Your side is read from your names
 board on the position before that move, with the move you played as a red arrow,
 and ← / → (or the buttons and the move list) step through the moves leading there.
 *Save card* asks Stockfish (at the analysis depth) for its top move there, which
-becomes the answer — it is never shown while you make the card. If the engine's
+becomes the answer — it is never shown while you make the card — and plays the
+line on to see whether it makes a puzzle (a few seconds, up to half a minute).
+Cards made before puzzles existed are worked out the first time they come up. If the engine's
 top move *is* the move you played, the card is refused (check the move number).
 A new card is first due the next day. The first card you save completes the step
 (and counts the day); the form stays for more. Use the step bar to move on.
@@ -305,7 +322,7 @@ chess_trainer/
              winpct.py, classify.py, best_move.py, eval_types.py
   pgn/       parse.py, positions.py, my_moves.py
   inaccuracies/  (revision cards) slip.py (move number → position), deck.py
-             (adding, serving, grading), hint.py, lichess_link.py
+             (adding, serving, grading), hint.py, puzzle.py (the forcing line)
   explorer/  lichess_client.py (HTTP), cache.py, rate_limit.py,
              explorer_types.py
   openings/  tree_rules.py, card_builder.py, queue_order.py, opening_names.py,

@@ -3,13 +3,16 @@
 I make a card by pasting a game and naming the number of my move that went
 wrong; the card is the position before it. The answer is the engine's top
 move there at the analysis depth, found when the card is made (the same strict
-top-1 everywhere in the app). Grading and scheduling are the opening
-cards' modified SM-2; a hint caps the grade at q=3. A card that looks wrong
-or useless can be deleted for good.
+top-1 everywhere in the app). Where the line after it is forcing, the card is
+a puzzle (``inaccuracies.puzzle``): each right move brings the opponent's
+reply, and I go on until the line ends. Grading counts wrong tries over the
+whole puzzle, with the opening cards' modified SM-2; a hint caps the grade at
+q=3. A card that looks wrong or useless can be deleted for good.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import sqlite3
 
 from fastapi import APIRouter, HTTPException
@@ -40,6 +43,7 @@ from chess_trainer.engine import analysis
 from chess_trainer.engine.classify import classify
 from chess_trainer.engine.winpct import win_percent_drop
 from chess_trainer.inaccuracies import deck as deck_module
+from chess_trainer.inaccuracies import puzzle
 from chess_trainer.inaccuracies import slip as slip_module
 from chess_trainer.inaccuracies.deck import DeckAnswer, DeckItem
 from chess_trainer.pgn.lichess_link import analysis_url
@@ -112,8 +116,48 @@ def _card_out(conn: sqlite3.Connection, card: InaccuracyCard, source: CardSource
     )
 
 
-def _hint_out(card: InaccuracyCard) -> HintOut:
-    return HintOut.of(card.fen, card.best_move_uci[:2])
+# -- the puzzle line ---------------------------------------------------------
+def _line(card: InaccuracyCard) -> tuple[str, ...]:
+    """The card's puzzle line; a card not yet worked out is just its answer."""
+    return card.solution or (card.best_move_uci,)
+
+
+def _line_moves(card: InaccuracyCard, line: tuple[str, ...]) -> list[GameMoveOut]:
+    """Moves of the line, numbered as in the game (the slip is ply ``card.ply``)."""
+    walked = positions_module.walk(list(line), start_fen=card.fen)
+    return _moves_out(
+        [dataclasses.replace(p, ply=card.ply + i) for i, p in enumerate(walked)],
+        card.my_colour,
+    )
+
+
+def _fen_at(card: InaccuracyCard, plies: int) -> str:
+    """The position after the first ``plies`` moves of the puzzle line."""
+    if plies == 0:
+        return card.fen
+    return positions_module.walk(list(_line(card)[:plies]), start_fen=card.fen)[-1].fen_after
+
+
+async def _with_puzzle(
+    state: State, conn: sqlite3.Connection, engine: Engine, card: InaccuracyCard
+) -> InaccuracyCard:
+    """Work out the puzzle of a card made before puzzles existed."""
+    if card.solution is not None:
+        return card
+
+    def run():
+        line = puzzle.build_line(
+            conn, engine, card.fen, card.depth, first_move=card.best_move_uci
+        )
+        return repo.set_solution(conn, card.id or 0, line)
+
+    return await state.in_thread(run)
+
+
+def _hint_out(state: State, card: InaccuracyCard) -> HintOut:
+    """The piece to move at the step the puzzle has reached."""
+    progress = state.inaccuracy_progress
+    return HintOut.of(_fen_at(card, progress), _line(card)[progress][:2])
 
 
 def _current(state: State, conn: sqlite3.Connection) -> InaccuracyCard:
@@ -160,6 +204,7 @@ def _result_out(
         ),
         moves=_moves_out(positions, card.my_colour),
         ply=card.ply,
+        solution=_line_moves(card, _line(card)),
         lichess_url=analysis_url(
             positions,
             start_fen=positions[0].fen_before if positions else card.fen,
@@ -183,22 +228,28 @@ def get_state(state: State, conn: Conn, config: Cfg) -> InaccuracyStateOut:
         card=_card_out(conn, card, CardSource.DUE),
         counts=counts,
         attempts=len(state.inaccuracy_attempts),
-        hint=_hint_out(card) if state.inaccuracy_hinted else None,
+        hint=_hint_out(state, card) if state.inaccuracy_hinted else None,
         finished=state.inaccuracy_finished,
     )
 
 
 @router.post("/next", response_model=InaccuracyStateOut)
-def next_card(state: State, conn: Conn, config: Cfg) -> InaccuracyStateOut:
-    """Serve the next card: a failed one whose turn has come, else the oldest due."""
+async def next_card(
+    state: State, conn: Conn, engine: Engine, config: Cfg
+) -> InaccuracyStateOut:
+    """Serve the next card: a failed one whose turn has come, else the oldest due.
+
+    A card made before puzzles gets its puzzle worked out here, once.
+    """
     item: DeckItem | None = state.inaccuracy_deck.next_item(conn, _today(config))
     state.reset_inaccuracy()
     if item is None:
         return InaccuracyStateOut(counts=_counts(state, conn, config), exhausted=True)
-    state.current_inaccuracy_id = item.card.id
+    card = await _with_puzzle(state, conn, engine, item.card)
+    state.current_inaccuracy_id = card.id
     state.inaccuracy_deck.mark_served()
     return InaccuracyStateOut(
-        card=_card_out(conn, item.card, item.source),
+        card=_card_out(conn, card, item.source),
         counts=_counts(state, conn, config),
     )
 
@@ -209,26 +260,34 @@ def hint(state: State, conn: Conn) -> HintOut:
     card = _current(state, conn)
     _require_open(state)
     state.inaccuracy_hinted = True
-    return _hint_out(card)
+    return _hint_out(state, card)
 
 
 @router.post("/attempt", response_model=InaccuracyAttemptResponse)
 async def attempt(
     payload: CardAttemptRequest, state: State, conn: Conn, engine: Engine, config: Cfg
 ) -> InaccuracyAttemptResponse:
-    """Try a move. Only the recorded engine move is correct; retries are unlimited."""
+    """Try a move at the step the puzzle has reached; retries are unlimited.
+
+    Only the engine's move is right (or, where it mates, any mate). A right
+    move with more to come plays the opponent's reply and waits for my next.
+    """
     card = _current(state, conn)
     _require_open(state)
+    line = _line(card)
+    progress = state.inaccuracy_progress
+    fen = _fen_at(card, progress)
     try:
-        uci = rules.resolve_uci(
-            card.fen, payload.from_square, payload.to_square, payload.promotion
-        )
-        move = rules.apply_move(card.fen, uci)
+        uci = rules.resolve_uci(fen, payload.from_square, payload.to_square, payload.promotion)
+        move = rules.apply_move(fen, uci)
     except rules.IllegalMove as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     state.inaccuracy_attempts.append(uci)
-    correct = uci == card.best_move_uci
+    correct = puzzle.accepts(fen, line[progress], uci)
+    if not correct:
+        state.inaccuracy_wrong += 1
+    finished = correct and progress + 1 >= len(line)
     evaluation = await _evaluate(state, conn, engine, move.fen_after, config)
     response = InaccuracyAttemptResponse(
         correct=correct,
@@ -237,10 +296,17 @@ async def attempt(
         evaluation=EvalOut.of(evaluation),
         fen_after=move.fen_after,
         attempts=len(state.inaccuracy_attempts),
-        finished=correct,
+        finished=finished,
     )
-    if correct:
+    if finished:
+        state.inaccuracy_progress = progress + 1
         _finish(state, conn, config, card, response, revealed=False)
+    elif correct:
+        state.inaccuracy_progress = progress + 2
+        played = _line_moves(card, line[: progress + 2])[progress:]
+        response.played = played
+        response.reply_san = played[-1].san
+        response.fen_after_reply = played[-1].fen_after
     return response
 
 
@@ -248,18 +314,24 @@ async def attempt(
 async def show_answer(
     state: State, conn: Conn, engine: Engine, config: Cfg
 ) -> InaccuracyAttemptResponse:
-    """Reveal the answer, which fails the card: it comes back later this session."""
+    """Reveal the rest of the puzzle, which fails the card: it comes back later
+    this session."""
     card = _current(state, conn)
     _require_open(state)
     state.inaccuracy_shown = True
-    move = rules.apply_move(card.fen, card.best_move_uci)
-    evaluation = await _evaluate(state, conn, engine, move.fen_after, config)
+    line = _line(card)
+    progress = state.inaccuracy_progress
+    fen = _fen_at(card, progress)
+    move = rules.apply_move(fen, line[progress])
+    end = _fen_at(card, len(line))
+    evaluation = await _evaluate(state, conn, engine, end, config)
+    state.inaccuracy_progress = len(line)
     response = InaccuracyAttemptResponse(
         correct=False,
-        uci=card.best_move_uci,
+        uci=line[progress],
         san=move.san,
         evaluation=EvalOut.of(evaluation),
-        fen_after=move.fen_after,
+        fen_after=end,
         attempts=len(state.inaccuracy_attempts),
         finished=True,
     )
@@ -349,9 +421,14 @@ async def create(
     def run():
         before = analysis.analyse(conn, engine, slip.fen_before, depth)
         after = analysis.analyse(conn, engine, slip.fen_after, depth)
-        return before, after
+        line = None
+        if before.best_move is not None and before.best_move != slip.uci:
+            line = puzzle.build_line(
+                conn, engine, slip.fen_before, depth, first_move=before.best_move
+            )
+        return before, after, line
 
-    before, after = await state.in_thread(run)
+    before, after, line = await state.in_thread(run)
     if before.best_move is None:
         raise HTTPException(status_code=422, detail="The engine has no move in that position.")
     if before.best_move == slip.uci:
@@ -392,7 +469,10 @@ async def create(
         depth=depth,
         previous=earlier[-1] if earlier else None,
     )
+    card = dataclasses.replace(card, solution=line)
     added = deck_module.add_card(conn, card, today=_today(config))
+    if added.card.solution is None and added.card.best_move_uci == card.best_move_uci:
+        repo.set_solution(conn, added.card.id or 0, line)
     response = NewCardOut(
         move_label=added.card.move_label,
         due_on=added.due_on.isoformat(),
@@ -444,10 +524,11 @@ def _finish(
 ) -> None:
     """Grade and schedule the card, and count the step on its first answer."""
     state.inaccuracy_finished = True
+    # Graded on wrong tries over the whole puzzle: none is "first time".
     answer = state.inaccuracy_deck.record_answer(
         conn,
         card,
-        attempts=len(state.inaccuracy_attempts),
+        attempts=state.inaccuracy_wrong + 1,
         used_show_answer=state.inaccuracy_shown,
         used_hint=state.inaccuracy_hinted,
         today=_today(config),

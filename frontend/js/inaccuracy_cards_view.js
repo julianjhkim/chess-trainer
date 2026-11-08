@@ -2,13 +2,17 @@
  * Revision cards (step 1; internally "inaccuracy cards"): slips I picked from
  * my own games, drilled again. Cards are made in step 2 (`make_card_view.js`).
  *
- * Each card is the position before the slip, from my side of the
- * board, with my move drawn as a red arrow. Find the engine's move: retries
- * are unlimited and the eval bar updates on each; *Hint* circles the piece to
- * move (which caps the grade at "right with a hint"); *Show answer* fails the
- * card, so it comes back later in the session. ← / → step through the moves
- * before the slip while solving, and the whole game once it is answered (the
- * answer sits beside the game, between the slip position and my move).
+ * Each card is the position before the slip, from my side of the board: the
+ * opponent's last move plays in, and my move is drawn as a red arrow. Find the
+ * engine's move: retries are unlimited and the eval bar updates on each.
+ * Where the line is forcing the card is a puzzle -- a right move brings the
+ * opponent's reply, played for me, and I go on until the line ends; the moves
+ * join the move list as they are played. *Hint* circles the piece to move at
+ * the current step (which caps the grade at "right with a hint"); *Show
+ * answer* plays out the rest and fails the card, so it comes back later in the
+ * session. ← / → step through the moves before the live position while
+ * solving, and the whole game once it is answered (the puzzle line sits beside
+ * the game, between the slip position and my move).
  * *Analyse at Lichess* (once answered) opens the game on Lichess's analysis
  * board at the card's position -- the app has no board of its own for trying
  * moves. *Delete card* (after an inline confirm) takes a card out of the deck.
@@ -27,6 +31,9 @@ import { bindArrowKeys, createMoveNav } from './move_nav.js';
 import { set, setStatus, withStatus } from './state.js';
 
 const WRONG_MOVE_LINGER_MS = 1000;
+/** Pauses before the opponent's move plays: at the start, and after mine. */
+const OPENING_MOVE_PAUSE_MS = 600;
+const REPLY_PAUSE_MS = 450;
 
 const CLASSIFICATION_LABEL = {
   inaccuracy: 'an inaccuracy',
@@ -48,6 +55,16 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
   let phase = 'loading'; // loading | solving | finished | empty
   let confirmingDelete = false;
   const attemptLog = [];
+  /** The position a move is asked for: the card's, then each puzzle step's. */
+  let live = null;
+  /** The game's moves before the slip, then the puzzle moves played so far. */
+  let solvingMoves = [];
+  /** Puzzle moves played so far (mine and the replies). */
+  let stepPlies = 0;
+  /** Bumped for every card, so a pause from an older card does nothing. */
+  let cardToken = 0;
+  /** True while an opponent's move is about to play in (no "browsing" note). */
+  let pausing = false;
 
   // -- layout ------------------------------------------------------------
   const layout = document.createElement('div');
@@ -104,6 +121,8 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
   // -- serving -----------------------------------------------------------
   async function serveNext() {
     phase = 'loading';
+    cardToken += 1;
+    pausing = false;
     card = null;
     result = null;
     hint = null;
@@ -135,8 +154,12 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     presentCard();
   }
 
-  function presentCard() {
+  async function presentCard() {
     phase = 'solving';
+    const token = ++cardToken;
+    live = { fen: card.fen, lastMove: card.last_move_uci };
+    solvingMoves = [...(card.moves ?? [])];
+    stepPlies = 0;
     const fresh = ensureBoard();
     fresh.setOrientation(card.orientation);
     fresh.setInteractive(false);
@@ -145,7 +168,17 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     fresh.setMoveHandler(handleAttempt);
     renderPrompt();
     buildControls();
-    showNav(card.moves ?? [], { index: (card.moves ?? []).length });
+    if (!solvingMoves.length) {
+      showNav(solvingMoves, { index: 0 });
+      return;
+    }
+    // As in a puzzle on Lichess: the opponent's last move plays in first.
+    pausing = true;
+    showNav(solvingMoves, { index: solvingMoves.length - 1 });
+    await sleep(OPENING_MOVE_PAUSE_MS);
+    if (token !== cardToken) return;
+    pausing = false;
+    if (phase === 'solving' && nav.index === solvingMoves.length - 1) nav.last();
   }
 
   /**
@@ -204,9 +237,13 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     attemptLog.push({ san: response.san, text: response.evaluation.text, correct: response.correct });
     renderAttempts();
 
-    if (response.correct) {
+    if (response.correct && response.finished) {
       setStatus('Correct.');
       finish(response);
+      return;
+    }
+    if (response.correct) {
+      await playReply(response);
       return;
     }
 
@@ -214,6 +251,24 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     await sleep(WRONG_MOVE_LINGER_MS);
     if (destroyed || phase !== 'solving') return;
     redraw();
+  }
+
+  /** A right move with more to come: mine joins the list, then the reply plays. */
+  async function playReply(response) {
+    const token = cardToken;
+    const [mine, reply] = response.played;
+    hint = null;
+    stepPlies += 2;
+    solvingMoves = [...solvingMoves, mine, reply];
+    live = { fen: reply.fen_after, lastMove: reply.uci };
+    renderPrompt();
+    setStatus(`Right — ${mine.san}. Now ${reply.san}…`);
+    pausing = true;
+    showNav(solvingMoves, { index: solvingMoves.length - 1 });
+    await sleep(REPLY_PAUSE_MS);
+    if (token !== cardToken) return;
+    pausing = false;
+    if (phase === 'solving' && !destroyed) nav.last();
   }
 
   async function showHint() {
@@ -247,15 +302,17 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     renderResult(result);
     buildControls();
 
-    // The whole game opens up; the board shows the answer played, which sits
-    // beside the game between the slip position and the move I played.
+    // The whole game opens up; the board shows the end of the puzzle line,
+    // which sits beside the game between the slip position and my move.
     showNav(result.moves ?? [], { index: result.ply, marked: result.ply, draw: false });
-    nav.showAside({
-      after: result.ply,
-      fen: response.fen_after,
-      lastMove: result.answer_uci,
+    const line = (result.solution ?? []).map((move) => ({
+      fen: move.fen_after,
+      lastMove: move.uci,
+      move,
       shapes: [],
-    });
+    }));
+    if (!line.length) line.push({ fen: response.fen_after, lastMove: result.answer_uci, shapes: [] });
+    nav.showAside({ after: result.ply, line });
   }
 
   // -- deleting ----------------------------------------------------------
@@ -304,8 +361,14 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       tag,
       paragraph(`From ${from}: move ${card.move_number}, ${side} to play.`, ''),
       playedLine(card.move_label, card.classification),
-      paragraph('Find the engine’s move — only its top choice counts. Unlimited retries.', 'choice-note'),
+      paragraph(
+        'Find the engine’s move — only its top choice counts. Where the line is forcing, your opponent replies and you go on until it ends. Unlimited retries.',
+        'choice-note',
+      ),
     );
+    if (stepPlies > 0) {
+      body.append(paragraph(`So far: ${lineText(solvingMoves.slice(-stepPlies))} — your move.`, 'played-line'));
+    }
     if (hint) body.append(paragraph(`Hint: ${hint.text}`, 'hint-line'));
     promptCard.setBody(body);
   }
@@ -314,11 +377,14 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     const body = document.createElement('div');
     const headline = document.createElement('p');
     headline.className = 'result-headline';
+    const solution = shown.solution?.length ? lineText(shown.solution) : shown.answer_san;
+    const wrong = attemptLog.filter((entry) => !entry.correct).length;
+    const puzzle = (shown.solution?.length ?? 0) > 1;
     headline.textContent = shown.revealed
-      ? `Answer: ${shown.answer_san}`
-      : attemptLog.length === 1
-        ? `Correct — ${shown.answer_san}, first try.`
-        : `Correct — ${shown.answer_san}, after ${attemptLog.length} tries.`;
+      ? `${puzzle ? 'Solution' : 'Answer'}: ${solution}`
+      : wrong === 0
+        ? `Correct — ${solution}, no wrong moves.`
+        : `Correct — ${solution}, after ${wrong} wrong move${wrong === 1 ? '' : 's'}.`;
     body.append(headline);
 
     const list = document.createElement('dl');
@@ -337,7 +403,7 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     body.append(list);
     if (shown.moves?.length) {
       body.append(
-        paragraph('← → step through the whole game. The engine’s move sits between the position and the move you played.', 'choice-note'),
+        paragraph('← → step through the whole game. The engine’s line sits beside it, between the position and the move you played.', 'choice-note'),
       );
     }
     resultCard.setBody(body);
@@ -429,17 +495,17 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
       .catch((error) => setStatus(error.message, 'error'));
   }
 
-  /** The slip position while solving, where a move is asked for. */
+  /** The position a move is asked for, while solving. */
   function isLive(view) {
     return !view.aside && view.index === nav.length && phase === 'solving';
   }
 
   async function drawView(view) {
     if (!board || destroyed) return;
-    const live = isLive(view);
-    const fen = live ? card?.fen : (view.fen ?? card?.fen);
+    const atLive = isLive(view);
+    const fen = atLive ? live?.fen : (view.fen ?? card?.fen);
     if (!fen) return;
-    const lastMove = live ? card?.last_move_uci : view.lastMove;
+    const lastMove = atLive ? live?.lastMove : view.lastMove;
 
     board.setInteractive(false);
     // Marks belong to one position: clear them before the board moves.
@@ -449,12 +515,12 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
     if (view !== latestView || destroyed) return;
 
     board.setShapes(shapesFor(view));
-    board.setHighlights(live ? hintShapes() : []);
+    board.setHighlights(atLive ? hintShapes() : []);
     if (phase === 'solving') {
-      if (live) {
+      if (atLive) {
         board.setInteractive(true);
-        setStatus('Your move.');
-      } else {
+        setStatus(stepPlies ? `${solvingMoves.at(-1).san} — your move.` : 'Your move.');
+      } else if (!pausing) {
         setStatus('Browsing the game — press End to come back to the position.');
       }
     }
@@ -478,7 +544,8 @@ export function renderInaccuracyCardsView(container, { step, onCompleted }) {
    */
   function hintShapes() {
     if (phase !== 'solving' || !card) return [];
-    const marks = [arrow(card.my_move_uci, 'red')];
+    // My game move belongs to the card's own position, not the later steps.
+    const marks = stepPlies === 0 ? [arrow(card.my_move_uci, 'red')] : [];
     if (hint) marks.push({ orig: hint.square, brush: 'yellow' });
     return marks.filter(Boolean);
   }
@@ -529,6 +596,16 @@ function playedLine(moveLabel, classification) {
   const kind = CLASSIFICATION_LABEL[classification];
   element.append(move, kind ? ` here — ${kind}. The red arrow shows it.` : ' here. The red arrow shows it.');
   return element;
+}
+
+/** Moves as written in a score, numbered: "2.d4 exd4 3.Qxd4", "2...Nc6 3.d4". */
+function lineText(moves) {
+  return moves
+    .map((move, i) => {
+      if (move.mover_is_white) return `${move.move_number}.${move.san}`;
+      return i === 0 ? `${move.move_number}...${move.san}` : move.san;
+    })
+    .join(' ');
 }
 
 function squares(uci) {

@@ -506,6 +506,9 @@ class InaccuracyResultOut(BaseModel):
     #: move ``ply`` (0-based), so position ``ply`` is the card's position.
     moves: list[GameMoveOut] = Field(default_factory=list)
     ply: int = 0
+    #: The puzzle: the engine's line from the card's position, my moves and
+    #: the replies, starting with the answer (just the answer for a one-move card).
+    solution: list[GameMoveOut] = Field(default_factory=list)
     #: The game on Lichess's analysis board, opened at the card's position
     #: (just the position when the game is not stored). Only once answered:
     #: Lichess's engine would give the answer away.
@@ -531,6 +534,11 @@ class InaccuracyAttemptResponse(BaseModel):
     fen_after: str
     attempts: int
     finished: bool
+    #: A right move with more puzzle to come: my move and the opponent's reply
+    #: (played for me), to add to the move list; the next move is mine again.
+    played: list[GameMoveOut] = Field(default_factory=list)
+    reply_san: str | None = None
+    fen_after_reply: str | None = None
     result: InaccuracyResultOut | None = None
     counts: InaccuracyCountsOut | None = None
     session: SessionOut | None = None

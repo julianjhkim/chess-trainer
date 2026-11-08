@@ -70,3 +70,36 @@ def best_among(
         ),
     )
     return chosen
+
+
+def second_best(
+    conn: sqlite3.Connection,
+    engine: Analyser,
+    fen: str,
+    depth: int,
+    best: str,
+    others: list[str],
+) -> EngineAnalysis | None:
+    """The engine's best line among every move but ``best``.
+
+    What a puzzle needs to tell an only move from one of several good ones.
+    ``None`` when ``best`` is the only legal move. Cached like a tie-break,
+    under a key naming the move left out.
+    """
+    if not others:
+        return None
+    cache_fen = f"{fen}|without:{best}"
+    cached = analysis_repo.get(conn, cache_fen, depth)
+    if cached is not None:
+        return cached
+    result = engine.analyse(fen, depth, root_moves=sorted(others))
+    analysis_repo.put(
+        conn,
+        EngineAnalysis(
+            fen=cache_fen,
+            depth=depth,
+            evaluation=result.evaluation,
+            best_move=result.best_move,
+        ),
+    )
+    return result

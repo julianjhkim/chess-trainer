@@ -64,6 +64,9 @@ class FakeEngine:
         self.default_best = default_best
         #: Per-FEN principal variations; otherwise the line is just the best move.
         self.pvs: dict[str, tuple[str, ...]] = {}
+        #: Per-FEN scores for a search restricted to some moves (the second
+        #: best, say); otherwise such a search scores like the position.
+        self.restricted_results: dict[str, Eval] = {}
         self.calls: list[tuple[str, int, tuple[str, ...] | None]] = []
 
     def _fallback_best(self, fen: str) -> str | None:
@@ -86,7 +89,9 @@ class FakeEngine:
         return EngineAnalysis(
             fen=fen,
             depth=depth,
-            evaluation=self.results.get(fen, self.default),
+            evaluation=(
+                self.restricted_results.get(fen) if root_moves else None
+            ) or self.results.get(fen, self.default),
             best_move=best,
             pv=self.pvs.get(fen) or ((best,) if best else ()),
         )

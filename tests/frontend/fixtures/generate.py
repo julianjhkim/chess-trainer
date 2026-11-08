@@ -23,6 +23,8 @@ LINES = [
     # The stubbed review game, and the engine's answer at its third ply.
     ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5"],
     ["e2e4", "e7e5", "f1c4"],
+    # The revision card as a puzzle: 2.Bc4 Nc6 3.Nf3.
+    ["e2e4", "e7e5", "f1c4", "b8c6", "g1f3"],
 ]
 
 OUT = Path(__file__).with_name("board.json")

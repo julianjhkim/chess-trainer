@@ -5,10 +5,11 @@
  * move, position i is after move i. The view decides what to draw; this only
  * says where the cursor is and tells it when that changes.
  *
- * One position may sit *beside* the game rather than in it: the engine's move
- * at my slip, shown once the card is answered. That "aside" lives
- * between the position before my move and the one after it, so ← from it goes
- * back to where I went wrong and → goes on to the move I actually played.
+ * A line may sit *beside* the game rather than in it: the engine's puzzle
+ * line at my slip, shown once the card is answered. That "aside" branches off
+ * the position before my move: ← and → step along it, ← from its first
+ * position goes back to where I went wrong, and → from its last goes on to the
+ * move I actually played.
  *
  * No DOM beyond the keyboard binding, so the cursor logic is testable alone.
  */
@@ -27,7 +28,9 @@ export function createMoveNav({ moves = [], index = null, onChange = null } = {}
   /** Index of the position the aside follows, or null when there is none. */
   let asideAfter = null;
   let onAside = false;
-  let asideView = null;
+  /** The aside's positions, and which of them the cursor is on. */
+  let asideLine = [];
+  let asideAt = 0;
 
   function clamp(value) {
     return Math.max(0, Math.min(list.length, value));
@@ -35,7 +38,7 @@ export function createMoveNav({ moves = [], index = null, onChange = null } = {}
 
   function view() {
     if (onAside) {
-      return { index: asideAfter, aside: true, ...asideView };
+      return { index: asideAfter, aside: true, asideStep: asideAt, ...asideLine[asideAt] };
     }
     const move = cursor > 0 ? list[cursor - 1] : null;
     return {
@@ -60,13 +63,21 @@ export function createMoveNav({ moves = [], index = null, onChange = null } = {}
     return true;
   }
 
+  function stepAside(at) {
+    asideAt = at;
+    changed();
+    return true;
+  }
+
   function back() {
-    if (onAside) return go(asideAfter);
+    if (onAside) return asideAt > 0 ? stepAside(asideAt - 1) : go(asideAfter);
     return go(cursor - 1);
   }
 
   function forward() {
-    if (onAside) return go(asideAfter + 1);
+    if (onAside) {
+      return asideAt < asideLine.length - 1 ? stepAside(asideAt + 1) : go(asideAfter + 1);
+    }
     return go(cursor + 1);
   }
 
@@ -85,13 +96,16 @@ export function createMoveNav({ moves = [], index = null, onChange = null } = {}
     },
 
     /**
-     * Put a position beside the game, after position `after`, and move onto it.
-     * `fen` and `lastMove` describe what to draw there; anything else given
-     * (arrows, say) is handed back in the view untouched.
+     * Put a line beside the game, after position `after`, and move onto its
+     * position `at` (the last, by default). Each entry of `line` describes a
+     * position: `fen` and `lastMove` say what to draw, and anything else
+     * (arrows, say) is handed back in the view untouched. A single position
+     * can be given as `fen` and `lastMove` instead of a line.
      */
-    showAside({ after, fen, lastMove, move = null, ...extra }) {
+    showAside({ after, line = null, at = null, fen, lastMove, move = null, ...extra }) {
       asideAfter = after;
-      asideView = { ...extra, fen, lastMove, move };
+      asideLine = line ?? [{ ...extra, fen, lastMove, move }];
+      asideAt = at ?? asideLine.length - 1;
       onAside = true;
       cursor = after;
       changed();

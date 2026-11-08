@@ -136,10 +136,30 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   The first card saved in a session marks `make_card` completed (streak) but the
   step stays open for more. There are **no "Continue to …" buttons** anywhere
   (the user asked to remove them): the step bar is how you move on.
+- **Puzzles** (`inaccuracies/puzzle.py`, Lichess-style): when a card is made,
+  Stockfish plays the line out from its position. Each of my moves must be an
+  **only move** — best beats second best (a search with every other move,
+  `best_move.second_best`, cached as `fen|without:<move>`) by
+  **≥ 10 points of win %** for me, or mates when the second doesn't, or is the
+  only legal move. Opponent replies are the engine's best, played for me. The
+  line ends on my move: at mate or the first non-only move, **no length limit**
+  (the user's choice; `MAX_PLIES` is only a runaway guard). The answer is always
+  the first move, so a non-forcing slip stays a one-move card. Stored as
+  `inaccuracy_cards.solution_uci` (migration 8); cards made before get theirs
+  the first time they are served (`/next`). On a mating step any mate counts.
+  The line is never sent before the card is finished; each right move returns
+  `played` (my move + reply) and the next move is mine (`AppState.
+  inaccuracy_progress`). **Grading counts wrong tries over the whole puzzle**
+  (`attempts = wrong + 1`): 0 wrong q=4, 1 wrong q=3, 2+ q=2 (fail), Show
+  answer (plays out the rest) q=1; Hint is for the current step and caps q=3.
+  In the drill the opponent's last move plays in first, puzzle moves join the
+  move list as played, my game move (red) is drawn on the first step only, and
+  once finished the whole line is the nav aside (← walks it back to the slip).
 - One card per position (unique EPD). A new card is scheduled as if passed once:
   `n=1, I=1, EF=2.5`, **due the next day**. Making an existing card again brings
   its due date forward to tomorrow (never later); making a deleted one restores it.
-- Tables: `inaccuracy_cards` (migration 5; `deleted_at` migration 6),
+- Tables: `inaccuracy_cards` (migration 5; `deleted_at` migration 6;
+  `solution_uci` migration 8),
   `inaccuracy_schedule` (same `ScheduleRow` shape as `card_schedule`),
   `inaccuracy_reviews`.
 - Drill: card position (my colour at the bottom, opponent's last move
