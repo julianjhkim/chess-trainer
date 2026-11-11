@@ -104,10 +104,18 @@ def test_a_mistake_punished_in_one_move_is_not_a_puzzle(client, fake_engine_for_
     assert state["skipped"] == ["2.Nf3"]
 
 
-def test_an_inaccuracy_is_not_scanned(client, fake_engine_for_api):
+def test_an_inaccuracy_with_a_clear_punishment_is_a_puzzle(client, fake_engine_for_api):
     rig_my_mistake(fake_engine_for_api)
     fake_engine_for_api.results[GAME[2].fen_after] = Eval(cp=-150)  # about -13%
     fake_engine_for_api.results[GAME[3].fen_after] = Eval(cp=-150)
+    [found] = scan(client)["found"]
+    assert (found["move_label"], found["classification"]) == ("2.Nf3", "inaccuracy")
+
+
+def test_a_smaller_slip_is_not_scanned(client, fake_engine_for_api):
+    rig_my_mistake(fake_engine_for_api)
+    fake_engine_for_api.results[GAME[2].fen_after] = Eval(cp=-80)  # about -7%
+    fake_engine_for_api.results[GAME[3].fen_after] = Eval(cp=-80)
     state = scan(client)
     assert state["found"] == [] and state["skipped"] == []
 

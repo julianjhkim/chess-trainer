@@ -121,8 +121,9 @@ Your side is read from your names (top right) in the PGN; if neither player has
 one, pick White or Black. Stockfish then checks **every move of the game, yours
 and your opponent's**, with a progress bar (a 30-move game takes a minute or
 two; *Stop* gives up and saves nothing). It works like Lichess's own puzzles:
-after each **mistake or blunder** (a move losing 20% or more of its player's win
-chance), the puzzle is to **punish it**:
+after each **inaccuracy, mistake or blunder** (a move losing 10% or more of its
+player's win chance — near equality even two pawns lost is only about 15%), the
+puzzle is to **punish it**:
 
 - after *your* mistake you play your opponent's side, and find what they should
   have done — that is how you learn why your move was bad, even if they missed it;

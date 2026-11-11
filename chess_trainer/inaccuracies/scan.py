@@ -1,8 +1,9 @@
 """Finding the puzzles in one of my games, the way Lichess finds its own.
 
 The engine walks every move of the game, both sides'. A move that cost its
-player at least a mistake's worth of win % (``classify``: 20 points) is a
-mistake to punish. The puzzle starts right after it, played by the side that
+player at least an inaccuracy's worth of win % (``classify``: 10 points) is a
+mistake to punish -- near equality even two pawns lost is only ~15%, so a
+higher bar missed clear wins of material. The puzzle starts right after it, played by the side that
 can punish it: my opponent's side when the mistake was mine (that is how I
 learn why my move was bad, whether or not they found the punishment), my own
 side when it was theirs (whether or not I found it).
@@ -33,8 +34,10 @@ from chess_trainer.pgn import my_moves
 from chess_trainer.pgn.positions import PositionMove
 
 #: A move losing at least this much win % for its player is worth punishing:
-#: mistakes and blunders (the user's choice), not inaccuracies.
-MIN_DROP = 20.0
+#: inaccuracies too (the user's choice, after 20 missed 10.b3?, which lost two
+#: pawns' worth from a level position). The only-move and two-move rules keep
+#: out the vague ones.
+MIN_DROP = 10.0
 
 #: A punishment asks at least this many moves of the solver.
 MIN_SOLVER_MOVES = 2

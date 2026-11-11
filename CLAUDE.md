@@ -129,8 +129,9 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   a background job (one at a time, 409 otherwise) that checks **every move of
   the game, both sides'**, at the analysis depth; `GET /scan` polls it
   (progress, then what it found), `DELETE /scan` stops it (nothing saved).
-  A move losing **≥ 20 win %** (`MIN_DROP`: mistakes and blunders, not
-  inaccuracies — the user's choice) is a mistake to punish. The puzzle is the
+  A move losing **≥ 10 win %** (`MIN_DROP`: inaccuracies too — the user first
+  chose 20, then lowered it when 20 missed 10.b3?, which lost two pawns from a
+  level position: near equality that is only ~15%) is a mistake to punish. The puzzle is the
   position **right after it** (`kind='punish'`), played by the side that can
   punish it: **my opponent's side when the mistake was mine** (that is how I
   learn why it was bad, whether or not they found it), mine when it was
