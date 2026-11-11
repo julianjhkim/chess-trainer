@@ -3,8 +3,9 @@
  * the engine finds the puzzles in it.
  *
  * *Find puzzles* starts a scan in the background: Stockfish checks every move
- * of the game, both sides', and after each mistake or blunder whose
- * punishment is a forced line of two moves or more, it becomes a puzzle,
+ * of the game, both sides', and after each slip whose punishment is clear --
+ * a forced line of two moves or more; after a mere inaccuracy, one that wins
+ * material or mates -- it becomes a puzzle,
  * due the next day -- played as my opponent when the mistake was mine. The
  * page polls the scan for its progress (it can be stopped) and then lists
  * what was found -- the mistakes only, never a solution. Clicking one puts the
@@ -162,7 +163,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
     body.className = 'new-card';
     body.append(
       paragraph(
-        'Paste one of your games. Stockfish checks every move, yours and your opponent’s; after each mistake or blunder, the punishment becomes a puzzle — played as your opponent when the mistake was yours.',
+        'Paste one of your games. Stockfish checks every move, yours and your opponent’s; wherever a slip has a clear punishment, that becomes a puzzle — played as your opponent when the slip was yours.',
         'choice-note',
       ),
     );
@@ -251,7 +252,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
     if (scan.skipped.length) {
       body.append(
         paragraph(
-          `Not puzzles (no clear punishment, or only a one-move one): ${scan.skipped.join(', ')}.`,
+          `Not puzzles (no clear punishment of two moves or more — after an inaccuracy, one that wins material or mates): ${scan.skipped.join(', ')}.`,
           'choice-note',
         ),
       );
@@ -311,7 +312,7 @@ export function renderMakeCardView(container, { step, onCompleted }) {
 // -- small DOM helpers ----------------------------------------------------
 function summaryText(state) {
   const n = state.found?.length ?? 0;
-  if (!n) return 'No puzzles in this game: no mistake had a clear punishment of two moves or more.';
+  if (!n) return 'No puzzles in this game: no slip had a clear punishment.';
   const fresh = state.found.filter((found) => found.created || found.restored).length;
   const saved = fresh === n ? 'saved' : `${fresh} new`;
   return `Found ${n} puzzle${n === 1 ? '' : 's'} in this game — ${saved}. Play them in step 1, “Puzzles”, from tomorrow.`;

@@ -12,8 +12,13 @@ The punishing move must be clearly the only good one (``puzzle.is_only_move``),
 and the line goes on while each next move is an only move too
 (``puzzle.build_line``). It must ask at least ``MIN_SOLVER_MOVES`` moves: a
 mistake punished in a single move -- a piece left to a bishop I didn't see --
-is too crude to learn from (the user's call). Mistakes with no such line are
-reported but skipped.
+is too crude to learn from (the user's call). After an inaccuracy (a drop
+under ``POSITIONAL_DROP``) the reward must also be clear: mate, or at least
+``MIN_MATERIAL_GAIN`` pawns won once the opponent has made their best reply to
+the last move (so a capture about to be taken back does not count) -- the
+small positional edges inaccuracies usually give are too hard to read. After a
+mistake or a blunder a positional punishment is a puzzle too (the user's
+rule). Slips with no such line are reported but skipped.
 
 ``scan_game`` asks the engine (through the analysis cache) and reports progress
 through a callback; it can be cancelled between moves.
@@ -42,6 +47,11 @@ MIN_DROP = 10.0
 #: A punishment asks at least this many moves of the solver.
 MIN_SOLVER_MOVES = 2
 
+#: From this drop on (a mistake), a positional punishment counts; below it
+#: (an inaccuracy), only one that mates or wins ``MIN_MATERIAL_GAIN`` pawns.
+POSITIONAL_DROP = 20.0
+MIN_MATERIAL_GAIN = 1
+
 
 @dataclass(frozen=True, slots=True)
 class FoundPuzzle:
@@ -66,7 +76,7 @@ class FoundPuzzle:
 @dataclass(slots=True)
 class ScanResult:
     found: list[FoundPuzzle] = field(default_factory=list)
-    #: Mistakes with no clear punishment of two moves or more: not puzzles.
+    #: Mistakes with no clear punishment: not puzzles.
     skipped: list[PositionMove] = field(default_factory=list)
 
 
@@ -107,9 +117,9 @@ def _punishment(
     depth: int,
     my_colour: str,
 ) -> FoundPuzzle | bool | None:
-    """The puzzle after a mistake; ``False`` for a mistake with no clear
-    punishment of two moves or more; ``None`` for a move that was not a
-    mistake."""
+    """The puzzle after a slip; ``False`` for a slip with no clear punishment
+    (two moves or more; after an inaccuracy, winning material or mating);
+    ``None`` for a move that was not a slip."""
     before = analysis.analyse(conn, engine, move.fen_before, depth)
     if before.best_move is None or before.best_move == move.uci:
         return None
@@ -127,6 +137,8 @@ def _punishment(
     )
     if (len(line) + 1) // 2 < MIN_SOLVER_MOVES:
         return False
+    if drop < POSITIONAL_DROP and not _clear_reward(conn, engine, move.fen_after, line, depth):
+        return False
     return FoundPuzzle(
         slip=move,
         mine=my_moves.is_mine(move, my_colour),
@@ -134,3 +146,16 @@ def _punishment(
         classification=classify(drop).value,
         line=line,
     )
+
+
+def _clear_reward(
+    conn: sqlite3.Connection, engine: Analyser, fen: str, line: tuple[str, ...], depth: int
+) -> bool:
+    """Whether the line mates, or wins material that the reply does not win back."""
+    mated, _ = puzzle.reward(fen, line)
+    if mated:
+        return True
+    end = puzzle.position_after(fen, line)
+    reply = analysis.analyse(conn, engine, end, depth).best_move
+    _, gain = puzzle.reward(fen, line + ((reply,) if reply else ()))
+    return gain >= MIN_MATERIAL_GAIN

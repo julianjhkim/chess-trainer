@@ -305,7 +305,7 @@ async function testMakeCard(page, base) {
   const panel = await page.innerText('.side-panel');
   check('each puzzle names the mistake, the side to punish it and its length', panel.includes('2.Nf3, your mistake (−21.4%): punish it as Black, 2 moves'), panel.replace(/\s+/g, ' ').slice(0, 300));
   check('and when it is first due', panel.includes('first due 2026-11-03'));
-  check('mistakes with no clear punishment are listed as not puzzles', panel.includes('Not puzzles (no clear punishment, or only a one-move one): 2...Nc6.'));
+  check('mistakes with no clear punishment are listed as not puzzles', panel.includes('Not puzzles (no clear punishment of two moves or more — after an inaccuracy, one that wins material or mates): 2...Nc6.'));
   check('the answer is never shown', !(await page.innerText('body')).includes('Nf6'));
   await waitFor(page, 'the puzzle position', (fen) => {
     const b = [...(window.chessTrainer?.boards ?? [])].at(-1);

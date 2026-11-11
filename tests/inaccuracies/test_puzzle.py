@@ -100,3 +100,14 @@ def test_the_second_best_search_is_cached(conn):
     calls = engine.call_count
     puzzle.build_line(conn, engine, chess.STARTING_FEN, 10, first_move="e2e4")
     assert engine.call_count == calls
+
+
+# -- the reward -------------------------------------------------------------------
+def test_the_reward_counts_material_for_the_side_to_move():
+    after_e4_e5 = fen_of(["e2e4", "e7e5"])
+    assert puzzle.reward(after_e4_e5, ("g1f3", "a7a6", "f3e5")) == (False, 1)
+    assert puzzle.reward(after_e4_e5, ("g1f3", "a7a6", "f3e5", "d8g5", "e5f7", "g5g2")) == (False, 1)
+
+
+def test_a_mate_is_a_reward_whatever_the_material():
+    assert puzzle.reward(BACK_RANK, ("a1a8",)) == (True, 0)

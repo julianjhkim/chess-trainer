@@ -12,7 +12,8 @@ beyond a safety guard against endless lines.
 
 A slip with no forced follow-up stays a one-move card, as before.
 
-``is_only_move`` and ``accepts`` are pure; ``build_line`` asks the engine.
+``is_only_move``, ``accepts`` and ``reward`` are pure; ``build_line`` asks the
+engine.
 """
 
 from __future__ import annotations
@@ -50,6 +51,39 @@ def is_only_move(best: Eval, second: Eval | None, *, white_to_move: bool) -> boo
         second, white_to_move=white_to_move
     )
     return gap >= ONLY_MOVE_MARGIN
+
+
+#: Pawn units, for telling a clear win of material from a positional edge.
+PIECE_VALUES = {
+    chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9,
+}
+
+
+def material(board: chess.Board, colour: chess.Color) -> int:
+    """``colour``'s material minus the other side's, in pawns."""
+    total = 0
+    for piece_type, value in PIECE_VALUES.items():
+        total += value * len(board.pieces(piece_type, colour))
+        total -= value * len(board.pieces(piece_type, not colour))
+    return total
+
+
+def reward(fen: str, moves: tuple[str, ...]) -> tuple[bool, int]:
+    """What playing ``moves`` from ``fen`` brings the side to move there:
+    whether it mates, and the material it wins (in pawns, maybe negative)."""
+    board = chess.Board(fen)
+    solver = board.turn
+    before = material(board, solver)
+    for uci in moves:
+        board.push_uci(uci)
+    return board.is_checkmate(), material(board, solver) - before
+
+
+def position_after(fen: str, moves: tuple[str, ...]) -> str:
+    board = chess.Board(fen)
+    for uci in moves:
+        board.push_uci(uci)
+    return board.fen()
 
 
 def mates(fen: str, uci: str) -> bool:

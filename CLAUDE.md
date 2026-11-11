@@ -139,8 +139,14 @@ plays, regenerate its legal-move fixture: `python3 tests/frontend/fixtures/gener
   (`build_line(first_must_be_only=True)`), and the line must ask **at least 2
   of the solver's moves** (`MIN_SOLVER_MOVES`): a mistake punished in one move
   (a piece left to an unseen bishop) is too crude to learn from — the user's
-  call, reversing an earlier "one move is fine". Mistakes without such a line
-  are listed as not puzzles. Found
+  call, reversing an earlier "one move is fine". **After an inaccuracy (10–20%)
+  the reward must also be clear: mate, or ≥ 1 pawn of material won**
+  (`POSITIONAL_DROP = 20`, `MIN_MATERIAL_GAIN`, `puzzle.reward`), counted after
+  the opponent's best reply to the line's last move so a capture about to be
+  retaken doesn't count — inaccuracies' usual positional edges are hard to
+  read. **After a mistake or blunder (20%+) a positional punishment counts
+  too** (the user's rule). Slips without such a line are listed as not
+  puzzles. Found
   puzzles are saved (game stored, `slip.punishment_card_for`, due tomorrow);
   the outcome names the mistakes but **never a solution**. Saving any
   completes `make_card` (streak) once. `AppState.shutdown` cancels and joins

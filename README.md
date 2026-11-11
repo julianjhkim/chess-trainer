@@ -131,9 +131,13 @@ puzzle is to **punish it**:
   whether or not you found it in the game.
 
 The punishing move has to be clearly the only good one (10 points of win %
-better than anything else), and the punishment has to take at least two of your
-moves: a mistake punished in a single move — a piece left hanging to a bishop
-you didn't see — is too crude to be worth drilling. While more only-moves follow,
+better than anything else), the punishment has to take at least two of your
+moves — a mistake punished in a single move, a piece left hanging to a bishop
+you didn't see, is too crude to be worth drilling. After a mere inaccuracy
+(10–20%), whose edge is usually positional and hard to read, the reward also
+has to be clear: **mate, or at least a pawn of material won**, counted after the
+opponent's best reply so a capture about to be taken back doesn't count. After a
+mistake or a blunder (20% or more) a positional punishment is a puzzle too. While more only-moves follow,
 the puzzle goes on. Mistakes without such a punishment are listed as not puzzles. Each puzzle is due the next day. The list names each
 mistake, the side you'll play and how many moves it asks — never the solution;
 clicking one shows its position, and ← / → step through the game. Saving the
